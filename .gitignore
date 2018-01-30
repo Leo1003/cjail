@@ -1,0 +1,12 @@
+# CMake build directory
+build/
+
+# Kdevelop project files
+*.kdev4
+
+# Output files
+*.o
+*.out
+*.a
+*.so
+*.so.*
