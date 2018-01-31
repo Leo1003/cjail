@@ -4,12 +4,12 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <sched.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-
 #include <sys/mount.h>
 #include <sys/resource.h>
 #include <sys/signal.h>
@@ -27,6 +27,7 @@ int setup_fs()
         IFERR(chroot(exec_para->chroot))
             goto error;
     }
+    //TODO: Custom mkdir util
     IFERR(stat("/proc", &st))
     {
         IFERR(mkdir("/proc", 0755))
@@ -34,6 +35,7 @@ int setup_fs()
     }
     IFERR(mount("proc", "/proc", "proc", 0, ""))
         goto error;
+    //TODO: Mount devfs
     if(exec_para->workingDir)
     {
         IFERR(chdir(exec_para->workingDir))
@@ -77,5 +79,60 @@ int setup_fd()
 
     error:
     PRINTERR("setup_fd");
+    return -1;
+}
+
+int setup_signals()
+{
+    for(int s = SIGHUP; s < SIGRTMAX; s++)
+    {
+        IFERR(signal(s, SIG_DFL))
+        {
+            PRINTERR("setup_signals");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int setup_cpumask()
+{
+    if(exec_para->cpumask)
+    {
+        IFERR(sched_setaffinity(getpid(), sizeof(*exec_para->cpumask), exec_para->cpumask))
+        {
+            PRINTERR("setup_cpumask");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int set_rlimit(int res, long long val)
+{
+    struct rlimit rl;
+    rl.rlim_cur = rl.rlim_max = val;
+    return setrlimit(res, &rl);
+}
+int setup_rlimit()
+{
+    if(exec_para->lim_vss > 0)
+    {
+        IFERR(set_rlimit(RLIMIT_AS, exec_para->lim_vss * 1024))
+            goto error;
+    }
+    if(exec_para->lim_fsize > 0)
+    {
+        IFERR(set_rlimit(RLIMIT_FSIZE, exec_para->lim_fsize * 1024))
+        goto error;
+    }
+    if(exec_para->lim_proc > 0)
+    {
+        IFERR(set_rlimit(RLIMIT_NPROC, exec_para->lim_proc))
+        goto error;
+    }
+
+    error:
+    PRINTERR("setup_rlimit");
     return -1;
 }

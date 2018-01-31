@@ -10,7 +10,7 @@ int setup_cpumask();
 int setup_rlimit();
 int setup_taskstats();
 int setup_cgroup();
-int enter_cgroup();
-int setup_seccomp();
+int enter_cgroup(pid_t pid);
+int setup_seccomp(void *argv);
 
 #endif
