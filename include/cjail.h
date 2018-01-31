@@ -1,6 +1,7 @@
 #ifndef CJAIL_H
 #define CJAIL_H
 
+#define _GNU_SOURCE
 #include <linux/taskstats.h>
 #include <sched.h>
 #include <sys/time.h>
