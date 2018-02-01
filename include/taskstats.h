@@ -1,0 +1,47 @@
+#ifndef TASKSTATS_H
+#define TASKSTATS_H
+
+#include "utils.h"
+#include <sched.h>
+#include <time.h>
+
+#include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <linux/genetlink.h>
+#include <linux/taskstats.h>
+
+/*
+ * Generic macros for dealing with netlink sockets. Might be duplicated
+ * elsewhere. It is recommended that commercial grade applications use
+ * libnl or libnetlink and use the interfaces provided by the library
+ */
+#define GENLMSG_DATA(glh)	((void *)(NLMSG_DATA(glh) + GENL_HDRLEN))
+#define GENLMSG_PAYLOAD(glh)	(NLMSG_PAYLOAD(glh, 0) - GENL_HDRLEN)
+#define NLA_DATA(na)		((void *)((char*)(na) + NLA_HDRLEN))
+#define NLA_PAYLOAD(len)	(len - NLA_HDRLEN)
+
+/* Maximum size of response requested or message sent */
+#define MAX_MSG_SIZE	1024
+
+struct msgtemplate {
+    struct nlmsghdr n;
+    struct genlmsghdr g;
+    char buf[MAX_MSG_SIZE];
+};
+
+struct ts_socket
+{
+    int socketfd;
+    int familyid;
+    char *cpumask;
+};
+
+int taskstats_create(struct ts_socket *s);
+int taskstats_setcpuset(struct ts_socket *s, cpu_set_t* cpuset);
+int taskstats_setpid(struct ts_socket *s, pid_t pid);
+int taskstats_getstats(struct ts_socket *s, struct taskstats * ts);
+int taskstats_destory(struct ts_socket *s);
+
+#endif
