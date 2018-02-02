@@ -1,5 +1,7 @@
 #include "taskstats.h"
 
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 /* getdelays.c
@@ -97,7 +99,7 @@ static int get_family_id(int sd)
     if (rc < 0)
         return 0;	/* sendto() failure? */
 
-        rep_len = recv(sd, &ans, sizeof(ans), 0);
+    rep_len = recv(sd, &ans, sizeof(ans), 0);
     if (ans.n.nlmsg_type == NLMSG_ERROR ||
         (rep_len < 0) || !NLMSG_OK((&ans.n), rep_len))
         return 0;
@@ -110,6 +112,118 @@ static int get_family_id(int sd)
     return id;
 }
 
+int taskstats_create(struct ts_socket *s)
+{
+    memset(s, 0, sizeof(*s)); //empty socket object
+    IFERR(s->socketfd = create_nl_socket(NETLINK_GENERIC))
+    {
+        PRINTERR("create_nl_socket");
+        return -1;
+    }
+    pdebugf("Created netlink socket: fd %d\n", s->socketfd);
+    if(!(s->familyid = get_family_id(s->socketfd)))
+    {
+        PRINTERR("get_family_id");
+        return -1;
+    }
+    pdebugf("Got family id: %d\n", s->familyid);
+    return 0;
+}
 
+int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
+{
+    parse_cpuset(cpuset, s->cpumask);
+    IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
+                   TASKSTATS_CMD_ATTR_REGISTER_CPUMASK, s->cpumask, strlen(s->cpumask) + 1))
+    {
+        PRINTERR("taskstats_setcpuset");
+        return -1;
+    }
+    return 0;
+}
 
+int taskstats_setpid(struct ts_socket* s, pid_t pid)
+{
+    IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
+        TASKSTATS_CMD_ATTR_PID, &pid, sizeof(pid)))
+    {
+        PRINTERR("taskstats_setpid");
+        return -1;
+    }
+    return 0;
+}
 
+int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
+{
+    struct msgtemplate msg;
+    int rep_len = recv(s->socketfd, &msg, sizeof(msg), 0);
+    if (rep_len < 0) {
+        PRINTERR("nonfatal reply error");
+        return -2;
+    }
+    if (msg.n.nlmsg_type == NLMSG_ERROR || !NLMSG_OK((&msg.n), rep_len)) {
+        struct nlmsgerr* err = NLMSG_DATA(&msg);
+        errno = err->error;
+        PRINTERR("fatal reply error");
+        return -1;
+    }
+
+    rep_len = GENLMSG_PAYLOAD(&msg.n);
+    struct nlattr* na = (struct nlattr*) GENLMSG_DATA(&msg);
+    int len = 0;
+    while (len < rep_len)
+    {
+        len += NLA_ALIGN(na->nla_len);
+        switch (na->nla_type)
+        {
+            case TASKSTATS_TYPE_AGGR_TGID:
+            case TASKSTATS_TYPE_AGGR_PID:
+            {
+                int aggr_len = NLA_PAYLOAD(na->nla_len);
+                int len2 = 0;
+                /* For nested attributes, na follows */
+                na = (struct nlattr*) NLA_DATA(na);
+                while (len2 < aggr_len)
+                {
+                    switch (na->nla_type) {
+                        case TASKSTATS_TYPE_PID: break;
+                        case TASKSTATS_TYPE_TGID: break;
+                        case TASKSTATS_TYPE_STATS:
+                            memcpy(ts, (struct taskstats*) NLA_DATA(na), sizeof(struct taskstats));
+                            return 0;
+                            break;
+                        default:
+                            perrf("Unknown nested nla_type %d\n", na->nla_type);
+                            break;
+                    }
+                    len2 += NLA_ALIGN(na->nla_len);
+                    na = (struct nlattr*) ((char*) na + len2);
+                }
+            }
+            break;
+            default:
+                perrf("Unknown nla_type %d\n", na->nla_type);
+                break;
+        }
+        na = (struct nlattr*) (GENLMSG_DATA(&msg) + len);
+    }
+    return -2;
+}
+
+int taskstats_destory(struct ts_socket* s)
+{
+    if (s->maskset) {
+        IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
+                          TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK,
+                          s->cpumask, strlen(s->cpumask) + 1))
+            PRINTERR("deregister cpumask");
+        // nonfatal error
+    }
+    IFERR(close(s->socketfd))
+    {
+        PRINTERR("close socket");
+        return -1;
+    }
+    memset(s, 0, sizeof(*s)); //empty socket object
+    return 0;
+}

@@ -29,3 +29,30 @@ int closefrom(int minfd)
     PRINTERR("closefrom");
     return -1;
 }
+
+void parse_cpuset(const cpu_set_t* cpuset, char* cpumask)
+{
+    int s = -1, w = 0;
+    for(int c = 0; c <= CPU_COUNT(cpuset); c++)
+    {
+        if(c == CPU_COUNT(cpuset))
+            goto e;
+
+        if(CPU_ISSET(c, cpuset) && s == -1)
+            s = c;
+        else if(!CPU_ISSET(c, cpuset) && s > -1)
+            goto e;
+
+        continue;
+
+        e:
+        if(!w++)
+            sprintf(cpumask, ",");
+        if(c - s == 1)
+            sprintf(cpumask, "%d", s);
+        else
+            sprintf(cpumask, "%d-%d", s, c - 1);
+        s = -1;
+    }
+    pdebugf("parse_cpuset %s\n", cpumask);
+}

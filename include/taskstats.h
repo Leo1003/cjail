@@ -33,9 +33,9 @@ struct msgtemplate {
 
 struct ts_socket
 {
-    int socketfd;
-    int familyid;
-    char *cpumask;
+    int socketfd, maskset;
+    unsigned short familyid;
+    char cpumask[256];
 };
 
 int taskstats_create(struct ts_socket *s);
