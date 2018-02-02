@@ -7,5 +7,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 find_package(libseccomp REQUIRED)
 
+message("Build Type: ${CMAKE_BUILD_TYPE}")
+
 include_directories("${CMAKE_SOURCE_DIR}/include")
 add_subdirectory(src)

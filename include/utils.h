@@ -8,10 +8,10 @@
 #define IFERR(x) if((x) < 0)
 #define perrf(x, ...) do { fprintf(stderr, x, ##__VA_ARGS__); } while(0)
 #define PRINTERR(name) do { fprintf(stderr, "Failed to %s: %s", name, strerror(errno)); } while(0)
-#ifdef DEBUG
-#define pdebugf(x, ...) do { fprintf(stderr, x, ##__VA_ARGS__); } while(0)
-#else
+#ifdef NDEBUG
 #define pdebugf(x, ...)
+#else
+#define pdebugf(x, ...) do { fprintf(stderr, x, ##__VA_ARGS__); } while(0)
 #endif
 
 int closefrom(int minfd);
