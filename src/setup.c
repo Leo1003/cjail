@@ -1,5 +1,6 @@
 #include "cjail.h"
 #include "setup.h"
+#include "taskstats.h"
 #include "utils.h"
 
 #include <errno.h>
@@ -11,11 +12,16 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/mount.h>
+#include <sys/prctl.h>
 #include <sys/resource.h>
 #include <sys/signal.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+
+#include <seccomp.h>
+
+typedef void * scmp_filter_ctx;
 
 int setup_fs()
 {
@@ -97,9 +103,9 @@ int setup_signals()
 
 int setup_cpumask()
 {
-    if(exec_para->cpumask)
+    if(exec_para->cpuset)
     {
-        IFERR(sched_setaffinity(getpid(), sizeof(*exec_para->cpumask), exec_para->cpumask))
+        IFERR(sched_setaffinity(getpid(), sizeof(*exec_para->cpuset), exec_para->cpuset))
         {
             PRINTERR("setup_cpumask");
             return -1;
@@ -134,5 +140,60 @@ int setup_rlimit()
 
     error:
     PRINTERR("setup_rlimit");
+    return -1;
+}
+
+int setup_taskstats(struct ts_socket *s)
+{
+    IFERR(taskstats_create(s))
+        goto error;
+    if(exec_para->cpuset)
+    {
+        IFERR(taskstats_setcpuset(s, exec_para->cpuset))
+            goto error;
+    }
+    return 0;
+
+    error:
+    PRINTERR("setup_taskstats");
+    return -1;
+}
+
+int setup_seccomp(void* exec_argv)
+{
+    prctl(PR_SET_NO_NEW_PRIVS, 1);
+    scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_TRAP);
+    if(!ctx)
+        goto error;
+    int i = 0;
+    while(exec_para->seccomplist[i])
+    {
+#ifndef NDEBUG
+        char *scname = seccomp_syscall_resolve_num_arch(exec_para->seccomplist[i], seccomp_arch_native());
+        pdebugf("seccomp_rule_add: %d %s", exec_para->seccomplist[i], scname);
+        free(scname);
+        /* In the case of seccomp_syscall_resolve_num_arch() the associated syscall name is
+         * returned and it remains the callers responsibility to free the returned string
+         * via free(3).
+         */
+#endif
+        IFERR(seccomp_rule_add(ctx, SCMP_ACT_ALLOW, exec_para->seccomplist[i], 0))
+            goto error;
+    }
+    if(exec_argv)
+    {
+        //we have to prevent seccomp from blocking our execve()
+        //only allow the certain argv pointer
+        IFERR(seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(execve), 1, SCMP_A1(SCMP_CMP_EQ, (scmp_datum_t)exec_argv)))
+            goto error;
+    }
+    IFERR(seccomp_load(ctx))
+        goto error;
+    seccomp_release(ctx);
+    return 0;
+
+    error:
+    PRINTERR("setup_seccomp");
+    seccomp_release(ctx);
     return -1;
 }

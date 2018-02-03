@@ -139,6 +139,7 @@ int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
         PRINTERR("taskstats_setcpuset");
         return -1;
     }
+    s->maskset = 1;
     return 0;
 }
 
@@ -212,7 +213,8 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
 
 int taskstats_destory(struct ts_socket* s)
 {
-    if (s->maskset) {
+    if(s->maskset)
+    {
         IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
                           TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK,
                           s->cpumask, strlen(s->cpumask) + 1))

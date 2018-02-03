@@ -5,9 +5,10 @@ set(SOVERSION 0)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
-find_package(libseccomp REQUIRED)
-
 message("Build Type: ${CMAKE_BUILD_TYPE}")
 
+find_package(libseccomp REQUIRED)
+
 include_directories("${CMAKE_SOURCE_DIR}/include")
+include_directories(${LIBSECCOMP_INCLUDE_DIRS})
 add_subdirectory(src)
