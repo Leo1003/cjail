@@ -98,3 +98,24 @@ int mkdir_r(const char* path)
             return -2;
     }
 }
+
+//TODO: Test combine_path()
+char* combine_path(char *root, char *path)
+{
+    int l = 0;
+    char *r = malloc(MAXPATHLEN);
+    if(!r)
+        return NULL;
+    char *p = r;
+    if(root)
+    {
+        l = strlen(root);
+        strlcpy(r, root, sizeof(char) * MAXPATHLEN);
+        if(root[l - 1] != '/')
+            strlcpy(r + l, "/", sizeof(char) * (MAXPATHLEN - l));
+        l = strlen(root);
+        p += l;
+    }
+    strlcpy(p, path, sizeof(char) * (MAXPATHLEN - l));
+    return r;
+}
