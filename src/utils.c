@@ -1,12 +1,16 @@
 #include "cjail.h"
 #include "utils.h"
 
+#include <bsd/string.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/param.h>
+#include <sys/stat.h>
 
+//TODO: Test closefrom()
 int closefrom(int minfd)
 {
     DIR *fddir = opendir("/proc/self/fd");
@@ -30,6 +34,7 @@ int closefrom(int minfd)
     return -1;
 }
 
+//TODO: Test parse_cpuset()
 void parse_cpuset(const cpu_set_t* cpuset, char* cpumask)
 {
     int s = -1, w = 0;
@@ -55,4 +60,41 @@ void parse_cpuset(const cpu_set_t* cpuset, char* cpumask)
         s = -1;
     }
     pdebugf("parse_cpuset %s\n", cpumask);
+}
+
+//TODO: Test mkdir_r()
+int mkdir_r(const char* path)
+{
+    int l;
+    if((l = strlen(path)) == 0)
+        return 0;
+    struct stat st;
+    IFERR(stat(path, &st))
+    {
+        if(strcmp(path, "."))
+            return -2;
+        char ppath[MAXPATHLEN];
+        if(strlcpy(ppath, path, sizeof(ppath)) >= sizeof(ppath))
+        {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+        char *p = ppath + l - 1;
+        if((p = strrchr(p, '/')) == NULL)
+            strlcpy(ppath, ".", sizeof(ppath));
+        else
+            *p = '\0';
+
+        int ret = mkdir_r(ppath);
+        if(!ret)
+            ret = mkdir(path, 0755);
+        return ret;
+    }
+    else
+    {
+        if(S_ISDIR(st.st_mode))
+            return 0;
+        else
+            return -2;
+    }
 }

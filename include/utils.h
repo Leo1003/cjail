@@ -17,5 +17,6 @@
 
 int closefrom(int minfd);
 void parse_cpuset(const cpu_set_t *cpuset, char *cpumask);
+int mkdir_r(const char *path);
 
 #endif

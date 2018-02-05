@@ -25,22 +25,21 @@ typedef void * scmp_filter_ctx;
 
 int setup_fs()
 {
-    struct stat st;
     IFERR(mount(NULL, "/", NULL, MS_REC|MS_PRIVATE, NULL))
         goto error;
+        int rmflag = 0;
     if(exec_para->chroot)
     {
         IFERR(chroot(exec_para->chroot))
             goto error;
+        rmflag |= MS_REMOUNT;
     }
-    //TODO: Custom mkdir util
-    IFERR(stat("/proc", &st))
-    {
-        IFERR(mkdir("/proc", 0755))
-            goto error;
-    }
-    IFERR(mount("proc", "/proc", "proc", 0, ""))
+
+    IFERR(mkdir_r("/proc"))
         goto error;
+    IFERR(mount("proc", "/proc", "proc", rmflag, ""))
+        goto error;
+
     //TODO: Mount devfs
     if(exec_para->workingDir)
     {
