@@ -36,26 +36,26 @@ int closefrom(int minfd)
 
 void parse_cpuset(const cpu_set_t* cpuset, char* cpumask)
 {
+    sprintf(cpumask, "");
     int s = -1, w = 0;
-    for(int c = 0; c <= CPU_COUNT(cpuset); c++)
+    for(int c = 0; c <= CPU_SETSIZE; c++)
     {
-        if(c == CPU_COUNT(cpuset))
+        if(c == CPU_SETSIZE && s > -1)
             goto e;
 
         if(CPU_ISSET(c, cpuset) && s == -1)
             s = c;
         else if(!CPU_ISSET(c, cpuset) && s > -1)
             goto e;
-
         continue;
 
         e:
-        if(!w++)
-            sprintf(cpumask, ",");
+        if(w++)
+            sprintf(cpumask, "%s,", cpumask);
         if(c - s == 1)
-            sprintf(cpumask, "%d", s);
+            sprintf(cpumask, "%s%d", cpumask, s);
         else
-            sprintf(cpumask, "%d-%d", s, c - 1);
+            sprintf(cpumask, "%s%d-%d", cpumask, s, c - 1);
         s = -1;
     }
     pdebugf("parse_cpuset %s\n", cpumask);
@@ -98,7 +98,6 @@ int mkdir_r(const char* path)
     }
 }
 
-//TODO: Test combine_path()
 char* combine_path(char *root, char *path)
 {
     int l = 0;
