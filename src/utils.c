@@ -34,7 +34,6 @@ int closefrom(int minfd)
     return -1;
 }
 
-//TODO: Test parse_cpuset()
 void parse_cpuset(const cpu_set_t* cpuset, char* cpumask)
 {
     int s = -1, w = 0;
