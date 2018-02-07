@@ -18,6 +18,7 @@
 int closefrom(int minfd);
 void parse_cpuset(const cpu_set_t *cpuset, char *cpumask);
 int mkdir_r(const char *path);
-char* combine_path(char *root, char *path) __nonnull((2));
+char* combine_path(const char *root, const char *path) __nonnull((2));
+int strrmchr(char* str, int index);
 
 #endif

@@ -20,6 +20,7 @@ int closefrom(int minfd)
     while((dent = readdir(fddir)) != NULL)
     {
         int fd = atoi(dent->d_name);
+        pdebugf("closing fd: %d\n", fd);
         if(fd > minfd && fd != dirfd(fddir))
         {
             IFERR(close(fd))
@@ -98,22 +99,35 @@ int mkdir_r(const char* path)
     }
 }
 
-char* combine_path(char *root, char *path)
+char* combine_path(const char *root, const char *path)
 {
-    int l = 0;
+    if(!root)
+        return combine_path("/", path);
+
     char *r = malloc(MAXPATHLEN);
     if(!r)
         return NULL;
-    char *p = r;
-    if(root)
-    {
-        l = strlen(root);
-        strlcpy(r, root, sizeof(char) * MAXPATHLEN);
-        if(root[l - 1] != '/')
-            strlcpy(r + l, "/", sizeof(char) * (MAXPATHLEN - l));
-        l = strlen(root);
-        p += l;
-    }
-    strlcpy(p, path, sizeof(char) * (MAXPATHLEN - l));
+
+    char rtmp[MAXPATHLEN], ptmp[MAXPATHLEN];
+    strlcpy(rtmp, root, sizeof(char) * MAXPATHLEN);
+    strlcpy(ptmp, path, sizeof(char) * MAXPATHLEN);
+
+    if(rtmp[strlen(root) - 1] == '/')
+        strrmchr(rtmp, -1);
+    if(ptmp[0] == '/')
+        strrmchr(ptmp, 0);
+
+    snprintf(r, sizeof(char) * MAXPATHLEN, "%s/%s", rtmp, ptmp);
     return r;
+}
+
+int strrmchr(char* str, int index)
+{
+    int l = strlen(str);
+    if(index >= l || -index > l)
+        return -1;
+    if(index < 0)
+        index += l;
+    memmove(str + index, str + index + 1, l - index);
+    return 0;
 }
