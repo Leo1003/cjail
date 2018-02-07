@@ -132,7 +132,11 @@ int taskstats_create(struct ts_socket *s)
 
 int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
 {
-    parse_cpuset(cpuset, s->cpumask);
+    IFERR(parse_cpuset(cpuset, s->cpumask, sizeof(s->cpumask)))
+    {
+        PRINTERR("parse_cpuset");
+        return -1;
+    }
     IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
                    TASKSTATS_CMD_ATTR_REGISTER_CPUMASK, s->cpumask, strlen(s->cpumask) + 1))
     {

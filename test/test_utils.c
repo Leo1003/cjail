@@ -20,7 +20,7 @@ START_TEST(test_parse_cpuset_1)
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(0, &cpuset);
-    parse_cpuset(&cpuset, str);
+    parse_cpuset(&cpuset, str, sizeof(str));
     ck_assert_str_eq("0", str);
 }
 END_TEST
@@ -32,7 +32,7 @@ START_TEST(test_parse_cpuset_2)
     CPU_ZERO(&cpuset);
     CPU_SET(0, &cpuset);
     CPU_SET(1, &cpuset);
-    parse_cpuset(&cpuset, str);
+    parse_cpuset(&cpuset, str, sizeof(str));
     ck_assert_str_eq("0-1", str);
 }
 END_TEST
@@ -49,7 +49,7 @@ START_TEST(test_parse_cpuset_3)
     CPU_SET(5, &cpuset);
     CPU_SET(9, &cpuset);
     CPU_SET(11, &cpuset);
-    parse_cpuset(&cpuset, str);
+    parse_cpuset(&cpuset, str, sizeof(str));
     ck_assert_str_eq("0-2,4-5,9,11", str);
 }
 END_TEST
@@ -64,7 +64,7 @@ START_TEST(test_parse_cpuset_4)
     CPU_SET(5, &cpuset);
     CPU_SET(6, &cpuset);
     CPU_SET(9, &cpuset);
-    parse_cpuset(&cpuset, str);
+    parse_cpuset(&cpuset, str, sizeof(str));
     ck_assert_str_eq("1,4-6,9", str);
 }
 END_TEST
@@ -79,8 +79,24 @@ START_TEST(test_parse_cpuset_5)
     CPU_SET(5, &cpuset);
     CPU_SET(7, &cpuset);
     CPU_SET(9, &cpuset);
-    parse_cpuset(&cpuset, str);
+    parse_cpuset(&cpuset, str, sizeof(str));
     ck_assert_str_eq("1,3,5,7,9", str);
+}
+END_TEST
+
+START_TEST(test_parse_cpuset_6)
+{
+    char str[10];
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(1, &cpuset);
+    CPU_SET(3, &cpuset);
+    CPU_SET(5, &cpuset);
+    CPU_SET(7, &cpuset);
+    CPU_SET(11, &cpuset);
+    int ret = parse_cpuset(&cpuset, str, sizeof(str));
+    ck_assert_int_eq(-1, ret);
+    ck_assert_str_eq("1,3,5,7,1", str);
 }
 END_TEST
 
@@ -212,6 +228,7 @@ Suite* suite_utils()
     tcase_add_test(t_cpuset, test_parse_cpuset_3);
     tcase_add_test(t_cpuset, test_parse_cpuset_4);
     tcase_add_test(t_cpuset, test_parse_cpuset_5);
+    tcase_add_test(t_cpuset, test_parse_cpuset_6);
 
     t_combine = tcase_create("combine_path");
     tcase_add_test(t_combine, test_combine_path_1);

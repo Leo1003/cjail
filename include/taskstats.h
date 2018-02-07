@@ -24,6 +24,7 @@
 
 /* Maximum size of response requested or message sent */
 #define MAX_MSG_SIZE	1024
+#define MAX_CPU_MASK 1024
 
 struct msgtemplate {
     struct nlmsghdr n;
@@ -35,7 +36,7 @@ struct ts_socket
 {
     int socketfd, maskset;
     unsigned short familyid;
-    char cpumask[256];
+    char cpumask[MAX_CPU_MASK];
 };
 
 int taskstats_create(struct ts_socket *s);

@@ -35,10 +35,10 @@ int closefrom(int minfd)
     return -1;
 }
 
-void parse_cpuset(const cpu_set_t* cpuset, char* cpumask)
+int parse_cpuset(const cpu_set_t* cpuset, char* cpumask, size_t len)
 {
-    sprintf(cpumask, "");
-    int s = -1, w = 0;
+    snprintf(cpumask, len, "");
+    int s = -1, w = 0, l = 0;
     for(int c = 0; c <= CPU_SETSIZE; c++)
     {
         if(c == CPU_SETSIZE && s > -1)
@@ -52,14 +52,21 @@ void parse_cpuset(const cpu_set_t* cpuset, char* cpumask)
 
         e:
         if(w++)
-            sprintf(cpumask, "%s,", cpumask);
+            l += snprintf(cpumask + l, len - l, ",");
+        if(l < 0 || l >= len)
+            return -1;
+
         if(c - s == 1)
-            sprintf(cpumask, "%s%d", cpumask, s);
+            l += snprintf(cpumask + l, len - l, "%d", s);
         else
-            sprintf(cpumask, "%s%d-%d", cpumask, s, c - 1);
+            l += snprintf(cpumask + l, len - l, "%d-%d", s, c - 1);
         s = -1;
+        pdebugf("cpumask = %s\n", cpumask);
+        if(l < 0 || l >= len)
+            return -1;
     }
     pdebugf("parse_cpuset %s\n", cpumask);
+    return 0;
 }
 
 //TODO: Test mkdir_r()
