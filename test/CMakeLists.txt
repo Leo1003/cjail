@@ -1,11 +1,3 @@
-find_package(Check)
-if(NOT CHECK_FOUND)
-    message(WARNING "Check library not found!\nTests disabled.")
-    return()
-endif(NOT CHECK_FOUND)
-
-message("Found Check library.")
-message("Test Enabled.")
 include_directories("${CMAKE_SOURCE_DIR}/include")
 include_directories(${CHECK_INCLUDE_DIR})
 add_executable(test_utils test_utils.c)
