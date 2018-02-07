@@ -5,6 +5,7 @@
 #include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/param.h>
 #include <sys/types.h>
 
 #define STR_LEN 1024
@@ -132,6 +133,69 @@ START_TEST(test_combine_path_5)
 }
 END_TEST
 
+START_TEST(test_combine_path_6)
+{
+    char *str, root[MAXPATHLEN], path[MAXPATHLEN], ans[MAXPATHLEN];
+    const int rc = 3072, pc = 2048;
+    for(int i = 0; i < rc; i++)
+        root[i] = 'r';
+    root[rc] = '\0';
+    for(int i = 0; i < pc; i++)
+        path[i] = 'p';
+    path[pc] = '\0';
+    for(int i = 0; i < MAXPATHLEN; i++)
+    {
+        if(i < rc)
+            ans[i] = 'r';
+        else if(i == rc)
+            ans[i] = '/';
+        else
+            ans[i] = 'p';
+    }
+    ans[MAXPATHLEN - 1] = '\0';
+
+    str = combine_path(root, path);
+    ck_assert_str_eq(ans, str);
+    free(str);
+}
+END_TEST
+
+/*
+ *  Tests for testing strrmchr()
+ */
+
+START_TEST(test_strrmchr_1)
+{
+    char str[STR_LEN] = "plogdhgjkahjgdfga";
+    strrmchr(str, 2);
+    ck_assert_str_eq("plgdhgjkahjgdfga", str);
+}
+END_TEST
+
+START_TEST(test_strrmchr_2)
+{
+    char str[STR_LEN] = "plogdhgjkahjgdfga";
+    strrmchr(str, -5);
+    ck_assert_str_eq("plogdhgjkahjdfga", str);
+}
+END_TEST
+
+START_TEST(test_strrmchr_3)
+{
+    char str[STR_LEN] = "pl";
+    int ret = strrmchr(str, 2);
+    ck_assert_int_eq(-1, ret);
+}
+END_TEST
+
+START_TEST(test_strrmchr_4)
+{
+    char str[STR_LEN] = "pl";
+    int ret = strrmchr(str, -3);
+    ck_assert_int_eq(-1, ret);
+}
+END_TEST
+
 /*
  *  libcheck suite setup
  */
@@ -139,7 +203,7 @@ END_TEST
 Suite* suite_utils()
 {
     Suite *s;
-    TCase *t_cpuset, *t_combine;
+    TCase *t_cpuset, *t_combine, *t_strrmchr;
     s = suite_create("utils");
 
     t_cpuset = tcase_create("parse_cpuset");
@@ -155,9 +219,17 @@ Suite* suite_utils()
     tcase_add_test(t_combine, test_combine_path_3);
     tcase_add_test(t_combine, test_combine_path_4);
     tcase_add_test(t_combine, test_combine_path_5);
+    tcase_add_test(t_combine, test_combine_path_6);
+
+    t_strrmchr = tcase_create("strrmchr");
+    tcase_add_test(t_strrmchr, test_strrmchr_1);
+    tcase_add_test(t_strrmchr, test_strrmchr_2);
+    tcase_add_test(t_strrmchr, test_strrmchr_3);
+    tcase_add_test(t_strrmchr, test_strrmchr_4);
 
     suite_add_tcase(s, t_cpuset);
     suite_add_tcase(s, t_combine);
+    suite_add_tcase(s, t_strrmchr);
     return s;
 }
 
