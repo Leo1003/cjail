@@ -3,6 +3,7 @@
 #include "taskstats.h"
 #include "utils.h"
 
+#include <linux/limits.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -31,22 +32,21 @@ int setup_fs()
     if(!exec_para->chroot)
         rmflag |= MS_REMOUNT;
 
-    char *devpath;
-    char *procpath = combine_path(exec_para->chroot, "/proc");
+    char procpath[PATH_MAX];
+    combine_path(procpath, exec_para->chroot, "/proc");
     IFERR(mkdir_r(procpath))
         goto procerror;
     IFERR(mount("none", procpath, "proc", rmflag | MS_NODEV | MS_NOEXEC | MS_NOSUID, ""))
         goto procerror;
-    free(procpath);
 
     if(exec_para->chroot)
     {
-        devpath = combine_path(exec_para->chroot, "/dev");
+        char devpath[PATH_MAX];
+        combine_path(devpath, exec_para->chroot, "/dev");
         IFERR(mkdir_r(devpath))
             goto deverror;
         IFERR(mount("/dev", devpath, "none", MS_BIND | MS_NOEXEC | MS_NOSUID, ""))
             goto deverror;
-        free(devpath);
     }
     if(exec_para->chroot)
     {
@@ -62,12 +62,10 @@ int setup_fs()
 
     procerror:
     PRINTERR("mount procfs");
-    free(procpath);
     return -1;
 
     deverror:
     PRINTERR("mount devfs");
-    free(devpath);
     return -1;
 
     error:
@@ -143,19 +141,19 @@ static int set_rlimit(int res, long long val)
 }
 int setup_rlimit()
 {
-    if(exec_para->lim_vss > 0)
+    if(exec_para->rlim_as > 0)
     {
-        IFERR(set_rlimit(RLIMIT_AS, exec_para->lim_vss * 1024))
+        IFERR(set_rlimit(RLIMIT_AS, exec_para->rlim_as * 1024))
             goto error;
     }
-    if(exec_para->lim_fsize > 0)
+    if(exec_para->rlim_fsize > 0)
     {
-        IFERR(set_rlimit(RLIMIT_FSIZE, exec_para->lim_fsize * 1024))
+        IFERR(set_rlimit(RLIMIT_FSIZE, exec_para->rlim_fsize * 1024))
         goto error;
     }
-    if(exec_para->lim_proc > 0)
+    if(exec_para->rlim_proc > 0)
     {
-        IFERR(set_rlimit(RLIMIT_NPROC, exec_para->lim_proc))
+        IFERR(set_rlimit(RLIMIT_NPROC, exec_para->rlim_proc))
         goto error;
     }
 

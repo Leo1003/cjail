@@ -2,6 +2,7 @@
 #include "utils.h"
 
 #include <check.h>
+#include <linux/limits.h>
 #include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -106,52 +107,48 @@ END_TEST
 
 START_TEST(test_combine_path_1)
 {
-    char *str;
-    str = combine_path("/root", "/dev");
+    char str[PATH_MAX];
+    combine_path(str, "/root", "/dev");
     ck_assert_str_eq("/root/dev", str);
-    free(str);
 }
 END_TEST
 
 START_TEST(test_combine_path_2)
 {
-    char *str;
-    str = combine_path("/root", "dev");
+    char str[PATH_MAX];
+    combine_path(str, "/root", "dev");
     ck_assert_str_eq("/root/dev", str);
-    free(str);
 }
 END_TEST
 
 START_TEST(test_combine_path_3)
 {
-    char *str;
-    str = combine_path("/", "/dev");
+    char str[PATH_MAX];
+    combine_path(str, "/", "/dev");
     ck_assert_str_eq("/dev", str);
-    free(str);
 }
 END_TEST
 
 START_TEST(test_combine_path_4)
 {
-    char *str;
-    str = combine_path(NULL, "/dev");
+    char str[PATH_MAX];
+    combine_path(str, NULL, "/dev");
     ck_assert_str_eq("/dev", str);
-    free(str);
 }
 END_TEST
 
 START_TEST(test_combine_path_5)
 {
-    char *str;
-    str = combine_path(NULL, "dev");
+    char str[PATH_MAX];
+    combine_path(str, NULL, "dev");
     ck_assert_str_eq("/dev", str);
-    free(str);
 }
 END_TEST
 
 START_TEST(test_combine_path_6)
 {
-    char *str, root[MAXPATHLEN], path[MAXPATHLEN], ans[MAXPATHLEN];
+    char str[PATH_MAX];
+    char root[PATH_MAX], path[PATH_MAX], ans[PATH_MAX];
     const int rc = 3072, pc = 2048;
     for(int i = 0; i < rc; i++)
         root[i] = 'r';
@@ -159,7 +156,7 @@ START_TEST(test_combine_path_6)
     for(int i = 0; i < pc; i++)
         path[i] = 'p';
     path[pc] = '\0';
-    for(int i = 0; i < MAXPATHLEN; i++)
+    for(int i = 0; i < PATH_MAX; i++)
     {
         if(i < rc)
             ans[i] = 'r';
@@ -168,11 +165,10 @@ START_TEST(test_combine_path_6)
         else
             ans[i] = 'p';
     }
-    ans[MAXPATHLEN - 1] = '\0';
+    ans[PATH_MAX - 1] = '\0';
 
-    str = combine_path(root, path);
+    combine_path(str, root, path);
     ck_assert_str_eq(ans, str);
-    free(str);
 }
 END_TEST
 

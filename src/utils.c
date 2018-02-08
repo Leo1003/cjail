@@ -106,26 +106,22 @@ int mkdir_r(const char* path)
     }
 }
 
-char* combine_path(const char *root, const char *path)
+int combine_path(char *s, const char *root, const char *path)
 {
     if(!root)
-        return combine_path("/", path);
+        return combine_path(s, "/", path);
 
-    char *r = malloc(MAXPATHLEN);
-    if(!r)
-        return NULL;
-
-    char rtmp[MAXPATHLEN], ptmp[MAXPATHLEN];
-    strlcpy(rtmp, root, sizeof(char) * MAXPATHLEN);
-    strlcpy(ptmp, path, sizeof(char) * MAXPATHLEN);
+    char rtmp[PATH_MAX], ptmp[PATH_MAX];
+    strlcpy(rtmp, root, sizeof(char) * PATH_MAX);
+    strlcpy(ptmp, path, sizeof(char) * PATH_MAX);
 
     if(rtmp[strlen(root) - 1] == '/')
         strrmchr(rtmp, -1);
     if(ptmp[0] == '/')
         strrmchr(ptmp, 0);
 
-    snprintf(r, sizeof(char) * MAXPATHLEN, "%s/%s", rtmp, ptmp);
-    return r;
+    snprintf(s, sizeof(char) * PATH_MAX, "%s/%s", rtmp, ptmp);
+    return 0;
 }
 
 int strrmchr(char* str, int index)
