@@ -172,6 +172,30 @@ START_TEST(test_combine_path_6)
 }
 END_TEST
 
+START_TEST(test_combine_path_7)
+{
+    char str[PATH_MAX];
+    combine_path(str, "", "dev");
+    ck_assert_str_eq("/dev", str);
+}
+END_TEST
+
+START_TEST(test_combine_path_8)
+{
+    char str[PATH_MAX];
+    combine_path(str, "", "");
+    ck_assert_str_eq("/", str);
+}
+END_TEST
+
+START_TEST(test_combine_path_9)
+{
+    char str[PATH_MAX];
+    combine_path(str, "/new_root", "");
+    ck_assert_str_eq("/new_root/", str);
+}
+END_TEST
+
 /*
  *  Tests for testing strrmchr()
  */
@@ -233,6 +257,9 @@ Suite* suite_utils()
     tcase_add_test(t_combine, test_combine_path_4);
     tcase_add_test(t_combine, test_combine_path_5);
     tcase_add_test(t_combine, test_combine_path_6);
+    tcase_add_test(t_combine, test_combine_path_7);
+    tcase_add_test(t_combine, test_combine_path_8);
+    tcase_add_test(t_combine, test_combine_path_9);
 
     t_strrmchr = tcase_create("strrmchr");
     tcase_add_test(t_strrmchr, test_strrmchr_1);

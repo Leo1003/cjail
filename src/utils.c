@@ -108,8 +108,10 @@ int mkdir_r(const char* path)
 
 int combine_path(char *s, const char *root, const char *path)
 {
-    if(!root)
+    if(!root || !strcmp(root, ""))
         return combine_path(s, "/", path);
+    if(!path || !strcmp(path, ""))
+        return combine_path(s, root, "/");
 
     char rtmp[PATH_MAX], ptmp[PATH_MAX];
     strlcpy(rtmp, root, sizeof(char) * PATH_MAX);
