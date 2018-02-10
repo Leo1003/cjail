@@ -12,8 +12,8 @@
 
 struct cjail_para
 {
-    //TODO: Add dup fd para
-    char **argv, **environ, *chroot, *workingDir, *fd_input, *fd_output, *fd_err;
+    int fd_input, fd_output, fd_err;
+    char **argv, **environ, *chroot, *workingDir, *redir_input, *redir_output, *redir_err, *cgroup_root;
     cpu_set_t *cpuset;
     uid_t uid;
     gid_t gid;

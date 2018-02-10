@@ -1,4 +1,5 @@
 #include "cjail.h"
+#include "cgroup.h"
 #include "setup.h"
 #include "taskstats.h"
 #include "utils.h"
@@ -75,22 +76,22 @@ int setup_fs()
 
 int setup_fd()
 {
-    if (exec_para->fd_input)
+    if (exec_para->redir_input)
     {
         close(STDIN_FILENO);
-        IFERR(open(exec_para->fd_input, O_RDONLY))
+        IFERR(open(exec_para->redir_input, O_RDONLY))
             goto error;
     }
-    if (exec_para->fd_output)
+    if (exec_para->redir_output)
     {
         close(STDOUT_FILENO);
-        IFERR(open(exec_para->fd_output, O_WRONLY | O_CREAT | O_TRUNC, 0666))
+        IFERR(open(exec_para->redir_output, O_WRONLY | O_CREAT | O_TRUNC, 0666))
             goto error;
     }
-    if (exec_para->fd_err)
+    if (exec_para->redir_err)
     {
         close(STDERR_FILENO);
-        IFERR(open(exec_para->fd_err, O_WRONLY | O_CREAT | O_TRUNC, 0666))
+        IFERR(open(exec_para->redir_err, O_WRONLY | O_CREAT | O_TRUNC, 0666))
             goto error;
     }
     else
@@ -176,6 +177,25 @@ int setup_taskstats(struct ts_socket *s)
     error:
     PRINTERR("setup_taskstats");
     return -1;
+}
+
+int setup_cgroup(int *memfd)
+{
+    if(exec_para->cgroup_root)
+        IFERR(cgroup_set_root(exec_para->cgroup_root))
+            return -1;
+
+    if(exec_para->cg_rss > 0)
+    {
+        IFERR(cgroup_create("memory"))
+            return -1;
+        IFERR(cgroup_write("memory", "memory.limit_in_bytes", "%lld", exec_para->cg_rss * 1024))
+            return -1;
+        *memfd = cgroup_open_tasks("memory");
+        if(*memfd < 0)
+            return -1;
+    }
+    return 0;
 }
 
 int setup_seccomp(void* exec_argv)

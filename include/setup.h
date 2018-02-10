@@ -10,8 +10,7 @@ int setup_signals();
 int setup_cpumask();
 int setup_rlimit();
 int setup_taskstats(struct ts_socket* s);
-int setup_cgroup();
-int enter_cgroup(pid_t pid);
+int setup_cgroup(int* memfd);
 int setup_seccomp(void* exec_argv);
 
 #endif
