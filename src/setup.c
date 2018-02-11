@@ -76,29 +76,63 @@ int setup_fs()
 
 int setup_fd()
 {
-    if (exec_para->redir_input)
+    if (exec_para->fd_input)
+    {
+        close(STDIN_FILENO);
+        IFERR(dup2(exec_para->fd_input, STDIN_FILENO))
+        {
+            pdebugf("dup2(): %d -> %d\n", exec_para->fd_input, STDIN_FILENO);
+            goto error;
+        }
+    }
+    else if (exec_para->redir_input)
     {
         close(STDIN_FILENO);
         IFERR(open(exec_para->redir_input, O_RDONLY))
+        {
+            pdebugf("open(): %s\n", exec_para->redir_input);
             goto error;
+        }
     }
-    if (exec_para->redir_output)
+
+    if (exec_para->fd_output)
+    {
+        close(STDOUT_FILENO);
+        IFERR(dup2(exec_para->fd_output, STDOUT_FILENO))
+        {
+            pdebugf("dup2(): %d -> %d\n", exec_para->fd_output, STDOUT_FILENO);
+            goto error;
+        }
+    }
+    else if (exec_para->redir_output)
     {
         close(STDOUT_FILENO);
         IFERR(open(exec_para->redir_output, O_WRONLY | O_CREAT | O_TRUNC, 0666))
+        {
+            pdebugf("open(): %s\n", exec_para->redir_output);
             goto error;
+        }
     }
-    if (exec_para->redir_err)
+
+    if (exec_para->fd_err)
+    {
+        close(STDERR_FILENO);
+        IFERR(dup2(exec_para->fd_err, STDERR_FILENO))
+        {
+            pdebugf("dup2(): %d -> %d\n", exec_para->fd_err, STDERR_FILENO);
+            goto error;
+        }
+    }
+    else if (exec_para->redir_err)
     {
         close(STDERR_FILENO);
         IFERR(open(exec_para->redir_err, O_WRONLY | O_CREAT | O_TRUNC, 0666))
+        {
+            pdebugf("open(): %s\n", exec_para->redir_err);
             goto error;
+        }
     }
-    else
-    {
-        IFERR(dup2(STDOUT_FILENO, STDERR_FILENO))
-            goto error;
-    }
+
     IFERR(closefrom(STDERR_FILENO))
         return -1;
     return 0;

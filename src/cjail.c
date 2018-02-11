@@ -29,6 +29,7 @@ int cjail_exec(struct cjail_para *para, struct taskstats *result)
     child_stack = malloc(STACKSIZE);
     pid_t initpid = clone(child_init, child_stack + STACKSIZE,
                           SIGCHLD | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWNET | CLONE_NEWPID, NULL);
+    //FIXME: Rewrite and add error handling
     size_t n = read(tspipe[0], result, sizeof(result));
     waitpid(initpid, &wstatus, 0);
     if(WIFEXITED(wstatus))
