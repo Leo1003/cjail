@@ -30,33 +30,33 @@ int setup_fs()
     IFERR(mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL))
         goto error;
     int rmflag = 0;
-    if(!exec_para->chroot)
+    if(!exec_para->para.chroot)
         rmflag |= MS_REMOUNT;
 
     char procpath[PATH_MAX];
-    combine_path(procpath, exec_para->chroot, "/proc");
+    combine_path(procpath, exec_para->para.chroot, "/proc");
     IFERR(mkdir_r(procpath))
         goto procerror;
     IFERR(mount("none", procpath, "proc", rmflag | MS_NODEV | MS_NOEXEC | MS_NOSUID, ""))
         goto procerror;
 
-    if(exec_para->chroot)
+    if(exec_para->para.chroot)
     {
         char devpath[PATH_MAX];
-        combine_path(devpath, exec_para->chroot, "/dev");
+        combine_path(devpath, exec_para->para.chroot, "/dev");
         IFERR(mkdir_r(devpath))
             goto deverror;
         IFERR(mount("/dev", devpath, "none", MS_BIND | MS_NOEXEC | MS_NOSUID, ""))
             goto deverror;
     }
-    if(exec_para->chroot)
+    if(exec_para->para.chroot)
     {
-        IFERR(chroot(exec_para->chroot))
+        IFERR(chroot(exec_para->para.chroot))
             goto error;
     }
-    if(exec_para->workingDir)
+    if(exec_para->para.workingDir)
     {
-        IFERR(chdir(exec_para->workingDir))
+        IFERR(chdir(exec_para->para.workingDir))
             goto error;
     }
     return 0;
@@ -76,59 +76,59 @@ int setup_fs()
 
 int setup_fd()
 {
-    if (exec_para->fd_input)
+    if (exec_para->para.fd_input)
     {
         close(STDIN_FILENO);
-        IFERR(dup2(exec_para->fd_input, STDIN_FILENO))
+        IFERR(dup2(exec_para->para.fd_input, STDIN_FILENO))
         {
-            pdebugf("dup2(): %d -> %d\n", exec_para->fd_input, STDIN_FILENO);
+            pdebugf("dup2(): %d -> %d\n", exec_para->para.fd_input, STDIN_FILENO);
             goto error;
         }
     }
-    else if (exec_para->redir_input)
+    else if (exec_para->para.redir_input)
     {
         close(STDIN_FILENO);
-        IFERR(open(exec_para->redir_input, O_RDONLY))
+        IFERR(open(exec_para->para.redir_input, O_RDONLY))
         {
-            pdebugf("open(): %s\n", exec_para->redir_input);
+            pdebugf("open(): %s\n", exec_para->para.redir_input);
             goto error;
         }
     }
 
-    if (exec_para->fd_output)
+    if (exec_para->para.fd_output)
     {
         close(STDOUT_FILENO);
-        IFERR(dup2(exec_para->fd_output, STDOUT_FILENO))
+        IFERR(dup2(exec_para->para.fd_output, STDOUT_FILENO))
         {
-            pdebugf("dup2(): %d -> %d\n", exec_para->fd_output, STDOUT_FILENO);
+            pdebugf("dup2(): %d -> %d\n", exec_para->para.fd_output, STDOUT_FILENO);
             goto error;
         }
     }
-    else if (exec_para->redir_output)
+    else if (exec_para->para.redir_output)
     {
         close(STDOUT_FILENO);
-        IFERR(open(exec_para->redir_output, O_WRONLY | O_CREAT | O_TRUNC, 0666))
+        IFERR(open(exec_para->para.redir_output, O_WRONLY | O_CREAT | O_TRUNC, 0666))
         {
-            pdebugf("open(): %s\n", exec_para->redir_output);
+            pdebugf("open(): %s\n", exec_para->para.redir_output);
             goto error;
         }
     }
 
-    if (exec_para->fd_err)
+    if (exec_para->para.fd_err)
     {
         close(STDERR_FILENO);
-        IFERR(dup2(exec_para->fd_err, STDERR_FILENO))
+        IFERR(dup2(exec_para->para.fd_err, STDERR_FILENO))
         {
-            pdebugf("dup2(): %d -> %d\n", exec_para->fd_err, STDERR_FILENO);
+            pdebugf("dup2(): %d -> %d\n", exec_para->para.fd_err, STDERR_FILENO);
             goto error;
         }
     }
-    else if (exec_para->redir_err)
+    else if (exec_para->para.redir_err)
     {
         close(STDERR_FILENO);
-        IFERR(open(exec_para->redir_err, O_WRONLY | O_CREAT | O_TRUNC, 0666))
+        IFERR(open(exec_para->para.redir_err, O_WRONLY | O_CREAT | O_TRUNC, 0666))
         {
-            pdebugf("open(): %s\n", exec_para->redir_err);
+            pdebugf("open(): %s\n", exec_para->para.redir_err);
             goto error;
         }
     }
@@ -157,9 +157,9 @@ int setup_signals()
 
 int setup_cpumask()
 {
-    if(exec_para->cpuset)
+    if(exec_para->para.cpuset)
     {
-        IFERR(sched_setaffinity(getpid(), sizeof(*exec_para->cpuset), exec_para->cpuset))
+        IFERR(sched_setaffinity(getpid(), sizeof(*exec_para->para.cpuset), exec_para->para.cpuset))
         {
             PRINTERR("setup_cpumask");
             return -1;
@@ -176,19 +176,19 @@ static int set_rlimit(int res, long long val)
 }
 int setup_rlimit()
 {
-    if(exec_para->rlim_as > 0)
+    if(exec_para->para.rlim_as > 0)
     {
-        IFERR(set_rlimit(RLIMIT_AS, exec_para->rlim_as * 1024))
+        IFERR(set_rlimit(RLIMIT_AS, exec_para->para.rlim_as * 1024))
             goto error;
     }
-    if(exec_para->rlim_fsize > 0)
+    if(exec_para->para.rlim_fsize > 0)
     {
-        IFERR(set_rlimit(RLIMIT_FSIZE, exec_para->rlim_fsize * 1024))
+        IFERR(set_rlimit(RLIMIT_FSIZE, exec_para->para.rlim_fsize * 1024))
         goto error;
     }
-    if(exec_para->rlim_proc > 0)
+    if(exec_para->para.rlim_proc > 0)
     {
-        IFERR(set_rlimit(RLIMIT_NPROC, exec_para->rlim_proc))
+        IFERR(set_rlimit(RLIMIT_NPROC, exec_para->para.rlim_proc))
         goto error;
     }
 
@@ -201,9 +201,9 @@ int setup_taskstats(struct ts_socket *s)
 {
     IFERR(taskstats_create(s))
         goto error;
-    if(exec_para->cpuset)
+    if(exec_para->para.cpuset)
     {
-        IFERR(taskstats_setcpuset(s, exec_para->cpuset))
+        IFERR(taskstats_setcpuset(s, exec_para->para.cpuset))
             goto error;
     }
     return 0;
@@ -215,15 +215,15 @@ int setup_taskstats(struct ts_socket *s)
 
 int setup_cgroup(int *memfd)
 {
-    if(exec_para->cgroup_root)
-        IFERR(cgroup_set_root(exec_para->cgroup_root))
+    if(exec_para->para.cgroup_root)
+        IFERR(cgroup_set_root(exec_para->para.cgroup_root))
             return -1;
 
-    if(exec_para->cg_rss > 0)
+    if(exec_para->para.cg_rss > 0)
     {
         IFERR(cgroup_create("memory"))
             return -1;
-        IFERR(cgroup_write("memory", "memory.limit_in_bytes", "%lld", exec_para->cg_rss * 1024))
+        IFERR(cgroup_write("memory", "memory.limit_in_bytes", "%lld", exec_para->para.cg_rss * 1024))
             return -1;
         *memfd = cgroup_open_tasks("memory");
         if(*memfd < 0)
@@ -239,18 +239,18 @@ int setup_seccomp(void* exec_argv)
     if(!ctx)
         goto error;
     int i = 0;
-    while(exec_para->seccomplist[i])
+    while(exec_para->para.seccomplist[i])
     {
 #ifndef NDEBUG
-        char *scname = seccomp_syscall_resolve_num_arch(exec_para->seccomplist[i], seccomp_arch_native());
-        pdebugf("seccomp_rule_add: %d %s", exec_para->seccomplist[i], scname);
+        char *scname = seccomp_syscall_resolve_num_arch(exec_para->para.seccomplist[i], seccomp_arch_native());
+        pdebugf("seccomp_rule_add: %d %s", exec_para->para.seccomplist[i], scname);
         free(scname);
         /* In the case of seccomp_syscall_resolve_num_arch() the associated syscall name is
          * returned and it remains the callers responsibility to free the returned string
          * via free(3).
          */
 #endif
-        IFERR(seccomp_rule_add(ctx, SCMP_ACT_ALLOW, exec_para->seccomplist[i], 0))
+        IFERR(seccomp_rule_add(ctx, SCMP_ACT_ALLOW, exec_para->para.seccomplist[i], 0))
             goto error;
     }
     if(exec_argv)

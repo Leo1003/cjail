@@ -4,6 +4,7 @@
 #define _GNU_SOURCE
 #include <linux/taskstats.h>
 #include <sched.h>
+#include <signal.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
@@ -23,8 +24,22 @@ struct cjail_para
     int *seccomplist;
 };
 
-extern int tspipe[2];
-extern struct cjail_para *exec_para;
-int cjail_exec(struct cjail_para *para, struct taskstats *result);
+struct cjail_result
+{
+    struct taskstats stats;
+    siginfo_t info;
+    struct timeval time;
+};
+
+
+struct __exec_para
+{
+    struct cjail_para para;
+    int resultpipe[2];
+    int memcgtasksfd;
+};
+
+extern struct __exec_para *exec_para;
+int cjail_exec(struct cjail_para *para, struct cjail_result *result);
 
 #endif
