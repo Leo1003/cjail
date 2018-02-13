@@ -51,7 +51,7 @@ inline static void init_signalset()
     sigaddset(&sa.sa_mask, SIGTERM);
     sigaddset(&sa.sa_mask, SIGCHLD);
     sa.sa_sigaction = sigact;
-    sa.sa_flags = SA_NOCLDSTOP | SA_SIGINFO | SA_RESTART;
+    sa.sa_flags = SA_NOCLDSTOP | SA_SIGINFO;
     sigaction(SIGHUP , &sa, NULL);
     sigaction(SIGINT , &sa, NULL);
     sigaction(SIGQUIT, &sa, NULL);
@@ -68,11 +68,11 @@ int child_init(void *arg)
     //we should register the signals, otherwise they will be ignored because we are init process
     init_signalset();
 
-    close(exec_para->resultpipe[0]);
+    close(exec_para.resultpipe[0]);
     IFERR(setup_fs())
-        abort();
+        _exit(1);
     IFERR(setup_taskstats(&tssock))
-        abort();
+        _exit(1);
 
     pid = fork();
     if(pid > 0)
@@ -82,10 +82,10 @@ int child_init(void *arg)
         struct taskstats ts;
         struct timeval stime, etime, timespan;
         gettimeofday(&stime, NULL);
-        if(exec_para->para.lim_time)
+        if(exec_para.para.lim_time)
         {
             struct itimerval it;
-            it.it_value = *exec_para->para.lim_time;
+            it.it_value = *exec_para.para.lim_time;
             IFERR(setitimer(ITIMER_REAL, &it, NULL))
             {
                 PRINTERR("setitimer");
@@ -164,18 +164,18 @@ int child_init(void *arg)
         result.info = sinfo;
         result.time = timespan;
         result.stats = ts;
-        write(exec_para->resultpipe[1], &result, sizeof(result));
+        write(exec_para.resultpipe[1], &result, sizeof(result));
         taskstats_destory(&tssock);
         exit(0);
 
         error:
         taskstats_destory(&tssock);
-        abort();
+        _exit(1);
     }
     else if(pid == 0)
     {
-        uid_t uid = exec_para->para.uid;
-        gid_t gid = exec_para->para.gid;
+        uid_t uid = exec_para.para.uid;
+        gid_t gid = exec_para.para.gid;
         IFERR(setresgid(gid, gid, gid))
         {
             PRINTERR("setgid");
@@ -186,7 +186,7 @@ int child_init(void *arg)
             PRINTERR("setuid");
             raise(SIGUSR1);
         }
-        IFERR(setup_signals())
+        IFERR(reset_signals())
             raise(SIGUSR1);
         IFERR(setup_cpumask())
             raise(SIGUSR1);
@@ -194,15 +194,15 @@ int child_init(void *arg)
             raise(SIGUSR1);
         IFERR(setup_fd())
             raise(SIGUSR1);
-        IFERR(setup_seccomp(exec_para->para.argv))
+        IFERR(setup_seccomp(exec_para.para.argv))
             raise(SIGUSR1);
-        execve(exec_para->para.argv[0], exec_para->para.argv, exec_para->para.environ);
+        execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
         raise(SIGUSR1);
     }
     else
     {
         PRINTERR("fork");
-        abort();
+        _exit(1);
     }
-    abort(); // it shouldn't be here!
+    _exit(1); // it shouldn't be here!
 }

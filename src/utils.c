@@ -20,9 +20,9 @@ int closefrom(int minfd)
     while((dent = readdir(fddir)) != NULL)
     {
         int fd = atoi(dent->d_name);
-        pdebugf("closing fd: %d\n", fd);
         if(fd > minfd && fd != dirfd(fddir))
         {
+            pdebugf("closing fd: %d\n", fd);
             IFERR(close(fd))
                 goto error;
         }

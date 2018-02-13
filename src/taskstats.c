@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <linux/netlink.h>
 
 /* getdelays.c
  *
@@ -97,12 +98,22 @@ static int get_family_id(int sd)
                   CTRL_ATTR_FAMILY_NAME, (void *)name,
                   strlen(TASKSTATS_GENL_NAME)+1);
     if (rc < 0)
-        return 0;	/* sendto() failure? */
+    {
+        pdebugf("send_cmd() failed\n");
+        return 0;
+    }	/* sendto() failure? */
 
     rep_len = recv(sd, &ans, sizeof(ans), 0);
     if (ans.n.nlmsg_type == NLMSG_ERROR ||
         (rep_len < 0) || !NLMSG_OK((&ans.n), rep_len))
-        return 0;
+        {
+            pdebugf("recv() failed\n");
+            pdebugf("NLMSG_ERROR: %d\n", ans.n.nlmsg_type == NLMSG_ERROR);
+            pdebugf("rep_len: %d\n", rep_len);
+            struct nlmsgerr* err = NLMSG_DATA(&ans);
+            pdebugf("Error: %d\n", err->error);
+            return 0;
+        }
 
     na = (struct nlattr *) GENLMSG_DATA(&ans);
     na = (struct nlattr *) ((char *) na + NLA_ALIGN(na->nla_len));
@@ -117,13 +128,13 @@ int taskstats_create(struct ts_socket *s)
     memset(s, 0, sizeof(*s)); //empty socket object
     IFERR(s->socketfd = create_nl_socket(NETLINK_GENERIC))
     {
-        PRINTERR("create_nl_socket");
+        perrf("Failed to create netlink socket\n");
         return -1;
     }
     pdebugf("Created netlink socket: fd %d\n", s->socketfd);
     if(!(s->familyid = get_family_id(s->socketfd)))
     {
-        PRINTERR("get_family_id");
+        perrf("Failed to get family id\n");
         return -1;
     }
     pdebugf("Got family id: %d\n", s->familyid);
@@ -137,12 +148,13 @@ int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
         PRINTERR("parse_cpuset");
         return -1;
     }
-    IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
-                   TASKSTATS_CMD_ATTR_REGISTER_CPUMASK, s->cpumask, strlen(s->cpumask) + 1))
-    {
-        PRINTERR("taskstats_setcpuset");
-        return -1;
-    }
+    pdebugf("Setting cpumask to: %s\n", s->cpumask);
+//     IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
+//                    TASKSTATS_CMD_ATTR_REGISTER_CPUMASK, s->cpumask, strlen(s->cpumask) + 1))
+//     {
+//         perrf("Failed to taskstats_setcpuset\n");
+//         return -1;
+//     }
     s->maskset = 1;
     return 0;
 }
@@ -152,7 +164,7 @@ int taskstats_setpid(struct ts_socket* s, pid_t pid)
     IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
         TASKSTATS_CMD_ATTR_PID, &pid, sizeof(pid)))
     {
-        PRINTERR("taskstats_setpid");
+        perrf("Failed to taskstats_setpid\n");
         return -1;
     }
     return 0;
@@ -168,7 +180,7 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
     }
     if (msg.n.nlmsg_type == NLMSG_ERROR || !NLMSG_OK((&msg.n), rep_len)) {
         struct nlmsgerr* err = NLMSG_DATA(&msg);
-        errno = err->error;
+        errno = -(err->error);
         PRINTERR("fatal reply error");
         return -1;
     }

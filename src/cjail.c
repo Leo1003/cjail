@@ -13,7 +13,7 @@
 #include <sys/signal.h>
 #include <sys/wait.h>
 
-struct __exec_para *exec_para;
+struct __exec_para exec_para;
 
 int cjail_exec(struct cjail_para* para, struct cjail_result* result)
 {
@@ -24,12 +24,12 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     if(!para)
         return -EINVAL;
 
-    IFERR(pipe(exec_para->resultpipe))
+    IFERR(pipe(exec_para.resultpipe))
     {
         PRINTERR("create pipe");
         return -errno;
     }
-    exec_para->para = *para;
+    exec_para.para = *para;
 
     child_stack = malloc(STACKSIZE);
     if(!child_stack)
@@ -44,9 +44,9 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         PRINTERR("clone child namespace init process");
         return -errno;
     }
-    close(exec_para->resultpipe[1]);
+    close(exec_para.resultpipe[1]);
 
-    size_t n = read(exec_para->resultpipe[0], result, sizeof(*result));
+    size_t n = read(exec_para.resultpipe[0], result, sizeof(*result));
     IFERR(n)
         PRINTERR("get result");
 
@@ -59,7 +59,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         }
     }
 
-    if(WIFSIGNALED(wstatus) && WTERMSIG(wstatus) == SIGABRT)
+    if(WIFEXITED(wstatus) && WEXITSTATUS(wstatus) == 1)
     {
         perrf("child namespace init process abnormal terminated\n");
         return EXIT_FAILURE;
