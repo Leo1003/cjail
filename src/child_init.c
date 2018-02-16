@@ -19,6 +19,7 @@
 static int alarmed = 0;
 static int interrupted = 0;
 static int child = 0;
+static int continued = 0;
 
 void sigact(int sig, siginfo_t *info, void *data)
 {
@@ -37,6 +38,10 @@ void sigact(int sig, siginfo_t *info, void *data)
             child = 1;
             break;
     }
+    if(sig == SIGRTMIN)
+    {
+        continued = 1;
+    }
 }
 
 inline static void init_signalset()
@@ -50,6 +55,7 @@ inline static void init_signalset()
     sigaddset(&sa.sa_mask, SIGALRM);
     sigaddset(&sa.sa_mask, SIGTERM);
     sigaddset(&sa.sa_mask, SIGCHLD);
+    sigaddset(&sa.sa_mask, SIGRTMIN);
     sa.sa_sigaction = sigact;
     sa.sa_flags = SA_NOCLDSTOP | SA_SIGINFO;
     sigaction(SIGHUP , &sa, NULL);
@@ -58,11 +64,11 @@ inline static void init_signalset()
     sigaction(SIGALRM, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGCHLD, &sa, NULL);
+    sigaction(SIGRTMIN, &sa, NULL);
 }
 
 int child_init(void *arg)
 {
-    struct ts_socket tssock;
     pid_t pid;
 
     //we should register the signals, otherwise they will be ignored because we are init process
@@ -71,16 +77,30 @@ int child_init(void *arg)
     close(exec_para.resultpipe[0]);
     IFERR(setup_fs())
         _exit(1);
-    IFERR(setup_taskstats(&tssock))
-        _exit(1);
 
     pid = fork();
     if(pid > 0)
     {
         struct cjail_result result;
         siginfo_t sinfo;
-        struct taskstats ts;
         struct timeval stime, etime, timespan;
+        bzero(&result, sizeof(result));
+
+        pdebugf("Writing tasks file, PID: %d\n", pid);
+        FILE *pidfile = fdopen(exec_para.cgtasksfd, "r+");
+        if(!pidfile)
+        {
+            PRINTERR("fdopen cgroup task");
+            goto error;
+        }
+        fprintf(pidfile, "%d", pid);
+        fflush(pidfile);
+        fclose(pidfile);
+        pdebugf("Writed into tasks file\n");
+        if(!continued)
+            pause();
+        pdebugf("init continued from rt_signal\n");
+
         gettimeofday(&stime, NULL);
         if(exec_para.para.lim_time)
         {
@@ -154,22 +174,14 @@ int child_init(void *arg)
                 PRINTERR("unknown return type");
                 goto error;
         }
-        int ts_ret;
-        while((ts_ret = taskstats_getstats(&tssock, &ts)) == 0)
-        {
-            if(ts_ret == -1)
-                goto error;
-            pdebugf("getstats ok!\n");
-        }
+
         result.info = sinfo;
         result.time = timespan;
-        result.stats = ts;
+
         write(exec_para.resultpipe[1], &result, sizeof(result));
-        taskstats_destory(&tssock);
         exit(0);
 
         error:
-        taskstats_destory(&tssock);
         _exit(1);
     }
     else if(pid == 0)
@@ -194,8 +206,27 @@ int child_init(void *arg)
             raise(SIGUSR1);
         IFERR(setup_fd())
             raise(SIGUSR1);
+        //To avoid seccomp block the pause systemcall
+        //We move pause before it.
+        if(!continued)
+            pause();
+        signal(SIGRTMIN, SIG_DFL);
+        pdebugf("child continued from rt_signal\n");
         IFERR(setup_seccomp(exec_para.para.argv))
             raise(SIGUSR1);
+        pdebugf("Every things ready, execing target process\n");
+#ifndef NDEBUG
+        pdebugf("argv: {");
+        for(int i = 0; exec_para.para.argv[i]; i++)
+        {
+            pdebugf(" ");
+            if(i > 0)
+                pdebugf(", ");
+            pdebugf("%s", exec_para.para.argv[i]);
+        }
+        pdebugf(" }\n");
+#endif
+        //TODO: Better environ setting
         execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
         raise(SIGUSR1);
     }

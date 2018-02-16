@@ -59,19 +59,20 @@ int cgroup_read(const char* subsystem, const char* name, const char* fmt, ...)
     if(!fp)
         goto error;
 
+    int ret;
+    errno = 0;
     va_start(ap, fmt);
-    IFERR(vfscanf(fp, fmt, ap))
+    IFERR((ret = vfscanf(fp, fmt, ap)))
     {
-        int ferr;
-        if((ferr = ferror(fp)))
-            perrf("File I/O error: %s\n" , strerror(ferr));
-        va_end(ap);
-        fclose(fp);
-        goto error;
+        if(errno)
+        {
+            pdebugf("cgroup_read error: %s\n", settingpath);
+            PRINTERR("read cgroup");
+        }
     }
     va_end(ap);
     fclose(fp);
-    return 0;
+    return ret;
 
     error:
     pdebugf("cgroup_read error: %s\n", settingpath);
@@ -90,19 +91,20 @@ int cgroup_write(const char* subsystem, const char* name, const char* fmt, ...)
     if(!fp)
         goto error;
 
+    int ret;
+    errno = 0;
     va_start(ap, fmt);
-    IFERR(vfprintf(fp, fmt, ap))
+    IFERR((ret = vfprintf(fp, fmt, ap)))
     {
-        int ferr;
-        if((ferr = ferror(fp)))
-            perrf("File I/O error: %s\n" , strerror(ferr));
-        va_end(ap);
-        fclose(fp);
-        goto error;
+        if(errno)
+        {
+            pdebugf("cgroup_write error: %s\n", settingpath);
+            PRINTERR("write cgroup");
+        }
     }
     va_end(ap);
     fclose(fp);
-    return 0;
+    return ret;
 
     error:
     pdebugf("cgroup_write error: %s\n", settingpath);

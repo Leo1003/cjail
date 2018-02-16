@@ -37,7 +37,7 @@ int setup_fs()
     combine_path(procpath, exec_para.para.chroot, "/proc");
     IFERR(mkdir_r(procpath))
         goto procerror;
-    IFERR(mount("none", procpath, "proc", rmflag | MS_NODEV | MS_NOEXEC | MS_NOSUID, ""))
+    IFERR(mount("proc", procpath, "proc", MS_NODEV | MS_NOEXEC | MS_NOSUID, ""))
         goto procerror;
 
     if(exec_para.para.chroot)
@@ -144,7 +144,7 @@ int setup_fd()
 
 int reset_signals()
 {
-    for(int s = SIGHUP; s < SIGRTMAX; s++)
+    for(int s = SIGHUP; s < SIGSYS; s++)
     {
         IFERR(signal(s, SIG_DFL))
         {
@@ -200,7 +200,7 @@ int setup_rlimit()
             goto error;
         pdebugf("setup_rlimit: RLIMIT_NPROC set to %lld\n", exec_para.para.rlim_proc);
     }
-    if(exec_para.para.rlim_stack >= 0)
+    if(exec_para.para.rlim_stack > 0)
     {
         IFERR(set_rlimit(RLIMIT_STACK, exec_para.para.rlim_stack * 1024))
             goto error;
@@ -229,10 +229,16 @@ int setup_taskstats(struct ts_socket *s)
     return -1;
 }
 
-int setup_cgroup(int *memfd)
+int setup_cgroup(int *pidfd)
 {
     if(exec_para.para.cgroup_root)
         IFERR(cgroup_set_root(exec_para.para.cgroup_root))
+            return -1;
+
+    IFERR(cgroup_create("pids"))
+        return -1;
+    *pidfd = cgroup_open_tasks("pids");
+        if(*pidfd < 0)
             return -1;
 
     if(exec_para.para.cg_rss > 0)
@@ -240,9 +246,6 @@ int setup_cgroup(int *memfd)
         IFERR(cgroup_create("memory"))
             return -1;
         IFERR(cgroup_write("memory", "memory.limit_in_bytes", "%lld", exec_para.para.cg_rss * 1024))
-            return -1;
-        *memfd = cgroup_open_tasks("memory");
-        if(*memfd < 0)
             return -1;
     }
     return 0;

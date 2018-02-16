@@ -36,7 +36,7 @@ struct __exec_para
 {
     struct cjail_para para;
     int resultpipe[2];
-    int memcgtasksfd;
+    int cgtasksfd;
 };
 
 extern struct __exec_para exec_para;

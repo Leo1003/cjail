@@ -50,7 +50,16 @@ int main()
         printf("    syscalls:\n");
         printf("        read: %llu\n", res.stats.read_syscalls);
         printf("        write: %llu\n", res.stats.write_syscalls);
-        printf("Exitcode: %d\n", res.info.si_status);
+        switch(res.info.si_code)
+        {
+            case CLD_EXITED:
+                printf("Exitcode: %d\n", res.info.si_status);
+                break;
+            case CLD_KILLED:
+            case CLD_DUMPED:
+                printf("Signaled: %d %s\n", res.info.si_status, strsignal(res.info.si_status));
+                break;
+        }
     }
     else
     {
