@@ -20,7 +20,7 @@ struct __exec_para exec_para;
 int cjail_exec(struct cjail_para* para, struct cjail_result* result)
 {
     void *child_stack;
-    int wstatus;
+    int wstatus, ret = 0;
     struct ts_socket tssock;
     if(geteuid())
         return -EPERM;
@@ -41,21 +41,26 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
 
     //setup taskstats
     IFERR(setup_taskstats(&tssock))
-        return -1;
+    {
+        ret = -1;
+        goto out_cgroup;
+    }
 
     //clone
     child_stack = malloc(STACKSIZE);
     if(!child_stack)
     {
         PRINTERR("malloc stack");
-        return -errno;
+        ret = -errno;
+        goto out_taskstats;
     }
     pid_t initpid = clone(child_init, child_stack + STACKSIZE,
                           SIGCHLD | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWNET | CLONE_NEWPID, NULL);
     IFERR(initpid)
     {
         PRINTERR("clone child namespace init process");
-        return -errno;
+        ret = -errno;
+        goto out_taskstats;
     }
     close(exec_para.resultpipe[1]);
     pdebugf("Init PID: %d", initpid);
@@ -85,13 +90,15 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         if(errno == ECHILD)
         {
             perrf("Lost control of child namespace init process\n");
-            return -ECHILD;
+            ret = -errno;
+            goto out_taskstats;
         }
     }
     if(WIFEXITED(wstatus) && WEXITSTATUS(wstatus) == 1)
     {
         perrf("child namespace init process abnormal terminated\n");
-        return EXIT_FAILURE;
+        ret = -WEXITSTATUS(wstatus);
+        goto out_taskstats;
     }
 
     //taskstats get stats
@@ -110,7 +117,23 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         }
     }
     if(tsret == -1)
-        return EXIT_FAILURE;
+    {
+        ret = -EXIT_FAILURE;
+        goto out_taskstats;
+    }
 
-    return 0;
+    out_taskstats:
+    IFERR(taskstats_destory(&tssock))
+    perrf("Failed to destory taskstats\n");
+
+    out_cgroup:
+    IFERR(cgroup_destory("pids"))
+        perrf("Failed to destory pids cgroup\n");
+    if(exec_para.para.cg_rss > 0)
+    {
+        IFERR(cgroup_destory("memory"))
+            perrf("Failed to destory memory cgroup\n");
+    }
+
+    return ret;
 }

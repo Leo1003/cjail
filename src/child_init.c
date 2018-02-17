@@ -152,6 +152,7 @@ int child_init(void *arg)
         }
         gettimeofday(&etime, NULL);
         timersub(&etime, &stime, &timespan);
+        //FIXME: child may double fork a process
         if(sinfo.si_pid != pid)
         {
             perrf("Lost control of child process\n");
