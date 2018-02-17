@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #include <sys/signal.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -98,6 +99,7 @@ int child_init(void *arg)
         fflush(pidfile);
         fclose(pidfile);
         pdebugf("Writed into tasks file\n");
+        //FIXME: Race condition may happen
         if(!continued)
             pause();
         pdebugf("init continued from rt_signal\n");
@@ -114,74 +116,59 @@ int child_init(void *arg)
             }
         }
 
-        wait:
-        IFERR(waitid(P_ALL, 0, &sinfo, WEXITED))
+        int chwaited = 0;
+        while(1)
         {
-            switch(errno)
+            IFERR(waitid(P_ALL, 0, &sinfo, WEXITED))
             {
-                case EINTR:
+                if(errno == ECHILD)
+                {
                     break;
-                case ECHILD:
-                    perrf("child process missing\n");
-                    goto error;
-                default:
-                    PRINTERR("waitid");
-                    goto error;
+                }
             }
-        }
-        if(interrupted)
-        {
-            perrf("Received signal, aborting...\n");
-            goto error;
-        }
-        if(alarmed)
-        {
-            alarmed = 0;
-            IFERR(kill(pid, SIGKILL))
+            if(interrupted)
             {
-                if(errno == ESRCH)
-                    goto wait;
-                PRINTERR("kill timeouted child process");
+                perrf("Received signal, aborting...\n");
                 goto error;
             }
-            goto wait;
+            if(alarmed)
+            {
+                alarmed = 0;
+                IFERR(kill(-1, SIGKILL))
+                {
+                    if(errno != ESRCH)
+                    {
+                        PRINTERR("kill timeouted child process");
+                        goto error;
+                    }
+                }
+                continue;
+            }
+            if(sinfo.si_pid == pid)
+            {
+                chwaited = 1;
+                result.info = sinfo;
+            }
         }
-        if(!child)
-        {
-            perrf("Not received SIGCHLD");
-            goto error;
-        }
-        gettimeofday(&etime, NULL);
-        timersub(&etime, &stime, &timespan);
-        //FIXME: child may double fork a process
-        if(sinfo.si_pid != pid)
+        if(!chwaited)
         {
             perrf("Lost control of child process\n");
-            pdebugf("PID should be: %d, but return %d\n", pid, sinfo.si_pid);
             goto error;
         }
-        switch(sinfo.si_code)
-        {
-            case CLD_EXITED:
-                break;
-            case CLD_KILLED:
-            case CLD_DUMPED:
-                if(sinfo.si_status == SIGUSR1)
-                {
-                    perrf("setup child process failed\n");
-                    goto error;
-                }
-                break;
-            default:
-                PRINTERR("unknown return type");
-                goto error;
-        }
 
-        result.info = sinfo;
+        gettimeofday(&etime, NULL);
+        timersub(&etime, &stime, &timespan);
         result.time = timespan;
 
         pdebugf("Sending result...\n");
         write(exec_para.resultpipe[1], &result, sizeof(result));
+
+        //move setup failed to here
+        if(sinfo.si_code == CLD_KILLED && sinfo.si_status == SIGUSR1)
+        {
+            perrf("setup child process failed\n");
+            exit(1);
+        }
         exit(0);
 
         error:
@@ -222,6 +209,7 @@ int child_init(void *arg)
             raise(SIGUSR1);
         //To avoid seccomp block the pause systemcall
         //We move pause before it.
+        //FIXME: Race condition may happen
         if(!continued)
             pause();
         signal(SIGRTMIN, SIG_DFL);
