@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <linux/taskstats.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -188,7 +189,6 @@ int child_init(void *arg)
     }
     else if(pid == 0)
     {
-        //FIXME: !!!IMPORTANT!!! not reset sid & groups list
         uid_t uid = exec_para.para.uid;
         gid_t gid = exec_para.para.gid;
         IFERR(setresgid(gid, gid, gid))
@@ -196,9 +196,20 @@ int child_init(void *arg)
             PRINTERR("setgid");
             raise(SIGUSR1);
         }
+        IFERR(setgroups(0, NULL))
+        {
+            PRINTERR("setgroups");
+            raise(SIGUSR1);
+        }
         IFERR(setresuid(uid, uid, uid))
         {
             PRINTERR("setuid");
+            raise(SIGUSR1);
+        }
+        //setsid can be configured
+        IFERR(setsid())
+        {
+            PRINTERR("setsid");
             raise(SIGUSR1);
         }
         IFERR(reset_signals())
