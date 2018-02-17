@@ -179,6 +179,7 @@ int child_init(void *arg)
         result.info = sinfo;
         result.time = timespan;
 
+        pdebugf("Sending result...\n");
         write(exec_para.resultpipe[1], &result, sizeof(result));
         exit(0);
 
@@ -187,6 +188,7 @@ int child_init(void *arg)
     }
     else if(pid == 0)
     {
+        //FIXME: !!!IMPORTANT!!! not reset sid & groups list
         uid_t uid = exec_para.para.uid;
         gid_t gid = exec_para.para.gid;
         IFERR(setresgid(gid, gid, gid))

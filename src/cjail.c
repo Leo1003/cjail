@@ -79,41 +79,46 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     kill(childpid, SIGRTMIN);
     kill(initpid, SIGRTMIN);
 
-    //get result from pipe
-    size_t n = read(exec_para.resultpipe[0], result, sizeof(*result));
-    IFERR(n)
-        PRINTERR("get result");
-
-    //wait for init process return
-    IFERR(waitpid(initpid, &wstatus, 0))
-    {
-        if(errno == ECHILD)
-        {
-            perrf("Lost control of child namespace init process\n");
-            ret = -errno;
-            goto out_taskstats;
-        }
-    }
-    if(WIFEXITED(wstatus) && WEXITSTATUS(wstatus) == 1)
-    {
-        perrf("child namespace init process abnormal terminated\n");
-        ret = -WEXITSTATUS(wstatus);
-        goto out_taskstats;
-    }
-
-    //taskstats get stats
-    //FIXME: socket buffer may overflow while the child process are executing
-    int tsret = 0;
+    //socket buffer may overflow while the child process are executing
+    int tsret = 0, waited = 0, tsgot = 0;
     struct taskstats ts;
-    while((tsret = taskstats_getstats(&tssock, &ts)) != -1)
+    while(!waited && !tsgot)
     {
-        pdebugf("taskstats got stats PID: %d\n", ts.ac_pid);
-        if(tsret == -2)
-            continue;
-        if(ts.ac_pid == childpid)
+        //wait for init process return
+        if(!waited)
         {
-            result->stats = ts;
-            break;
+            pid_t retp = waitpid(initpid, &wstatus, (tsgot ? 0 : WNOHANG));
+            IFERR(retp)
+            {
+                if(errno == ECHILD)
+                {
+                    perrf("Lost control of child namespace init process\n");
+                    ret = -errno;
+                    goto out_taskstats;
+                }
+            }
+            if(retp > 0)
+            {
+                if(WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0)
+                {
+                    perrf("child namespace init process abnormal terminated\n");
+                    ret = -WEXITSTATUS(wstatus);
+                    goto out_taskstats;
+                }
+                waited = 1;
+            }
+        }
+        //taskstats get stats
+        if(!tsgot)
+        {
+            tsret = taskstats_getstats(&tssock, &ts);
+            //pdebugf("taskstats got stats PID: %d\n", ts.ac_pid);
+            if(tsret == 0 && ts.ac_pid == childpid)
+            {
+                tsgot = 1;
+            }
+            if(tsret == -1)
+                tsgot = 1;
         }
     }
     if(tsret == -1)
@@ -121,6 +126,12 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         ret = -EXIT_FAILURE;
         goto out_taskstats;
     }
+
+    //get result from pipe
+    size_t n = read(exec_para.resultpipe[0], result, sizeof(*result));
+    IFERR(n)
+        PRINTERR("get result");
+    result->stats = ts;
 
     out_taskstats:
     IFERR(taskstats_destory(&tssock))
