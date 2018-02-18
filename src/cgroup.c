@@ -124,6 +124,11 @@ int cgroup_open_tasks(const char* subsystem)
         pdebugf("cgroup_open_tasks error: %s\n", taskspath);
         PRINTERR("open cgroup tasks");
     }
+    IFERR(fcntl(fd, F_SETFD, FD_CLOEXEC))
+    {
+        PRINTERR("set close on exec flag");
+        return -1;
+    }
     return fd;
 }
 

@@ -63,7 +63,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         goto out_taskstats;
     }
     close(exec_para.resultpipe[1]);
-    pdebugf("Init PID: %d", initpid);
+    pdebugf("Init PID: %d\n", initpid);
 
     //setup cgroup stage II
     pid_t childpid;

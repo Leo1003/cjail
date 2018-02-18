@@ -70,6 +70,11 @@ int child_init(void *arg)
     init_signalset();
 
     close(exec_para.resultpipe[0]);
+    IFERR(fcntl(exec_para.resultpipe[1], F_SETFD, FD_CLOEXEC))
+    {
+        PRINTERR("set close on exec flag");
+        return -1;
+    }
     IFERR(setup_fs())
         _exit(1);
 

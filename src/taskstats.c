@@ -1,5 +1,6 @@
 #include "taskstats.h"
 
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -129,6 +130,11 @@ int taskstats_create(struct ts_socket *s)
     IFERR(s->socketfd = create_nl_socket(NETLINK_GENERIC))
     {
         perrf("Failed to create netlink socket\n");
+        return -1;
+    }
+    IFERR(fcntl(s->socketfd, F_SETFD, FD_CLOEXEC))
+    {
+        PRINTERR("set close on exec flag");
         return -1;
     }
     pdebugf("Created netlink socket: fd %d\n", s->socketfd);

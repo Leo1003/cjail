@@ -133,8 +133,9 @@ int setup_fd()
         }
     }
 
-    IFERR(closefrom(STDERR_FILENO))
-        return -1;
+    if(!exec_para.para.prevervefd)
+        IFERR(closefrom(STDERR_FILENO))
+            return -1;
     return 0;
 
     error:
@@ -265,7 +266,7 @@ int setup_seccomp(void* exec_argv)
     while(exec_para.para.seccomplist[i])
     {
 #ifndef NDEBUG
-        char *scname = seccomp_syscall_resolve_num_arch(exec_para.para.seccomplist[i], seccomp_arch_native());
+        char *scname = seccomp_syscall_resolve_num_arch(seccomp_arch_native(), exec_para.para.seccomplist[i]);
         pdebugf("seccomp_rule_add: %d %s", exec_para.para.seccomplist[i], scname);
         free(scname);
         /* In the case of seccomp_syscall_resolve_num_arch() the associated syscall name is
@@ -275,6 +276,7 @@ int setup_seccomp(void* exec_argv)
 #endif
         IFERR(seccomp_rule_add(ctx, SCMP_ACT_ALLOW, exec_para.para.seccomplist[i], 0))
             goto error;
+        i++;
     }
     if(exec_argv)
     {

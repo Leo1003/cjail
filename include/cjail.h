@@ -14,7 +14,7 @@
 struct cjail_para
 {
     //TODO: Add preverve fd option
-    int fd_input, fd_output, fd_err;
+    int fd_input, fd_output, fd_err, prevervefd;
     char **argv, **environ, *chroot, *workingDir, *redir_input, *redir_output, *redir_err, *cgroup_root;
     cpu_set_t *cpuset;
     uid_t uid;
