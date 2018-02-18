@@ -42,6 +42,7 @@ int setup_fs()
 
     if(exec_para.para.chroot)
     {
+        //TODO: try to mount devtmpfs first
         char devpath[PATH_MAX];
         combine_path(devpath, exec_para.para.chroot, "/dev");
         IFERR(mkdir_r(devpath))

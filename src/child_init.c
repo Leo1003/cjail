@@ -234,7 +234,6 @@ int child_init(void *arg)
         }
         pdebugf(" }\n");
 #endif
-        //TODO: Better environ setting
         execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
         raise(SIGUSR1);
     }
