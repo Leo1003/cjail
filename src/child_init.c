@@ -20,8 +20,6 @@
 
 static int alarmed = 0;
 static int interrupted = 0;
-static int child = 0;
-static int continued = 0;
 
 void sigact(int sig, siginfo_t *info, void *data)
 {
@@ -37,12 +35,7 @@ void sigact(int sig, siginfo_t *info, void *data)
             alarmed = 1;
             break;
         case SIGCHLD:
-            child = 1;
             break;
-    }
-    if(sig == SIGRTMIN)
-    {
-        continued = 1;
     }
 }
 
@@ -80,6 +73,13 @@ int child_init(void *arg)
     IFERR(setup_fs())
         _exit(1);
 
+    //block the signal SIGRTMIN
+    int sig;
+    sigset_t rtset;
+    sigemptyset(&rtset);
+    sigaddset(&rtset, SIGRTMIN);
+    sigprocmask(SIG_BLOCK, &rtset, NULL);
+
     pid = fork();
     if(pid > 0)
     {
@@ -99,10 +99,11 @@ int child_init(void *arg)
         fflush(pidfile);
         fclose(pidfile);
         pdebugf("Writed into tasks file\n");
-        //FIXME: Race condition may happen
-        if(!continued)
-            pause();
+
+        //prevent race condition
+        sigwait(&rtset, &sig);
         pdebugf("init continued from rt_signal\n");
+        sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
         gettimeofday(&stime, NULL);
         if(exec_para.para.lim_time)
@@ -209,11 +210,11 @@ int child_init(void *arg)
             raise(SIGUSR1);
         //To avoid seccomp block the pause systemcall
         //We move pause before it.
-        //FIXME: Race condition may happen
-        if(!continued)
-            pause();
-        signal(SIGRTMIN, SIG_DFL);
+        sigwait(&rtset, &sig);
         pdebugf("child continued from rt_signal\n");
+        sigprocmask(SIG_UNBLOCK, &rtset, NULL);
+        signal(SIGRTMIN, SIG_DFL);
+
         IFERR(setup_seccomp(exec_para.para.argv))
             raise(SIGUSR1);
         pdebugf("Every things ready, execing target process\n");
