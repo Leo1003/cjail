@@ -54,8 +54,10 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         ret = -errno;
         goto out_taskstats;
     }
+    int optionflag = 0;
+    optionflag |= exec_para.para.sharenet ? 0 : CLONE_NEWNET;
     pid_t initpid = clone(child_init, child_stack + STACKSIZE,
-                          SIGCHLD | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWNET | CLONE_NEWPID, NULL);
+                          SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWPID | optionflag, NULL);
     IFERR(initpid)
     {
         PRINTERR("clone child namespace init process");

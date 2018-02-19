@@ -62,7 +62,7 @@ inline static void init_signalset()
     sigaction(SIGRTMIN, &sa, NULL);
 }
 
-int child_init(void *arg)
+int child_init(void *arg UNUSED)
 {
     pid_t pid;
 
@@ -140,6 +140,7 @@ int child_init(void *arg)
             if(alarmed)
             {
                 alarmed = 0;
+                pdebugf("Execution timeout, killing process...");
                 IFERR(kill(-1, SIGKILL))
                 {
                     if(errno != ESRCH)

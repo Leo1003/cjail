@@ -16,10 +16,11 @@ int main()
     bzero(&para, sizeof(para));
     para.argv = cargv;
     struct timeval limt = { .tv_sec = 0, .tv_usec = 0 };
-    int seccomplist[1024] = { 31, 0 };
+    //int seccomplist[1024] = { 31, 0 };
 
     CPU_ZERO(&cpuset);
     CPU_SET(0, &cpuset);
+    para.chroot = "/mnt";
     para.cpuset = &cpuset;
     para.environ = NULL;
     para.rlim_as = 65536;
@@ -32,7 +33,7 @@ int main()
     para.gid = 10000;
     para.workingDir = "/";
     para.prevervefd = 1;
-    para.seccomplist = seccomplist;
+    //para.seccomplist = seccomplist;
 
     int ret;
     if((ret = cjail_exec(&para, &res)) == 0)

@@ -10,7 +10,6 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 
-//TODO: Test closefrom()
 int closefrom(int minfd)
 {
     DIR *fddir = opendir("/proc/self/fd");
