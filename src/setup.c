@@ -58,6 +58,8 @@ int setup_fs()
     {
         IFERR(chroot(exec_para.para.chroot))
             goto error;
+        IFERR(chdir("/"))
+            goto error;
     }
     if(exec_para.para.workingDir)
     {
