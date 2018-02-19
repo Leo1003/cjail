@@ -9,7 +9,7 @@
 extern char** environ;
 int main()
 {
-    char *cargv[] = {"/bin/bash", NULL};
+    char *cargv[] = {"/bin/java", "MemoryEater", NULL};
     cpu_set_t cpuset;
     struct cjail_para para;
     struct cjail_result res;
@@ -20,18 +20,18 @@ int main()
 
     CPU_ZERO(&cpuset);
     CPU_SET(0, &cpuset);
-    para.chroot = "/mnt";
+    //para.chroot = "/mnt";
     para.cpuset = &cpuset;
     para.environ = NULL;
-    para.rlim_as = 65536;
+    //para.rlim_as = 65536;
     para.rlim_fsize = 1024;
     para.rlim_proc = 10;
     para.rlim_core = 0;
     para.lim_time = &limt;
-    para.cg_rss = 1024;
+    para.cg_rss = 2048;
     para.uid = 10000;
     para.gid = 10000;
-    para.workingDir = "/";
+    para.workingDir = "/tmp";
     para.prevervefd = 1;
     //para.seccomplist = seccomplist;
 

@@ -255,6 +255,8 @@ int setup_cgroup(int *pidfd)
             return -1;
         IFERR(cgroup_write("memory", "memory.limit_in_bytes", "%lld", exec_para.para.cg_rss * 1024))
             return -1;
+        IFERR(cgroup_write("memory", "memory.swappiness", "%u", 0))
+            return -1;
     }
     return 0;
 }

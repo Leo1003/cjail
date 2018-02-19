@@ -236,6 +236,8 @@ int child_init(void *arg UNUSED)
         pdebugf(" }\n");
 #endif
         execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
+        if(errno == ENOENT)
+            exit(255);
         raise(SIGUSR1);
     }
     else
