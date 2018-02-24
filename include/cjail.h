@@ -13,6 +13,7 @@
 
 struct cjail_para
 {
+    //FIXME: spelling wrong(prevervefd => preservefd)
     unsigned int prevervefd, sharenet;
     int fd_input, fd_output, fd_err;
     char **argv, **environ, *chroot, *workingDir, *redir_input, *redir_output, *redir_err, *cgroup_root;

@@ -41,8 +41,22 @@ Set to NULL will make the working directory unchanged.
 - **fd_input** <sup>int</sup>: The fd number to be duplicated to the standard input(fd 0). Note that this option will override **redir_input**. Set to 0 to disable this configure.
 - **fd_output** <sup>int</sup>: The fd number to be duplicated to the standard output(fd 1). Note that this option will override **redir_output**. Set to 0 to disable this configure.
 - **fd_err** <sup>int</sup>: The fd number to be duplicated to the standard error(fd 2). Note that this option will override **redir_err**. Set to 0 to disable this configure.
-- **prevervefd** <sup>unsigned int</sup>: Set to 1 to keep fd above 3 opening. **Use this carefully!!** Note that the fd used by cjail will close on executing the process.
+- **prevervefd** <sup>unsigned int</sup>: Set to 1 to keep fds above 3 opening. **Use this carefully!!** Note that the fds used by cjail will close on executing the process.
 - **sharenet** <sup>unsigned int</sup>: Set to 1 to share the same network namespace with the calling process. **Use this carefully!!**
+- **cpuset** <sup>cpu_set_t*</sup>: Limit the cpus which the process can run on with this set.
+- **rlim_as** <sup>long long</sup>: Limit the maximum size(KB) of availble memory of the process. Set to 0 to disable this limit.
+- **rlim_core** <sup>long long</sup>: Limit the maximum size(KB) of core dump. Set to 0 to disable coredump generation. Set to negative value to disable this limit.
+- **rlim_fsize** <sup>long long</sup>: Limit the maximum file size(KB) of a file that can be created. Set to 0 to disable this limit.
+- **rlim_proc** <sup>long long</sup>: Limit the maximum processes can be created. Set to 0 to disable this limit.
+- **rlim_stack** <sup>long long</sup>: Limit the maximum size(KB) of the stack of the process. Set to 0 to disable this limit.
+- **lim_time** <sup>timeval*</sup>: Limit the running time. If the time is exceeded, all of the processes in the namespace will be killed.
+- **cgroup_root** <sup>char*</sup>: Change the cgroup filesystem root path(outside the chroot jail). Default: "/sys/fs/cgroup"
+- **cg_rss** <sup>long long</sup>: Limit the maximum size(KB) of memory of the cgroup. Set to 0 to disable this limit.
 
+```c
+struct cjail_result;
+```
+- **stats** <sup>struct taskstats</sup>: The resource stats of the child process.
+- **info** <sup>siginfo_t</sup>: The child process's return status.
+- **time** <sup>struct timeval</sup>: The total execution time of the container.
 
-**Unfinished......**
