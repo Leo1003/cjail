@@ -140,7 +140,7 @@ int setup_fd()
         }
     }
 
-    if(!exec_para.para.prevervefd)
+    if(!exec_para.para.preservefd)
         IFERR(closefrom(STDERR_FILENO))
             return -1;
     return 0;

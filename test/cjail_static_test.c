@@ -32,7 +32,7 @@ int main()
     para.uid = 10000;
     para.gid = 10000;
     para.workingDir = "/tmp";
-    para.prevervefd = 1;
+    para.preservefd = 1;
     //para.seccomplist = seccomplist;
 
     int ret;
