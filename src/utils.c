@@ -68,40 +68,55 @@ int parse_cpuset(const cpu_set_t* cpuset, char* cpumask, size_t len)
     return 0;
 }
 
-//TODO: Test mkdir_r()
 int mkdir_r(const char* path)
 {
+    pdebugf("mkdir_r: %s: ", path);
     int l;
     if((l = strlen(path)) == 0)
         return 0;
     struct stat st;
     IFERR(stat(path, &st))
     {
-        if(strcmp(path, "."))
-            return -2;
+        if(!strcmp(path, "."))
+        {
+            pdebugf("PWD\n");
+            return 0;
+        }
         char ppath[MAXPATHLEN];
         if(strlcpy(ppath, path, sizeof(ppath)) >= sizeof(ppath))
         {
+            pdebugf("TooLong\n");
             errno = ENAMETOOLONG;
-            return -1;
+            return -errno;
         }
         char *p = ppath + l - 1;
-        if((p = strrchr(p, '/')) == NULL)
+        if((p = strrchr(ppath, '/')) == NULL)
             strlcpy(ppath, ".", sizeof(ppath));
         else
             *p = '\0';
 
+        pdebugf("Recursive\n");
         int ret = mkdir_r(ppath);
         if(!ret)
+        {
+            pdebugf("mkdir: %s\n", path);
             ret = mkdir(path, 0755);
+        }
         return ret;
     }
     else
     {
         if(S_ISDIR(st.st_mode))
+        {
+            pdebugf("Return\n");
             return 0;
+        }
         else
-            return -2;
+        {
+            pdebugf("Not dir\n");
+            errno = ENOTDIR;
+            return -errno;
+        }
     }
 }
 
