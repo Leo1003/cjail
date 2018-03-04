@@ -125,6 +125,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     }
     if(tsret == -1)
     {
+        perrf("Failed to receive from taskstats.");
         ret = -EXIT_FAILURE;
         goto out_taskstats;
     }
@@ -137,7 +138,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
 
     out_taskstats:
     IFERR(taskstats_destory(&tssock))
-    perrf("Failed to destory taskstats\n");
+        perrf("Failed to destory taskstats\n");
 
     out_cgroup:
     IFERR(cgroup_destory("pids"))
@@ -147,6 +148,5 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         IFERR(cgroup_destory("memory"))
             perrf("Failed to destory memory cgroup\n");
     }
-
     return ret;
 }

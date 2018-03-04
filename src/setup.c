@@ -230,6 +230,17 @@ int setup_taskstats(struct ts_socket *s)
         IFERR(taskstats_setcpuset(s, exec_para.para.cpuset))
             goto error;
     }
+    else
+    {
+        cpu_set_t cur;
+        IFERR(sched_getaffinity(getpid(), sizeof(cur), &cur))
+        {
+            PRINTERR("get CPU affinity");
+            goto error;
+        }
+        IFERR(taskstats_setcpuset(s, &cur))
+            goto error;
+    }
     return 0;
 
     error:
