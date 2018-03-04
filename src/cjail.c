@@ -150,3 +150,11 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     }
     return ret;
 }
+
+void cjail_para_init(struct cjail_para* para)
+{
+    memset(para, 0, sizeof(struct cjail_para));
+    para->rlim_core = -1;
+    para->uid = 65534;
+    para->gid = 65534;
+}

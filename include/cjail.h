@@ -41,6 +41,8 @@ struct __exec_para
 };
 
 extern struct __exec_para exec_para;
+
+void cjail_para_init(struct cjail_para *para);
 int cjail_exec(struct cjail_para *para, struct cjail_result *result);
 
 #endif
