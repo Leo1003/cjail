@@ -115,6 +115,7 @@ int child_init(void *arg UNUSED)
         {
             struct itimerval it;
             it.it_value = *exec_para.para.lim_time;
+            memset(&it.it_interval, 0, sizeof(it.it_interval));
             IFERR(setitimer(ITIMER_REAL, &it, NULL))
             {
                 PRINTERR("setitimer");
