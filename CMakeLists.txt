@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 2.6)
 project(cjail)
 set(VERSION 0.3.7)
 set(SOVERSION 0)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 if(NOT CMAKE_BUILD_TYPE)

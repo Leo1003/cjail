@@ -1,5 +1,5 @@
 include_directories("${CMAKE_SOURCE_DIR}/include")
-include_directories(${CHECK_INCLUDE_DIR})
+include_directories(${CHECK_INCLUDE_DIRS})
 add_executable(test_utils test_utils.c)
 target_link_libraries(test_utils ${CHECK_LIBRARIES} libcjail)
 
