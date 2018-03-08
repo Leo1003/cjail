@@ -7,6 +7,9 @@ build/
 # Kdevelop swap files
 *.kate-swp
 
+# Vim swap files
+*.swp
+
 # Output files
 *.o
 *.out
