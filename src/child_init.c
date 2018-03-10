@@ -61,11 +61,15 @@ inline static void init_signalset()
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGCHLD, &sa, NULL);
     sigaction(SIGRTMIN, &sa, NULL);
+    signal(SIGTTIN, SIG_IGN);
+    signal(SIGTTOU, SIG_IGN);
 }
 
 int child_init(void *arg UNUSED)
 {
     pid_t pid;
+    struct termios term;
+    int ttymode;
 
     //we should register the signals, otherwise they will be ignored because we are init process
     init_signalset();
@@ -85,6 +89,9 @@ int child_init(void *arg UNUSED)
     sigemptyset(&rtset);
     sigaddset(&rtset, SIGRTMIN);
     sigprocmask(SIG_BLOCK, &rtset, NULL);
+
+    //save tty setting and restore it back if needed
+    ttymode = (tcgetattr(STDIN_FILENO, &term) == 0);
 
     pid = fork();
     if(pid > 0)
@@ -144,7 +151,7 @@ int child_init(void *arg UNUSED)
             if(alarmed)
             {
                 alarmed = 0;
-                pdebugf("Execution timeout, killing process...");
+                pdebugf("Execution timeout, killing process...\n");
                 IFERR(kill(-1, SIGKILL))
                 {
                     if(errno != ESRCH)
@@ -165,6 +172,20 @@ int child_init(void *arg UNUSED)
         {
             perrf("Lost control of child process\n");
             goto error;
+        }
+        if(ttymode)
+        {
+            //set back control tty
+            //because we are in the pid namespace, getpgrp() will always return 0
+            //using getpid() instead
+            IFERR(tcsetpgrp(STDIN_FILENO, getpid()))
+            {
+                PRINTERR("set back control terminal");
+            }
+            IFERR(tcsetattr(STDIN_FILENO, TCSADRAIN, &term))
+            {
+                PRINTERR("restore terminal setting");
+            }
         }
 
         gettimeofday(&etime, NULL);
@@ -187,6 +208,8 @@ int child_init(void *arg UNUSED)
     }
     else if(pid == 0)
     {
+        IFERR(setup_signals())
+            raise(SIGUSR1);
         uid_t uid = exec_para.para.uid;
         gid_t gid = exec_para.para.gid;
         IFERR(setresgid(gid, gid, gid))
@@ -204,29 +227,27 @@ int child_init(void *arg UNUSED)
             PRINTERR("setuid");
             raise(SIGUSR1);
         }
-        //setsid can be configured
-        /*
-        IFERR(setsid())
-        {
-            PRINTERR("setsid");
-            raise(SIGUSR1);
-        }
-        */
         IFERR(setpgrp())
         {
             PRINTERR("setpgrp");
             raise(SIGUSR1);
         }
-        IFERR(reset_signals())
-            raise(SIGUSR1);
+        if(isatty(STDIN_FILENO))
+        {
+            IFERR(tcsetpgrp(STDIN_FILENO, getpgrp()))
+            {
+                PRINTERR("setpgrp");
+                raise(SIGUSR1);
+            }
+        }
         IFERR(setup_cpumask())
             raise(SIGUSR1);
         IFERR(setup_rlimit())
             raise(SIGUSR1);
         IFERR(setup_fd())
             raise(SIGUSR1);
-        //To avoid seccomp block the pause systemcall
-        //We move pause before it.
+        //To avoid seccomp block the systemcall
+        //We move before it.
         sigwait(&rtset, &sig);
         pdebugf("child continued from rt_signal\n");
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);

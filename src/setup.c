@@ -150,11 +150,19 @@ int setup_fd()
     return -1;
 }
 
-int reset_signals()
+int setup_signals()
 {
     for(int s = SIGHUP; s < SIGSYS; s++)
     {
-        IFERR(signal(s, SIG_DFL))
+        __sighandler_t v = SIG_DFL;
+        switch(s)
+        {
+            case SIGTTIN:
+            case SIGTTOU:
+                v = SIG_IGN;
+                break;
+        }
+        IFERR(signal(s, v))
         {
             PRINTERR("setup_signals");
             return -1;
@@ -287,7 +295,7 @@ int setup_seccomp(void* exec_argv)
     {
 #ifndef NDEBUG
         char *scname = seccomp_syscall_resolve_num_arch(seccomp_arch_native(), exec_para.para.seccomplist[i]);
-        pdebugf("seccomp_rule_add: %d %s", exec_para.para.seccomplist[i], scname);
+        pdebugf("seccomp_rule_add: %d %s\n", exec_para.para.seccomplist[i], scname);
         free(scname);
         /* In the case of seccomp_syscall_resolve_num_arch() the associated syscall name is
          * returned and it remains the callers responsibility to free the returned string
