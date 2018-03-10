@@ -141,7 +141,7 @@ int setup_fd()
     }
 
     if(!exec_para.para.preservefd)
-        IFERR(closefrom(STDERR_FILENO))
+        IFERR(closefrom(STDERR_FILENO + 1))
             return -1;
     return 0;
 

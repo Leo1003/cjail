@@ -117,8 +117,6 @@ int child_init(void *arg UNUSED)
         sigwait(&rtset, &sig);
         pdebugf("init continued from rt_signal\n");
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
-        //TODO: Check if child input isatty
-        //TODO: Set fg pgrp to child pgrp
 
         gettimeofday(&stime, NULL);
         if(exec_para.para.lim_time)
@@ -196,7 +194,7 @@ int child_init(void *arg UNUSED)
         write(exec_para.resultpipe[1], &result, sizeof(result));
 
         //move setup failed to here
-        if(sinfo.si_code == CLD_KILLED && sinfo.si_status == SIGUSR1)
+        if(result.info.si_code == CLD_KILLED && result.info.si_status == SIGUSR1)
         {
             perrf("setup child process failed\n");
             exit(1);

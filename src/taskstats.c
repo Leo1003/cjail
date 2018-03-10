@@ -1,3 +1,4 @@
+#include "cjail.h"
 #include "taskstats.h"
 
 #include <fcntl.h>
@@ -149,7 +150,7 @@ int taskstats_create(struct ts_socket *s)
 
 int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
 {
-    IFERR(parse_cpuset(cpuset, s->cpumask, sizeof(s->cpumask)))
+    IFERR(cpuset_tostr(cpuset, s->cpumask, sizeof(s->cpumask)))
     {
         PRINTERR("parse_cpuset");
         return -1;

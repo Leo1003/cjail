@@ -96,7 +96,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
                 {
                     perrf("Lost control of child namespace init process\n");
                     ret = -errno;
-                    goto out_taskstats;
+                    goto out_kill;
                 }
             }
             if(retp > 0)
@@ -105,7 +105,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
                 {
                     perrf("child namespace init process abnormal terminated\n");
                     ret = -WEXITSTATUS(wstatus);
-                    goto out_taskstats;
+                    goto out_kill;
                 }
                 waited = 1;
             }
@@ -114,7 +114,6 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         if(!tsgot)
         {
             tsret = taskstats_getstats(&tssock, &ts);
-            //pdebugf("taskstats got stats PID: %d\n", ts.ac_pid);
             if(tsret == 0 && ts.ac_pid == childpid)
             {
                 tsgot = 1;
@@ -125,9 +124,9 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     }
     if(tsret == -1)
     {
-        perrf("Failed to receive from taskstats.");
+        perrf("Failed to receive from taskstats.\n");
         ret = -EXIT_FAILURE;
-        goto out_taskstats;
+        goto out_kill;
     }
 
     //get result from pipe
@@ -135,6 +134,11 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     IFERR(n)
         PRINTERR("get result");
     result->stats = ts;
+
+    out_kill:
+    kill(childpid, SIGKILL);
+    kill(initpid, SIGKILL);
+    usleep(200000);
 
     out_taskstats:
     IFERR(taskstats_destory(&tssock))

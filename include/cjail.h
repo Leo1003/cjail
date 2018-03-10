@@ -42,7 +42,39 @@ struct __exec_para
 
 extern struct __exec_para exec_para;
 
+/**
+* @brief Initialize cjail_para struct
+*
+* @param[in,out] para cjail_para struct to be initialized
+*/
 void cjail_para_init(struct cjail_para *para);
+
+/**
+* @brief Execute a process in the jail
+*
+* @param[in] para Executing parameters to the jail
+* @param[out] result Executing results to be filled
+* @return int
+*/
 int cjail_exec(struct cjail_para *para, struct cjail_result *result);
+
+/**
+* @brief Convert cpu_set_t to human readable format
+*
+* @param[in] cpuset cpu_set_t to be converted
+* @param[out] str Output string
+* @param[in] len The buffer size of str
+* @return int
+*/
+int cpuset_tostr(const cpu_set_t* cpuset, char* str, size_t len);
+
+/**
+* @brief Convert human readable format to cpu_set_t
+*
+* @param[in] str string to be converted
+* @param[out] cpuset Output
+* @return int
+*/
+int cpuset_parse(const char *str, cpu_set_t *cpuset);
 
 #endif

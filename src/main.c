@@ -100,10 +100,14 @@ struct timeval totime(char* str, int abr)
 int main(int argc, char *argv[], char *envp[])
 {
     int o;
+    cpu_set_t cpuset;
     struct cjail_para para;
     struct cjail_result res;
     cjail_para_init(&para);
     struct timeval time;
+#ifndef NDEBUG
+    char cpustr[1024];
+#endif
     while((o = getopt_long(argc, argv, opts, longopts, NULL)) >= 0)
     {
         switch(o)
@@ -162,6 +166,16 @@ int main(int argc, char *argv[], char *envp[])
                 break;
             case 'S':
                 //TODO: Write CPU mask parser utils
+                if(cpuset_parse(optarg, &cpuset) < 0)
+                {
+                    perrf("Invalid cpuset string: %s\n", optarg);
+                    exit(1);
+                }
+                para.cpuset = &cpuset;
+#ifndef NDEBUG
+                cpuset_tostr(&cpuset, cpustr, 1024);
+                pdebugf("cpuset: %s\n", cpustr);
+#endif
                 break;
             case 'v':
                 para.rlim_as = toll(optarg, 1);

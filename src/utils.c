@@ -16,27 +16,32 @@ int closefrom(int minfd)
     if(!fddir)
         goto error;
     struct dirent *dent;
+    int dfd = dirfd(fddir);
     while((dent = readdir(fddir)) != NULL)
     {
-        int fd = atoi(dent->d_name);
-        if(fd > minfd && fd != dirfd(fddir))
+        if(!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
+            continue;
+        int fd = strtol(dent->d_name, NULL, 10);
+        if(fd >= minfd && fd != dfd)
         {
             pdebugf("closing fd: %d\n", fd);
             IFERR(close(fd))
-                goto error;
+                goto error_dir;
         }
     }
     closedir(fddir);
     return 0;
 
+    error_dir:
+    closedir(fddir);
     error:
     PRINTERR("closefrom");
     return -1;
 }
 
-int parse_cpuset(const cpu_set_t* cpuset, char* cpumask, size_t len)
+int cpuset_tostr(const cpu_set_t* cpuset, char* str, size_t len)
 {
-    snprintf(cpumask, len, "");
+    snprintf(str, len, "");
     int s = -1, w = 0, l = 0;
     for(int c = 0; c <= CPU_SETSIZE; c++)
     {
@@ -51,21 +56,80 @@ int parse_cpuset(const cpu_set_t* cpuset, char* cpumask, size_t len)
 
         e:
         if(w++)
-            l += snprintf(cpumask + l, len - l, ",");
+            l += snprintf(str + l, len - l, ",");
         if(l < 0 || l >= len)
             return -1;
 
         if(c - s == 1)
-            l += snprintf(cpumask + l, len - l, "%d", s);
+            l += snprintf(str + l, len - l, "%d", s);
         else
-            l += snprintf(cpumask + l, len - l, "%d-%d", s, c - 1);
+            l += snprintf(str + l, len - l, "%d-%d", s, c - 1);
         s = -1;
-        pdebugf("cpumask = %s\n", cpumask);
+        pdebugf("cpumask = %s\n", str);
         if(l < 0 || l >= len)
             return -1;
     }
-    pdebugf("parse_cpuset %s\n", cpumask);
+    pdebugf("parse_cpuset %s\n", str);
+    return l;
+}
+
+static int readcpunum(const char *str, char **end_ptr)
+{
+    unsigned long num = strtoul(str, end_ptr, 10);
+    if(str == *end_ptr)
+        return -1;
+    if(num >= CPU_SETSIZE)
+        return -1;
+    pdebugf("readcpunum: %lu\n", num);
+    return num;
+}
+
+int cpuset_parse(const char *str, cpu_set_t *cpuset)
+{
+    CPU_ZERO(cpuset);
+    int l = strlen(str);
+    const char *p = str;
+    int s, e;
+
+    while(p <= str + l)
+    {
+        char *n;
+
+        s = readcpunum(p, &n);
+        if(s < 0)
+            goto error;
+        switch(*n)
+        {
+            case ',':
+            case '\0':
+                n++;
+                e = s;
+                break;
+            case '-':
+                n++;
+                p = n;
+                e = readcpunum(p, &n);
+                if(e < 0)
+                    goto error;
+                if(*n != ',' && *n != '\0')
+                    goto error;
+                n++;
+                break;
+            default:
+                goto error;
+        }
+        if(e < s)
+            goto error;
+        for(int i = s; i <= e; i++)
+            CPU_SET(i, cpuset);
+        p = n;
+    }
+
     return 0;
+
+    error:
+    errno = EINVAL;
+    return -1;
 }
 
 int mkdir_r(const char* path)
