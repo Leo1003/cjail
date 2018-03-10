@@ -58,7 +58,7 @@ int cpuset_tostr(const cpu_set_t* cpuset, char* str, size_t len)
         if(w++)
             l += snprintf(str + l, len - l, ",");
         if(l < 0 || l >= len)
-            return -1;
+            RETERR(ERANGE);
 
         if(c - s == 1)
             l += snprintf(str + l, len - l, "%d", s);
@@ -67,7 +67,7 @@ int cpuset_tostr(const cpu_set_t* cpuset, char* str, size_t len)
         s = -1;
         pdebugf("cpumask = %s\n", str);
         if(l < 0 || l >= len)
-            return -1;
+            RETERR(ERANGE);
     }
     pdebugf("parse_cpuset %s\n", str);
     return l;
@@ -97,7 +97,7 @@ int cpuset_parse(const char *str, cpu_set_t *cpuset)
 
         s = readcpunum(p, &n);
         if(s < 0)
-            goto error;
+            RETERR(EINVAL);
         switch(*n)
         {
             case ',':
@@ -110,26 +110,22 @@ int cpuset_parse(const char *str, cpu_set_t *cpuset)
                 p = n;
                 e = readcpunum(p, &n);
                 if(e < 0)
-                    goto error;
+                    RETERR(EINVAL);
                 if(*n != ',' && *n != '\0')
-                    goto error;
+                    RETERR(EINVAL);
                 n++;
                 break;
             default:
-                goto error;
+                RETERR(EINVAL);
         }
         if(e < s)
-            goto error;
+            RETERR(EINVAL);
         for(int i = s; i <= e; i++)
             CPU_SET(i, cpuset);
         p = n;
     }
 
     return 0;
-
-    error:
-    errno = EINVAL;
-    return -1;
 }
 
 int mkdir_r(const char* path)
@@ -150,8 +146,7 @@ int mkdir_r(const char* path)
         if(strlcpy(ppath, path, sizeof(ppath)) >= sizeof(ppath))
         {
             pdebugf("TooLong\n");
-            errno = ENAMETOOLONG;
-            return -errno;
+            RETERR(ENAMETOOLONG);
         }
         char *p = ppath + l - 1;
         if((p = strrchr(ppath, '/')) == NULL)
@@ -178,8 +173,7 @@ int mkdir_r(const char* path)
         else
         {
             pdebugf("Not dir\n");
-            errno = ENOTDIR;
-            return -errno;
+            RETERR(ENOTDIR);
         }
     }
 }

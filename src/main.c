@@ -165,7 +165,6 @@ int main(int argc, char *argv[], char *envp[])
                 para.sharenet = 1;
                 break;
             case 'S':
-                //TODO: Write CPU mask parser utils
                 if(cpuset_parse(optarg, &cpuset) < 0)
                 {
                     perrf("Invalid cpuset string: %s\n", optarg);
