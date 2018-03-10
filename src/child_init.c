@@ -11,6 +11,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/signal.h>
@@ -109,6 +110,8 @@ int child_init(void *arg UNUSED)
         sigwait(&rtset, &sig);
         pdebugf("init continued from rt_signal\n");
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
+        //TODO: Check if child input isatty
+        //TODO: Set fg pgrp to child pgrp
 
         gettimeofday(&stime, NULL);
         if(exec_para.para.lim_time)
@@ -202,9 +205,16 @@ int child_init(void *arg UNUSED)
             raise(SIGUSR1);
         }
         //setsid can be configured
+        /*
         IFERR(setsid())
         {
             PRINTERR("setsid");
+            raise(SIGUSR1);
+        }
+        */
+        IFERR(setpgrp())
+        {
+            PRINTERR("setpgrp");
             raise(SIGUSR1);
         }
         IFERR(reset_signals())
