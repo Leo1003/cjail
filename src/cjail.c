@@ -215,7 +215,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         goto out_kill;
     }
 
-    if(!child && result)
+    if(!error && result)
     {
         //get result from pipe
         size_t n = read(exec_para.resultpipe[0], result, sizeof(*result));
