@@ -252,7 +252,7 @@ int setup_taskstats(struct ts_socket *s)
     return 0;
 
     error:
-    perrf("Failed to setup taskstats\n");
+    PRINTERR("setup taskstats");
     return -1;
 }
 

@@ -15,29 +15,90 @@
 #include <sys/signal.h>
 #include <sys/wait.h>
 
+#define RETRYTIMES 3
+
 struct __exec_para exec_para;
+
+static struct sigaction sa_save[32];
+static int child = 0, interrupted = 0, error = 0;
+static void sighandler(int sig, siginfo_t *info, void *data)
+{
+    switch(sig)
+    {
+        case SIGHUP:
+        case SIGINT:
+        case SIGQUIT:
+        case SIGTERM:
+            interrupted = 1;
+            break;
+        case SIGCHLD:
+            child = 1;
+            break;
+    }
+}
+
+#define SIGSAV(x) sigaction(x , &sa, &sa_save[x])
+#define SIGRES(x) sigaction(x , &sa_save[x], NULL)
+inline static void installsig()
+{
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sigaddset(&sa.sa_mask, SIGHUP);
+    sigaddset(&sa.sa_mask, SIGINT);
+    sigaddset(&sa.sa_mask, SIGQUIT);
+    sigaddset(&sa.sa_mask, SIGALRM);
+    sigaddset(&sa.sa_mask, SIGTERM);
+    sigaddset(&sa.sa_mask, SIGCHLD);
+    sigaddset(&sa.sa_mask, SIGRTMIN);
+    sa.sa_sigaction = sighandler;
+    SIGSAV(SIGHUP);
+    SIGSAV(SIGINT);
+    SIGSAV(SIGQUIT);
+    SIGSAV(SIGALRM);
+    SIGSAV(SIGTERM);
+    SIGSAV(SIGCHLD);
+}
+
+inline static void restoresig()
+{
+    SIGRES(SIGHUP);
+    SIGRES(SIGINT);
+    SIGRES(SIGQUIT);
+    SIGRES(SIGALRM);
+    SIGRES(SIGTERM);
+    SIGRES(SIGCHLD);
+}
 
 int cjail_exec(struct cjail_para* para, struct cjail_result* result)
 {
     void *child_stack;
     int wstatus, ret = 0;
+    pid_t initpid, childpid;
     struct ts_socket tssock;
+    struct taskstats ts;
+
     if(geteuid())
-        return -EPERM;
+        RETERR(EPERM);
     if(!para)
-        return -EINVAL;
+        RETERR(EINVAL);
     exec_para.para = *para;
+
+    installsig();
 
     //setup pipe
     IFERR(pipe(exec_para.resultpipe))
     {
         PRINTERR("create pipe");
-        return -errno;
+        ret = -1;
+        goto out_sig;
     }
 
     //setup cgroup stage I
     IFERR(setup_cgroup(&exec_para.cgtasksfd))
-        return -1;
+    {
+        ret = -1;
+        goto out_sig;
+    }
 
     //setup taskstats
     IFERR(setup_taskstats(&tssock))
@@ -51,12 +112,12 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     if(!child_stack)
     {
         PRINTERR("malloc stack");
-        ret = -errno;
+        ret = -1;
         goto out_taskstats;
     }
     int optionflag = 0;
     optionflag |= exec_para.para.sharenet ? 0 : CLONE_NEWNET;
-    pid_t initpid = clone(child_init, child_stack + STACKSIZE,
+    initpid = clone(child_init, child_stack + STACKSIZE,
                           SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWPID | optionflag, NULL);
     IFERR(initpid)
     {
@@ -68,23 +129,31 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     pdebugf("Init PID: %d\n", initpid);
 
     //setup cgroup stage II
-    pid_t childpid;
     while(cgroup_read("pids", "tasks", "%d", &childpid) == EOF)
     {
+        if(child || interrupted)
+        {
+            error = 1;
+            break;
+        }
         usleep(100000);
     }
-    pdebugf("Got childpid: %d\n", childpid);
-    if(exec_para.para.cg_rss)
+    if(!error)
     {
-        cgroup_write("memory", "tasks", "%d", childpid);
+        pdebugf("Got childpid: %d\n", childpid);
+        if(exec_para.para.cg_rss)
+        {
+            cgroup_write("memory", "tasks", "%d", childpid);
+        }
+        kill(childpid, SIGRTMIN);
+        kill(initpid, SIGRTMIN);
     }
-    kill(childpid, SIGRTMIN);
-    kill(initpid, SIGRTMIN);
 
     //socket buffer may overflow while the child process are executing
-    int tsret = 0, waited = 0, tsgot = 0;
-    struct taskstats ts;
-    while(!waited && !tsgot)
+    int tsret = 0, waited = 0, tsgot = 0, retry = RETRYTIMES;
+    if(error)
+        tsgot = -1;
+    while(!waited || !tsgot)
     {
         //wait for init process return
         if(!waited)
@@ -99,12 +168,14 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
                     goto out_kill;
                 }
             }
-            if(retp > 0)
+            if(retp == initpid)
             {
-                if(WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0)
+                if((WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0) || WIFSIGNALED(wstatus))
                 {
                     perrf("child namespace init process abnormal terminated\n");
-                    ret = -WEXITSTATUS(wstatus);
+                    errno = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : EFAULT;
+                    ret = -1;
+                    waited = 1;
                     goto out_kill;
                 }
                 waited = 1;
@@ -114,31 +185,52 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         if(!tsgot)
         {
             tsret = taskstats_getstats(&tssock, &ts);
-            if(tsret == 0 && ts.ac_pid == childpid)
+            if(tsret == 0)
             {
-                tsgot = 1;
+                if(ts.ac_pid == childpid)
+                    tsgot = 1;
+                retry = RETRYTIMES;
             }
-            if(tsret == -1)
-                tsgot = 1;
+            if(tsret < 0)
+            {
+                switch(errno)
+                {
+                    case EAGAIN:
+                    case ETIMEDOUT:
+                    case EBUSY:
+                        if(!retry--)
+                            tsgot = -1;
+                        break;
+                    default:
+                        tsgot = -1;
+                        break;
+                }
+            }
         }
     }
-    if(tsret == -1)
+    if(tsgot == -1)
     {
         perrf("Failed to receive from taskstats.\n");
-        ret = -EXIT_FAILURE;
+        ret = -1;
         goto out_kill;
     }
 
-    //get result from pipe
-    size_t n = read(exec_para.resultpipe[0], result, sizeof(*result));
-    IFERR(n)
-        PRINTERR("get result");
-    result->stats = ts;
+    if(!child && result)
+    {
+        //get result from pipe
+        size_t n = read(exec_para.resultpipe[0], result, sizeof(*result));
+        IFERR(n)
+            PRINTERR("get result");
+        result->stats = ts;
+    }
 
     out_kill:
-    kill(childpid, SIGKILL);
-    kill(initpid, SIGKILL);
-    usleep(200000);
+    if(!waited)
+    {
+        kill(childpid, SIGKILL);
+        kill(initpid, SIGKILL);
+        usleep(200000);
+    }
 
     out_taskstats:
     IFERR(taskstats_destory(&tssock))
@@ -152,6 +244,9 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         IFERR(cgroup_destory("memory"))
             perrf("Failed to destory memory cgroup\n");
     }
+
+    out_sig:
+    restoresig();
     return ret;
 }
 

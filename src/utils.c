@@ -208,3 +208,13 @@ int strrmchr(char* str, int index)
     memmove(str + index, str + index + 1, l - index);
     return 0;
 }
+
+int setcloexec(int fd)
+{
+    IFERR(fcntl(fd, F_SETFD, FD_CLOEXEC))
+    {
+        PRINTERR("set close on exec flag");
+        return -1;
+    }
+    return 0;
+}

@@ -69,24 +69,22 @@ int child_init(void *arg UNUSED)
 {
     pid_t pid;
     struct termios term;
-    int ttymode;
+    int ttymode, chwaited = 0;
 
     //we should register the signals, otherwise they will be ignored because we are init process
     init_signalset();
 
     close(exec_para.resultpipe[0]);
-    IFERR(fcntl(exec_para.resultpipe[1], F_SETFD, FD_CLOEXEC))
-    {
-        PRINTERR("set close on exec flag");
-        return -1;
-    }
+    IFERR(setcloexec(exec_para.resultpipe[1]))
+        exit(errno);
     IFERR(setup_fs())
-        _exit(1);
+        exit(errno);
 
     //block the signal SIGRTMIN
     int sig;
     sigset_t rtset;
     sigemptyset(&rtset);
+    sigaddset(&rtset, SIGCHLD); //Prevent child error
     sigaddset(&rtset, SIGRTMIN);
     sigprocmask(SIG_BLOCK, &rtset, NULL);
 
@@ -106,7 +104,7 @@ int child_init(void *arg UNUSED)
         if(!pidfile)
         {
             PRINTERR("fdopen cgroup task");
-            goto error;
+            exit(errno);
         }
         fprintf(pidfile, "%d", pid);
         fflush(pidfile);
@@ -115,7 +113,13 @@ int child_init(void *arg UNUSED)
 
         //prevent race condition
         sigwait(&rtset, &sig);
-        pdebugf("init continued from rt_signal\n");
+        if(sig == SIGCHLD)
+        {
+            //child should not exit now
+            perrf("Child process exit unexpectedly!\n");
+        }
+        if(sig == SIGRTMIN)
+            pdebugf("init continued from rt_signal\n");
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
         gettimeofday(&stime, NULL);
@@ -127,24 +131,21 @@ int child_init(void *arg UNUSED)
             IFERR(setitimer(ITIMER_REAL, &it, NULL))
             {
                 PRINTERR("setitimer");
-                goto error;
+                exit(errno);
             }
         }
 
-        int chwaited = 0;
         while(1)
         {
             IFERR(waitid(P_ALL, 0, &sinfo, WEXITED))
             {
                 if(errno == ECHILD)
-                {
                     break;
-                }
             }
             if(interrupted)
             {
                 perrf("Received signal, aborting...\n");
-                goto error;
+                exit(EINTR);
             }
             if(alarmed)
             {
@@ -155,7 +156,7 @@ int child_init(void *arg UNUSED)
                     if(errno != ESRCH)
                     {
                         PRINTERR("kill timeouted child process");
-                        goto error;
+                        exit(errno);
                     }
                 }
                 continue;
@@ -169,7 +170,7 @@ int child_init(void *arg UNUSED)
         if(!chwaited)
         {
             perrf("Lost control of child process\n");
-            goto error;
+            exit(ECHILD);
         }
         if(ttymode)
         {
@@ -200,9 +201,6 @@ int child_init(void *arg UNUSED)
             exit(1);
         }
         exit(0);
-
-        error:
-        _exit(1);
     }
     else if(pid == 0)
     {
@@ -273,7 +271,7 @@ int child_init(void *arg UNUSED)
     else
     {
         PRINTERR("fork");
-        _exit(1);
+        exit(errno);
     }
-    _exit(1); // it shouldn't be here!
+    exit(EFAULT); // it shouldn't be here!
 }
