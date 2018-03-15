@@ -94,7 +94,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     IFERR(setup_cgroup(&exec_para.cgtasksfd))
     {
         ret = -1;
-        goto out_sig;
+        goto out_pipe;
     }
 
     //setup taskstats
@@ -153,6 +153,17 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     while(!waited || !tsgot)
     {
         //wait for init process return
+        if(interrupted)
+        {
+            IFERR(kill(initpid, SIGTERM))
+            {
+                if(errno != ESRCH)
+                {
+                    PRINTERR("terminate init process");
+                    goto out_kill;
+                }
+            }
+        }
         if(!waited)
         {
             pid_t retp = waitpid(initpid, &wstatus, (tsgot ? 0 : WNOHANG));
@@ -195,7 +206,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
                     case EAGAIN:
                     case ETIMEDOUT:
                     case EBUSY:
-                        if(!retry--)
+                        if(waited && !retry--)
                             tsgot = -1;
                         break;
                     default:
@@ -237,6 +248,8 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         perrf("Failed to destory taskstats\n");
 
     out_cgroup:
+    IFERR(close(exec_para.cgtasksfd))
+        PRINTERR("close cgroup tasks file");
     IFERR(cgroup_destory("pids"))
         perrf("Failed to destory pids cgroup\n");
     if(exec_para.para.cg_rss > 0)
@@ -244,6 +257,11 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         IFERR(cgroup_destory("memory"))
             perrf("Failed to destory memory cgroup\n");
     }
+
+    out_pipe:
+    IFERR(close(exec_para.resultpipe[0]))
+        PRINTERR("close pipe");
+    close(exec_para.resultpipe[1]);
 
     out_sig:
     restoresig();

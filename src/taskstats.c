@@ -187,7 +187,16 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
     struct msgtemplate msg;
     int rep_len = recv(s->socketfd, &msg, sizeof(msg), 0);
     if (rep_len < 0) {
-        PRINTERR("getstats (recv error)");
+        switch(errno)
+        {
+            case EAGAIN:
+            case ETIMEDOUT:
+            case EBUSY:
+                break;
+            default:
+                PRINTERR("getstats (recv error)");
+                break;
+        }
         return -2;
     }
     if (msg.n.nlmsg_type == NLMSG_ERROR || !NLMSG_OK((&msg.n), rep_len)) {
