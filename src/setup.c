@@ -49,9 +49,7 @@ int setup_fs()
         IFERR(mount("dev", devpath, "devtmpfs", MS_NOEXEC | MS_NOSUID, ""))
         {
             PRINTERR("mount devtmpfs");
-            perrf("falling back to bind mount\n");
-            IFERR(mount("/dev", devpath, "none", MS_BIND | MS_NOEXEC | MS_NOSUID, ""))
-                goto deverror;
+            goto deverror;
         }
     }
     if(exec_para.para.chroot)

@@ -14,15 +14,15 @@
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/prctl.h>
 #include <sys/signal.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
-static int alarmed = 0;
-static int interrupted = 0;
+static volatile sig_atomic_t alarmed = 0, interrupted = 0;
 
-void sigact(int sig, siginfo_t *info, void *data)
+void sigact(int sig)
 {
     switch(sig)
     {
@@ -52,8 +52,8 @@ inline static void init_signalset()
     sigaddset(&sa.sa_mask, SIGTERM);
     sigaddset(&sa.sa_mask, SIGCHLD);
     sigaddset(&sa.sa_mask, SIGRTMIN);
-    sa.sa_sigaction = sigact;
-    sa.sa_flags = SA_NOCLDSTOP | SA_SIGINFO;
+    sa.sa_handler = sigact;
+    sa.sa_flags = SA_NOCLDSTOP;
     sigaction(SIGHUP , &sa, NULL);
     sigaction(SIGINT , &sa, NULL);
     sigaction(SIGQUIT, &sa, NULL);
@@ -71,12 +71,24 @@ int child_init(void *arg UNUSED)
     struct termios term;
     int ttymode, chwaited = 0;
 
+    if(getpid() != 1)
+    {
+        perrf("This process should be run as init process.\n");
+        exit(EINVAL);
+    }
+
     //we should register the signals, otherwise they will be ignored because we are init process
     init_signalset();
 
     close(exec_para.resultpipe[0]);
     IFERR(setcloexec(exec_para.resultpipe[1]))
         exit(errno);
+    IFERR(prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0))
+    {
+        PRINTERR("set parent death signal");
+        exit(errno);
+    }
+
     IFERR(setup_fs())
         exit(errno);
 
@@ -97,7 +109,7 @@ int child_init(void *arg UNUSED)
         struct cjail_result result;
         siginfo_t sinfo;
         struct timeval stime, etime, timespan;
-        bzero(&result, sizeof(result));
+        memset(&result, 0, sizeof(result));
 
         pdebugf("Writing tasks file, PID: %d\n", pid);
         FILE *pidfile = fdopen(exec_para.cgtasksfd, "r+");
@@ -172,6 +184,11 @@ int child_init(void *arg UNUSED)
             perrf("Lost control of child process\n");
             exit(ECHILD);
         }
+
+        gettimeofday(&etime, NULL);
+        timersub(&etime, &stime, &timespan);
+        result.time = timespan;
+
         if(ttymode)
         {
             //set back control tty
@@ -186,10 +203,6 @@ int child_init(void *arg UNUSED)
                 PRINTERR("restore terminal setting");
             }
         }
-
-        gettimeofday(&etime, NULL);
-        timersub(&etime, &stime, &timespan);
-        result.time = timespan;
 
         pdebugf("Sending result...\n");
         write(exec_para.resultpipe[1], &result, sizeof(result));

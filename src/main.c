@@ -18,7 +18,7 @@ enum OPTVAL
     OPT_CGR
 };
 
-const char opts[] = "e:EC:D:u:g:i:o:r:I:O:R:S:v:c:z:p:s:t:G:m:";
+const char opts[] = "e:EC:D:u:g:i:o:r:I:O:R:S:v:c:z:p:s:t:G:m:h";
 const struct option longopts[] =
 {
     {"environ",     required_argument,  NULL, 'e'},
@@ -44,6 +44,7 @@ const struct option longopts[] =
     {"limit-time",  required_argument,  NULL, 't'},
     {"cgroup-root", required_argument,  NULL, OPT_CGR},
     {"limit-rss",   required_argument,  NULL, 'm'},
+    {"help",        no_argument      ,  NULL, 'h'},
     {NULL,          0,                  NULL,  0 }
 };
 
@@ -201,9 +202,12 @@ int main(int argc, char *argv[], char *envp[])
             case 'm':
                 para.cg_rss = toll(optarg, 1);
                 break;
-            default:
+            case 'h':
                 usage();
                 break;
+            default:
+                usage();
+                exit(1);
         }
     }
     if(optind >= argc)

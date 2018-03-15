@@ -20,8 +20,8 @@
 struct __exec_para exec_para;
 
 static struct sigaction sa_save[32];
-static int child = 0, interrupted = 0, error = 0;
-static void sighandler(int sig, siginfo_t *info, void *data)
+static volatile sig_atomic_t child = 0, interrupted = 0, error = 0;
+static void sighandler(int sig)
 {
     switch(sig)
     {
@@ -46,15 +46,13 @@ inline static void installsig()
     sigaddset(&sa.sa_mask, SIGHUP);
     sigaddset(&sa.sa_mask, SIGINT);
     sigaddset(&sa.sa_mask, SIGQUIT);
-    sigaddset(&sa.sa_mask, SIGALRM);
     sigaddset(&sa.sa_mask, SIGTERM);
     sigaddset(&sa.sa_mask, SIGCHLD);
     sigaddset(&sa.sa_mask, SIGRTMIN);
-    sa.sa_sigaction = sighandler;
+    sa.sa_handler = sighandler;
     SIGSAV(SIGHUP);
     SIGSAV(SIGINT);
     SIGSAV(SIGQUIT);
-    SIGSAV(SIGALRM);
     SIGSAV(SIGTERM);
     SIGSAV(SIGCHLD);
 }
@@ -64,7 +62,6 @@ inline static void restoresig()
     SIGRES(SIGHUP);
     SIGRES(SIGINT);
     SIGRES(SIGQUIT);
-    SIGRES(SIGALRM);
     SIGRES(SIGTERM);
     SIGRES(SIGCHLD);
 }
@@ -123,7 +120,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     {
         PRINTERR("clone child namespace init process");
         ret = -errno;
-        goto out_taskstats;
+        goto out_free;
     }
     close(exec_para.resultpipe[1]);
     pdebugf("Init PID: %d\n", initpid);
@@ -231,6 +228,9 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         kill(initpid, SIGKILL);
         usleep(200000);
     }
+
+    out_free:
+    free(child_stack);
 
     out_taskstats:
     IFERR(taskstats_destory(&tssock))

@@ -51,6 +51,7 @@ static int send_cmd(int sd, __u16 nlmsg_type, __u32 nlmsg_pid,
     char *buf;
 
     struct msgtemplate msg;
+    memset(&msg, 0, sizeof(msg));
 
     msg.n.nlmsg_len = NLMSG_LENGTH(GENL_HDRLEN);
     msg.n.nlmsg_type = nlmsg_type;
