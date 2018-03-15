@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/param.h>
@@ -142,17 +143,13 @@ int mkdir_r(const char* path)
             pdebugf("PWD\n");
             return 0;
         }
-        char ppath[MAXPATHLEN];
-        if(strlcpy(ppath, path, sizeof(ppath)) >= sizeof(ppath))
+        char dpath[PATH_MAX];
+        if(strlcpy(dpath, path, sizeof(dpath)) >= sizeof(dpath))
         {
             pdebugf("TooLong\n");
             RETERR(ENAMETOOLONG);
         }
-        char *p = ppath + l - 1;
-        if((p = strrchr(ppath, '/')) == NULL)
-            strlcpy(ppath, ".", sizeof(ppath));
-        else
-            *p = '\0';
+        char *ppath = dirname(dpath);
 
         pdebugf("Recursive\n");
         int ret = mkdir_r(ppath);
