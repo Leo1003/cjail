@@ -131,7 +131,10 @@ int child_init(void *arg UNUSED)
             perrf("Child process exit unexpectedly!\n");
         }
         if(sig == SIGRTMIN)
+        {
             pdebugf("init continued from rt_signal\n");
+            kill(pid, SIGRTMIN);
+        }
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
         gettimeofday(&stime, NULL);
