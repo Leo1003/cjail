@@ -215,3 +215,14 @@ int setcloexec(int fd)
     }
     return 0;
 }
+
+int pipe_c(int pipedes[2])
+{
+    IFERR(pipe(pipedes))
+        return -1;
+    IFERR(setcloexec(pipedes[0]))
+        return -1;
+    IFERR(setcloexec(pipedes[1]))
+        return -1;
+    return 0;
+}

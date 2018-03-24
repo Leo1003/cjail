@@ -21,6 +21,8 @@
 #include <sys/wait.h>
 
 static volatile sig_atomic_t alarmed = 0, interrupted = 0;
+static int child_exit_fd;
+inline static void child_exit();
 
 void sigact(int sig)
 {
@@ -69,7 +71,7 @@ int child_init(void *arg UNUSED)
 {
     pid_t pid;
     struct termios term;
-    int ttymode, chwaited = 0;
+    int ttymode, chwaited = 0, errorpipe[2];
 
     if(getpid() != 1)
     {
@@ -81,8 +83,6 @@ int child_init(void *arg UNUSED)
     init_signalset();
 
     close(exec_para.resultpipe[0]);
-    IFERR(setcloexec(exec_para.resultpipe[1]))
-        exit(errno);
     IFERR(prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0))
     {
         PRINTERR("set parent death signal");
@@ -103,6 +103,12 @@ int child_init(void *arg UNUSED)
     //save tty setting and restore it back if needed
     ttymode = (tcgetattr(STDIN_FILENO, &term) == 0);
 
+    IFERR(pipe_c(errorpipe))
+    {
+        PRINTERR("create pipe");
+        exit(errno);
+    }
+
     pid = fork();
     if(pid > 0)
     {
@@ -110,6 +116,8 @@ int child_init(void *arg UNUSED)
         siginfo_t sinfo;
         struct timeval stime, etime, timespan;
         memset(&result, 0, sizeof(result));
+
+        close(errorpipe[1]);
 
         pdebugf("Writing tasks file, PID: %d\n", pid);
         FILE *pidfile = fdopen(exec_para.cgtasksfd, "r+");
@@ -198,76 +206,74 @@ int child_init(void *arg UNUSED)
             //because we are in the pid namespace, getpgrp() will always return 0
             //using getpid() instead
             IFERR(tcsetpgrp(STDIN_FILENO, getpid()))
-            {
                 PRINTERR("set back control terminal");
-            }
-            IFERR(tcsetattr(STDIN_FILENO, TCSADRAIN, &term))
-            {
+            IFERR(tcsetattr(STDIN_FILENO, TCSANOW, &term))
                 PRINTERR("restore terminal setting");
             }
+        //move setup failed to here
+        if(result.info.si_code == CLD_KILLED && result.info.si_status == SIGUSR1)
+        {
+            perrf("setup child process failed\n");
+            int childerr = 0;
+            read(errorpipe[0], &childerr, sizeof(childerr));
+            exit(childerr);
         }
 
         pdebugf("Sending result...\n");
         write(exec_para.resultpipe[1], &result, sizeof(result));
 
-        //move setup failed to here
-        if(result.info.si_code == CLD_KILLED && result.info.si_status == SIGUSR1)
-        {
-            perrf("setup child process failed\n");
-            exit(1);
-        }
         exit(0);
     }
     else if(pid == 0)
     {
+        close(errorpipe[0]);
+        child_exit_fd = errorpipe[1];
         IFERR(setup_signals())
-            raise(SIGUSR1);
+            child_exit();
         uid_t uid = exec_para.para.uid;
         gid_t gid = exec_para.para.gid;
         IFERR(setresgid(gid, gid, gid))
         {
             PRINTERR("setgid");
-            raise(SIGUSR1);
+            child_exit();
         }
         IFERR(setgroups(0, NULL))
         {
             PRINTERR("setgroups");
-            raise(SIGUSR1);
+            child_exit();
         }
         IFERR(setresuid(uid, uid, uid))
         {
             PRINTERR("setuid");
-            raise(SIGUSR1);
+            child_exit();
         }
         IFERR(setpgrp())
         {
             PRINTERR("setpgrp");
-            raise(SIGUSR1);
+            child_exit();
         }
         if(isatty(STDIN_FILENO))
         {
             IFERR(tcsetpgrp(STDIN_FILENO, getpgrp()))
             {
                 PRINTERR("setpgrp");
-                raise(SIGUSR1);
+                child_exit();
             }
         }
         IFERR(setup_cpumask())
-            raise(SIGUSR1);
+            child_exit();
         IFERR(setup_rlimit())
-            raise(SIGUSR1);
+            child_exit();
         IFERR(setup_fd())
-            raise(SIGUSR1);
+            child_exit();
         //To avoid seccomp block the systemcall
         //We move before it.
         sigwait(&rtset, &sig);
         pdebugf("child continued from rt_signal\n");
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
-        signal(SIGRTMIN, SIG_DFL);
 
         IFERR(setup_seccomp(exec_para.para.argv))
-            raise(SIGUSR1);
-        pdebugf("Every things ready, execing target process\n");
+            child_exit();
 #ifndef NDEBUG
         pdebugf("argv: {");
         for(int i = 0; exec_para.para.argv[i]; i++)
@@ -282,7 +288,7 @@ int child_init(void *arg UNUSED)
         execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
         if(errno == ENOENT)
             exit(255);
-        raise(SIGUSR1);
+        child_exit();
     }
     else
     {
@@ -290,4 +296,10 @@ int child_init(void *arg UNUSED)
         exit(errno);
     }
     exit(EFAULT); // it shouldn't be here!
+}
+
+inline static void child_exit()
+{
+    write(child_exit_fd, &errno, sizeof(errno));
+    raise(SIGUSR1);
 }

@@ -120,7 +120,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     installsig();
 
     //setup pipe
-    IFERR(pipe(exec_para.resultpipe))
+    IFERR(pipe_c(exec_para.resultpipe))
     {
         PRINTERR("create pipe");
         ret = -1;

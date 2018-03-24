@@ -223,11 +223,10 @@ int main(int argc, char *argv[], char *envp[])
     signal(SIGHUP, sighandler);
     signal(SIGINT, sighandler);
     signal(SIGTERM, sighandler);
-    int ret = cjail_exec(&para, &res);
-    if(ret)
+    if(cjail_exec(&para, &res) < 0)
     {
-        perrf("Error: cjail failure.\n");
-        exit(ret);
+        perrf("Error: cjail failure. %s\n", strerror(errno));
+        exit(1);
     }
     printf("Time: %ld.%06ld sec\n", res.time.tv_sec, res.time.tv_usec);
     printf("---\n");
