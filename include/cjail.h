@@ -21,7 +21,7 @@ struct cjail_para
     gid_t gid;
     long long rlim_as, rlim_core, rlim_fsize, rlim_proc, rlim_stack;
     long long cg_rss;
-    struct timeval *lim_time;
+    struct timeval lim_time;
     int *seccomplist;
 };
 

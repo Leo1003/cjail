@@ -194,7 +194,7 @@ int main(int argc, char *argv[], char *envp[])
                 break;
             case 't':
                 time = totime(optarg, 1);
-                para.lim_time = &time;
+                para.lim_time = time;
                 break;
             case OPT_CGR:
                 para.cgroup_root = optarg;

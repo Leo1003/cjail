@@ -105,10 +105,11 @@ int child_init(void *arg UNUSED)
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
         gettimeofday(&stime, NULL);
-        if(exec_para.para.lim_time)
+        if(timerisset(&exec_para.para.lim_time))
         {
+            pdebugf("Setting timer...\n");
             struct itimerval it;
-            it.it_value = *exec_para.para.lim_time;
+            it.it_value = exec_para.para.lim_time;
             memset(&it.it_interval, 0, sizeof(it.it_interval));
             IFERR(setitimer(ITIMER_REAL, &it, NULL))
             {
@@ -168,7 +169,7 @@ int child_init(void *arg UNUSED)
                 PRINTERR("set back control terminal");
             IFERR(tcsetattr(STDIN_FILENO, TCSANOW, &term))
                 PRINTERR("restore terminal setting");
-            }
+        }
         //move setup failed to here
         if(result.info.si_code == CLD_KILLED && result.info.si_status == SIGUSR1)
         {

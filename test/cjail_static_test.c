@@ -9,7 +9,7 @@
 extern char** environ;
 int main()
 {
-    char *cargv[] = {"/bin/java", "MemoryEater", NULL};
+    char *cargv[] = {"/usr/bin/uname", "-a", NULL};
     cpu_set_t cpuset;
     struct cjail_para para;
     struct cjail_result res;
@@ -27,7 +27,8 @@ int main()
     para.rlim_fsize = 1024;
     para.rlim_proc = 10;
     para.rlim_core = 0;
-    para.lim_time = &limt;
+    para.lim_time.tv_sec = 0;
+    para.lim_time.tv_usec = 0;
     para.cg_rss = 2048;
     para.uid = 10000;
     para.gid = 10000;
