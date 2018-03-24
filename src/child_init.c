@@ -22,50 +22,9 @@
 
 static volatile sig_atomic_t alarmed = 0, interrupted = 0;
 static int child_exit_fd;
+inline static void init_signalset();
+void sigact(int sig);
 inline static void child_exit();
-
-void sigact(int sig)
-{
-    switch(sig)
-    {
-        case SIGHUP:
-        case SIGINT:
-        case SIGQUIT:
-        case SIGTERM:
-            interrupted = 1;
-            break;
-        case SIGALRM:
-            alarmed = 1;
-            break;
-        case SIGCHLD:
-            break;
-    }
-}
-
-inline static void init_signalset()
-{
-    struct sigaction sa;
-    bzero(&sa, sizeof(sa));
-    sigemptyset(&sa.sa_mask);
-    sigaddset(&sa.sa_mask, SIGHUP);
-    sigaddset(&sa.sa_mask, SIGINT);
-    sigaddset(&sa.sa_mask, SIGQUIT);
-    sigaddset(&sa.sa_mask, SIGALRM);
-    sigaddset(&sa.sa_mask, SIGTERM);
-    sigaddset(&sa.sa_mask, SIGCHLD);
-    sigaddset(&sa.sa_mask, SIGRTMIN);
-    sa.sa_handler = sigact;
-    sa.sa_flags = SA_NOCLDSTOP;
-    sigaction(SIGHUP , &sa, NULL);
-    sigaction(SIGINT , &sa, NULL);
-    sigaction(SIGQUIT, &sa, NULL);
-    sigaction(SIGALRM, &sa, NULL);
-    sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGCHLD, &sa, NULL);
-    sigaction(SIGRTMIN, &sa, NULL);
-    signal(SIGTTIN, SIG_IGN);
-    signal(SIGTTOU, SIG_IGN);
-}
 
 int child_init(void *arg UNUSED)
 {
@@ -96,7 +55,7 @@ int child_init(void *arg UNUSED)
     int sig;
     sigset_t rtset;
     sigemptyset(&rtset);
-    sigaddset(&rtset, SIGCHLD); //Prevent child error
+    sigaddset(&rtset, SIGCHLD); //Detect child exit
     sigaddset(&rtset, SIGRTMIN);
     sigprocmask(SIG_BLOCK, &rtset, NULL);
 
@@ -296,6 +255,49 @@ int child_init(void *arg UNUSED)
         exit(errno);
     }
     exit(EFAULT); // it shouldn't be here!
+}
+
+void sigact(int sig)
+{
+    switch(sig)
+    {
+        case SIGHUP:
+        case SIGINT:
+        case SIGQUIT:
+        case SIGTERM:
+            interrupted = 1;
+            break;
+        case SIGALRM:
+            alarmed = 1;
+            break;
+        case SIGCHLD:
+            break;
+    }
+}
+
+inline static void init_signalset()
+{
+    struct sigaction sa;
+    bzero(&sa, sizeof(sa));
+    sigemptyset(&sa.sa_mask);
+    sigaddset(&sa.sa_mask, SIGHUP);
+    sigaddset(&sa.sa_mask, SIGINT);
+    sigaddset(&sa.sa_mask, SIGQUIT);
+    sigaddset(&sa.sa_mask, SIGALRM);
+    sigaddset(&sa.sa_mask, SIGTERM);
+    sigaddset(&sa.sa_mask, SIGCHLD);
+    sigaddset(&sa.sa_mask, SIGRTMIN);
+    sa.sa_handler = sigact;
+    sa.sa_flags = SA_NOCLDSTOP;
+    sigaction(SIGHUP , &sa, NULL);
+    sigaction(SIGINT , &sa, NULL);
+    sigaction(SIGQUIT, &sa, NULL);
+    sigaction(SIGALRM, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGCHLD, &sa, NULL);
+    sigaction(SIGRTMIN, &sa, NULL);
+    signal(SIGTTIN, SIG_IGN);
+    signal(SIGTTOU, SIG_IGN);
 }
 
 inline static void child_exit()

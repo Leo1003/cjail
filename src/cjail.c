@@ -67,6 +67,17 @@ inline static void restoresig()
     SIGRES(SIGCHLD);
 }
 
+static int cjail_kill(pid_t pid)
+{
+    IFERR(kill(pid, SIGKILL))
+    {
+        if(errno != ESRCH)
+            return -1;
+    }
+    usleep(100000);
+    return 0;
+}
+
 static int cjail_wait(pid_t initpid, int *wstatus)
 {
     pid_t retp;
@@ -81,6 +92,8 @@ static int cjail_wait(pid_t initpid, int *wstatus)
         }
         if(errno == EINTR)
         {
+            if(interrupted && !child)
+                cjail_kill(initpid);
             goto retry;
         }
     }
@@ -235,10 +248,8 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
 
     out_kill:
     if(interrupted && !child)
-    {
-        kill(initpid, SIGKILL);
-        usleep(200000);
-    }
+        IFERR(cjail_kill(initpid))
+            ret = -1;
     IFERR(cjail_wait(initpid, &wstatus))
         ret = -1;
 
