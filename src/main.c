@@ -1,6 +1,8 @@
 #include "cjail.h"
 #include "utils.h"
 
+#include <argz.h>
+#include <envz.h>
 #include <getopt.h>
 #include <math.h>
 #include <signal.h>
@@ -9,7 +11,7 @@
 #include <string.h>
 #include <time.h>
 
-void usage();
+void usage(char *name);
 
 enum OPTVAL
 {
@@ -47,11 +49,6 @@ const struct option longopts[] =
     {"help",        no_argument      ,  NULL, 'h'},
     {NULL,          0,                  NULL,  0 }
 };
-
-void sighandler(int sig)
-{
-    return;
-}
 
 unsigned long toul(char* str, int abr)
 {
@@ -98,6 +95,69 @@ struct timeval totime(char* str, int abr)
     return ret;
 }
 
+int parse_env(const char *str, char **dest[], char *envp[])
+{
+    char *argz = NULL, *envz = NULL, *i = NULL;
+    size_t argz_len = 0, envz_len = 0;
+    if(argz_create_sep(str, ';', &argz, &argz_len))
+    {
+        PRINTERR("create list");
+        goto error;
+    }
+
+    if(envp)
+        if(argz_create(envp, &envz, &envz_len))
+        {
+            PRINTERR("create envz");
+            goto error;
+        }
+    envz_strip(&envz, &envz_len);
+
+    while ((i = argz_next(argz, argz_len, i)))
+    {
+        if(i[0] == '!')
+        {
+            pdebugf("removing: %s\n", i + 1);
+            envz_remove(&envz, &envz_len, i + 1);
+            continue;
+        }
+        if(!strchr(i, '='))
+        {
+            if(envz_add(&envz, &envz_len, i, getenv(i)))
+            {
+                PRINTERR("add environ");
+                goto error;
+            }
+        }
+        else
+        {
+            if(argz_add(&envz, &envz_len, i))
+            {
+                PRINTERR("inherit environ");
+                goto error;
+            }
+        }
+    }
+    free(argz);
+    argz = NULL;
+    argz_len = 0;
+
+    envz_strip(&envz, &envz_len);
+
+    // i = NULL;
+    // while((i = argz_next(envz, envz_len, i)))
+    //     pdebugf("ENVZ: %s\n", i);
+
+    *dest = malloc((argz_count(envz, envz_len) + 1) * sizeof(char *));
+    argz_extract(envz, envz_len, *dest);
+    return 0;
+
+    error:
+    if(argz)
+        free(argz);
+    return -1;
+}
+
 int main(int argc, char *argv[], char *envp[])
 {
     int o;
@@ -106,6 +166,8 @@ int main(int argc, char *argv[], char *envp[])
     struct cjail_result res;
     cjail_para_init(&para);
     struct timeval time;
+    int inherenv = 0;
+    char *envstr = NULL, **para_env = NULL;
 #ifndef NDEBUG
     char cpustr[1024];
 #endif
@@ -114,10 +176,10 @@ int main(int argc, char *argv[], char *envp[])
         switch(o)
         {
             case 'e':
-                //TODO: Convert environ utils
+                envstr = optarg;
                 break;
             case 'E':
-                para.environ = envp;
+                inherenv = 1;
                 break;
             case 'C':
                 para.chroot = optarg;
@@ -203,10 +265,11 @@ int main(int argc, char *argv[], char *envp[])
                 para.cg_rss = toll(optarg, 1);
                 break;
             case 'h':
-                usage();
+                usage(argv[0]);
+                exit(0);
                 break;
             default:
-                usage();
+                usage(argv[0]);
                 exit(1);
         }
     }
@@ -216,14 +279,29 @@ int main(int argc, char *argv[], char *envp[])
         exit(1);
     }
     para.argv = argv + optind;
+    pdebugf("arguments parsing completed\n");
     if(!para.uid)
         perrf("Warning: Running with UID 0\n");
     if(!para.gid)
         perrf("Warning: Running with GID 0\n");
-    signal(SIGHUP, sighandler);
-    signal(SIGINT, sighandler);
-    signal(SIGTERM, sighandler);
+
+    if(envstr)
+    {
+        IFERR(parse_env(envstr, &para_env, (inherenv ? envp : NULL )))
+        {
+            perrf("Error: Parsing environment variables\n");
+            exit(1);
+        }
+        para.environ = para_env;
+    }
+    if(inherenv && !envstr)
+        para.environ = envp;
+
     int ret = cjail_exec(&para, &res);
+
+    if(para_env)
+        free(para_env);
+    para_env = NULL;
     if(ret)
     {
         perrf("Error: cjail failure.\n");
@@ -273,7 +351,44 @@ int main(int argc, char *argv[], char *envp[])
     return 0;
 }
 
-void usage()
+void usage(char *name)
 {
-    //TODO: Write usage
+    printf("Usage: %s [OPTIONS...] [--] PROGRAM... [ARG...]\n", name);
+    printf("       %s --help\n", name);
+    printf("\n");
+    printf("  -C, --chroot=PATH\t\tset the root path of the jail\n");
+    printf("  -D, --workingDir=PATH\t\tchange the working directory of the program\n");
+    printf("  -u, --uid=UID\t\t\tset the user of the program\n");
+    printf("  -g, --gid=GID\t\t\tset the group of the program\n");
+    printf("  -S, --cpuset=SET\t\tset cpu affinity of the program with a list separated by ','\n");
+    printf("      \t\t\t\teach entry shou be <CPU> or <CPU>-<CPU>\n");
+    printf("      --share-net\t\tnot to unshare the net namespace while creating the jail\n");
+    printf("      --cgroup-root=PATH\tchange cgroup filesystem root path (default: /sys/fs/cgroup)\n");
+    printf("  -h, --help\t\t\tshow this help\n");
+    printf("\n");
+    printf(" Resource Limit Options:\n");
+    printf("  -v, --limit-vss=SIZE\t\tlimit the memory space size can be allocated per process (KB)\n");
+    printf("  -c, --limit-core=SIZE\t\tlimit the core file size can be generated (KB)\n");
+    printf("  -z, --limit-fsize=SIZE\tlimit the max file size can be created (KB)\n");
+    printf("  -p, --limit-proc=NUM\t\tlimit the process number in the jail\n");
+    printf("  -s, --limit-stack=SIZE\tlimit the stack size of one process (KB)\n");
+    printf("  -t, --limit-time=SEC\t\tlimit the total running time of the jail (sec)\n");
+    printf("  -m, --limit-rss=SIZE\t\tlimit the memory size can be used of the jail (KB)\n");
+    printf("\n");
+    printf(" I/O Options:\n");
+    printf("  -i, --file-input=FILE\t\tredirect stdin of the program to the file\n");
+    printf("  -o, --file-output=FILE\tredirect stdout of the program to the file\n");
+    printf("  -r, --file-err=FILE\t\tredirect stderr of the program to the file\n");
+    printf("  -I, --fd-input=FD\t\tredirect stdin of the program to the file descriptor\n");
+    printf("  -O, --fd-output=FD\t\tredirect stdout of the program to the file descriptor\n");
+    printf("  -R, --fd-err=FD\t\tredirect stderr of the program to the file descriptor\n");
+    printf("      --preserve-fd\t\tdo not close file descriptors greater than 2\n");
+    printf("\n");
+    printf(" Environment Variables Options:\n");
+    printf("  -e, --environ=ENV\t\tset the environment variables of the program with a list separated by ';'\n");
+    printf("      \t\t\t\teach entry should be <name>, !<name>, <name>=<value>\n");
+    printf("      \t\t\t\t<name>        : try to inherit the environment variable from the parent process\n");
+    printf("      \t\t\t\t!<name>       : unset the environment variable inheriting from the parent process\n");
+    printf("      \t\t\t\t<name>=<value>: set the environment variable using giving name and value\n");
+    printf("  -E, --inherit-env\t\tinherit all environment variables from the parent process\n");
 }
