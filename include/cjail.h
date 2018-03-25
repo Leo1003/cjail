@@ -56,7 +56,7 @@ void cjail_para_init(struct cjail_para *para);
 * @param[out] result Executing results to be filled
 * @return int
 */
-int cjail_exec(struct cjail_para *para, struct cjail_result *result);
+int cjail_exec(const struct cjail_para *para, struct cjail_result *result);
 
 /**
 * @brief Convert cpu_set_t to human readable format

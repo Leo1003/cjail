@@ -66,7 +66,7 @@ inline static void restoresig()
     SIGRES(SIGCHLD);
 }
 
-int cjail_exec(struct cjail_para* para, struct cjail_result* result)
+int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
 {
     void *child_stack;
     int wstatus, ret = 0;
