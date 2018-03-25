@@ -13,8 +13,12 @@ cmake ..
 make
 ```
 
+---
+
 ## Library call
 cjail provide a interface to use the jail directly, without the need to call the command.
+
+---
 
 ```c
 void cjail_para_init(struct cjail_para *para);
@@ -22,6 +26,8 @@ void cjail_para_init(struct cjail_para *para);
 Initialize cjail_para struct
 #### Parameters
 struct cjail_para **para**: the parameter struct to be initialized.
+
+---
 
 ```c
 int cjail_exec(const struct cjail_para *para, struct cjail_result *result);
@@ -33,6 +39,8 @@ struct cjail_result **result**: After a successful execution, the results and st
 #### Return value
 Return 0 if successfully executed the specific process, otherwise, the execution is failed.
 
+---
+
 ```c
 int cpuset_tostr(const cpu_set_t* cpuset, char *str, size_t len);
 ```
@@ -43,6 +51,8 @@ char* **str**: Output string
 size_t **len**: The buffer size of the string (including the terminating null byte)
 #### Return value
 Return the length of the string (excluding the terminating null byte) if successfully converted. Return -1 if any error occurred.
+
+---
 
 ```c
 int cpuset_parse(const char *str, cpu_set_t *cpuset);
@@ -56,6 +66,8 @@ Return 0 if successfully converted. Return -1 if any error occurred.
 #### NOTE
 A legal string should only contain numbers, ',', and '-'. It must not have any space in it; otherwise, the convertion would error. Each cpu number should be separated by ','. You can also use '-' to represent continous cpu numbers, like "0,1-3,5,9-10".
 
+
+---
 ## Struct
 ```c
 struct cjail_para;
@@ -84,6 +96,8 @@ Set to NULL will make the working directory unchanged.
 - timeval* **lim_time**: Limit the running time. If the time is exceeded, all of the processes in the namespace will be killed.
 - char* **cgroup_root**: Change the cgroup filesystem root path(outside the chroot jail). Default: "/sys/fs/cgroup"
 - long long **cg_rss**: Limit the maximum size(KB) of memory of the cgroup. Set to 0 to disable this limit.
+
+---
 
 ```c
 struct cjail_result;
