@@ -66,7 +66,7 @@ int cjail_exec(const struct cjail_para *para, struct cjail_result *result);
 * @param[in] len The buffer size of str
 * @return int
 */
-int cpuset_tostr(const cpu_set_t* cpuset, char* str, size_t len);
+int cpuset_tostr(const cpu_set_t *cpuset, char *str, size_t len);
 
 /**
 * @brief Convert human readable format to cpu_set_t
