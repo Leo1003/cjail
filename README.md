@@ -4,7 +4,7 @@
 cjail is a application jail for competitive programming and online judge
 
 ## Build
-cjail use CMake as build system. Install CMake first if you don't have it on your computer.
+cjail use CMake as build system. Install CMake first if you don't have it on your computer.  
 We suggest you do an out-of-source build
 ```bash
 mkdir build
@@ -25,7 +25,7 @@ void cjail_para_init(struct cjail_para *para);
 ```
 Initialize cjail_para struct
 #### Parameters
-struct cjail_para **para**: the parameter struct to be initialized.
+struct cjail_para **para**: the parameter struct to be initialized.  
 
 ---
 
@@ -34,8 +34,8 @@ int cjail_exec(const struct cjail_para *para, struct cjail_result *result);
 ```
 Execute a process in the jail
 #### Parameters
-struct cjail_para **para**: Configures to change the jail behaviors.
-struct cjail_result **result**: After a successful execution, the results and stats of the process will be filled in it.
+struct cjail_para **para**: Configures to change the jail behaviors.  
+struct cjail_result **result**: After a successful execution, the results and stats of the process will be filled in it.  
 #### Return value
 Return 0 if successfully executed the specific process, otherwise, the execution is failed.
 
@@ -46,9 +46,9 @@ int cpuset_tostr(const cpu_set_t* cpuset, char *str, size_t len);
 ```
 Convert cpu_set_t to human readable format
 #### Parameters
-cpu_set_t* **cpuset**: Cpuset to be converted
-char* **str**: Output string
-size_t **len**: The buffer size of the string (including the terminating null byte)
+cpu_set_t* **cpuset**: Cpuset to be converted  
+char* **str**: Output string  
+size_t **len**: The buffer size of the string (including the terminating null byte)  
 #### Return value
 Return the length of the string (excluding the terminating null byte) if successfully converted. Return -1 if any error occurred.
 
@@ -59,8 +59,8 @@ int cpuset_parse(const char *str, cpu_set_t *cpuset);
 ```
 Convert human readable format to cpu_set_t
 #### Parameters
-const char* **str**: Null-terminated string to be converted
-cpu_set_t* **cpuset**: Output cpuset struct
+const char* **str**: Null-terminated string to be converted  
+cpu_set_t* **cpuset**: Output cpuset struct  
 #### Return value
 Return 0 if successfully converted. Return -1 if any error occurred.
 #### NOTE
