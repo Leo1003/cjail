@@ -12,10 +12,10 @@
 #define STR_LEN 1024
 
 /*
- *  Tests for testing parse_cpuset()
+ *  Tests for testing cpuset_tostr()
  */
 
-START_TEST(test_parse_cpuset_1)
+START_TEST(test_cpuset_tostr_1)
 {
     char str[STR_LEN];
     cpu_set_t cpuset;
@@ -26,7 +26,7 @@ START_TEST(test_parse_cpuset_1)
 }
 END_TEST
 
-START_TEST(test_parse_cpuset_2)
+START_TEST(test_cpuset_tostr_2)
 {
     char str[STR_LEN];
     cpu_set_t cpuset;
@@ -38,7 +38,7 @@ START_TEST(test_parse_cpuset_2)
 }
 END_TEST
 
-START_TEST(test_parse_cpuset_3)
+START_TEST(test_cpuset_tostr_3)
 {
     char str[STR_LEN];
     cpu_set_t cpuset;
@@ -55,7 +55,7 @@ START_TEST(test_parse_cpuset_3)
 }
 END_TEST
 
-START_TEST(test_parse_cpuset_4)
+START_TEST(test_cpuset_tostr_4)
 {
     char str[STR_LEN];
     cpu_set_t cpuset;
@@ -70,7 +70,7 @@ START_TEST(test_parse_cpuset_4)
 }
 END_TEST
 
-START_TEST(test_parse_cpuset_5)
+START_TEST(test_cpuset_tostr_5)
 {
     char str[STR_LEN];
     cpu_set_t cpuset;
@@ -85,7 +85,7 @@ START_TEST(test_parse_cpuset_5)
 }
 END_TEST
 
-START_TEST(test_parse_cpuset_6)
+START_TEST(test_cpuset_tostr_6)
 {
     char str[10];
     cpu_set_t cpuset;
@@ -98,6 +98,58 @@ START_TEST(test_parse_cpuset_6)
     int ret = cpuset_tostr(&cpuset, str, sizeof(str));
     ck_assert_int_eq(-1, ret);
     ck_assert_str_eq("1,3,5,7,1", str);
+}
+END_TEST
+
+
+/*
+ *  Tests for testing combine_path()
+ */
+
+START_TEST(test_cpuset_parse_1)
+{
+    cpu_set_t cpu1, cpu2;
+    CPU_ZERO(&cpu1);
+    CPU_SET(0, &cpu1);
+    CPU_SET(1, &cpu1);
+    CPU_SET(3, &cpu1);
+    CPU_SET(4, &cpu1);
+    CPU_SET(5, &cpu1);
+    CPU_SET(7, &cpu1);
+    CPU_SET(11, &cpu1);
+    ck_assert_int_eq(cpuset_parse("0,1,3-5,7,11", &cpu2), 0);
+    ck_assert_int_ne(CPU_EQUAL(&cpu1, &cpu2), 0);
+}
+END_TEST
+
+START_TEST(test_cpuset_parse_2)
+{
+    cpu_set_t cpu1, cpu2;
+    CPU_ZERO(&cpu1);
+    CPU_SET(0, &cpu1);
+    CPU_SET(1, &cpu1);
+    CPU_SET(3, &cpu1);
+    CPU_SET(4, &cpu1);
+    CPU_SET(5, &cpu1);
+    CPU_SET(7, &cpu1);
+    CPU_SET(11, &cpu1);
+    ck_assert_int_eq(cpuset_parse("0 ,1,3-5,7,11", &cpu2), -1);
+}
+END_TEST
+
+START_TEST(test_cpuset_parse_3)
+{
+    cpu_set_t cpu1, cpu2;
+    CPU_ZERO(&cpu1);
+    CPU_SET(1, &cpu1);
+    CPU_SET(2, &cpu1);
+    CPU_SET(3, &cpu1);
+    CPU_SET(4, &cpu1);
+    CPU_SET(5, &cpu1);
+    CPU_SET(6, &cpu1);
+    CPU_SET(11, &cpu1);
+    ck_assert_int_eq(cpuset_parse("1-6,11", &cpu2), 0);
+    ck_assert_int_ne(CPU_EQUAL(&cpu1, &cpu2), 0);
 }
 END_TEST
 
@@ -239,16 +291,21 @@ END_TEST
 Suite* suite_utils()
 {
     Suite *s;
-    TCase *t_cpuset, *t_combine, *t_strrmchr;
+    TCase *t_cputostr, *t_cpuparse, *t_combine, *t_strrmchr;
     s = suite_create("utils");
 
-    t_cpuset = tcase_create("parse_cpuset");
-    tcase_add_test(t_cpuset, test_parse_cpuset_1);
-    tcase_add_test(t_cpuset, test_parse_cpuset_2);
-    tcase_add_test(t_cpuset, test_parse_cpuset_3);
-    tcase_add_test(t_cpuset, test_parse_cpuset_4);
-    tcase_add_test(t_cpuset, test_parse_cpuset_5);
-    tcase_add_test(t_cpuset, test_parse_cpuset_6);
+    t_cputostr = tcase_create("cpuset_tostr");
+    tcase_add_test(t_cputostr, test_cpuset_tostr_1);
+    tcase_add_test(t_cputostr, test_cpuset_tostr_2);
+    tcase_add_test(t_cputostr, test_cpuset_tostr_3);
+    tcase_add_test(t_cputostr, test_cpuset_tostr_4);
+    tcase_add_test(t_cputostr, test_cpuset_tostr_5);
+    tcase_add_test(t_cputostr, test_cpuset_tostr_6);
+
+    t_cpuparse = tcase_create("cpuset_parse");
+    tcase_add_test(t_cpuparse, test_cpuset_parse_1);
+    tcase_add_test(t_cpuparse, test_cpuset_parse_2);
+    tcase_add_test(t_cpuparse, test_cpuset_parse_3);
 
     t_combine = tcase_create("combine_path");
     tcase_add_test(t_combine, test_combine_path_1);
@@ -267,7 +324,8 @@ Suite* suite_utils()
     tcase_add_test(t_strrmchr, test_strrmchr_3);
     tcase_add_test(t_strrmchr, test_strrmchr_4);
 
-    suite_add_tcase(s, t_cpuset);
+    suite_add_tcase(s, t_cputostr);
+    suite_add_tcase(s, t_cpuparse);
     suite_add_tcase(s, t_combine);
     suite_add_tcase(s, t_strrmchr);
     return s;
