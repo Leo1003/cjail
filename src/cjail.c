@@ -2,6 +2,7 @@
 #include "child_init.h"
 #include "cgroup.h"
 #include "setup.h"
+#include "sigset.h"
 #include "utils.h"
 #include "cleanup.h"
 
@@ -16,11 +17,8 @@
 #include <sys/signal.h>
 #include <sys/wait.h>
 
-#define RETRYTIMES 3
-
 struct __exec_para exec_para;
 
-static struct sigaction sa_save[32];
 static volatile sig_atomic_t child = 0, interrupted = 0;
 static void sighandler(int sig)
 {
@@ -38,34 +36,17 @@ static void sighandler(int sig)
     }
 }
 
-#define SIGSAV(x) sigaction(x , &sa, &sa_save[x])
-#define SIGRES(x) sigaction(x , &sa_save[x], NULL)
-inline static void installsig()
+static struct sig_rule lib_sigrules[] =
 {
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sigaddset(&sa.sa_mask, SIGHUP);
-    sigaddset(&sa.sa_mask, SIGINT);
-    sigaddset(&sa.sa_mask, SIGQUIT);
-    sigaddset(&sa.sa_mask, SIGTERM);
-    sigaddset(&sa.sa_mask, SIGCHLD);
-    sigaddset(&sa.sa_mask, SIGRTMIN);
-    sa.sa_handler = sighandler;
-    SIGSAV(SIGHUP);
-    SIGSAV(SIGINT);
-    SIGSAV(SIGQUIT);
-    SIGSAV(SIGTERM);
-    SIGSAV(SIGCHLD);
-}
-
-inline static void restoresig()
-{
-    SIGRES(SIGHUP);
-    SIGRES(SIGINT);
-    SIGRES(SIGQUIT);
-    SIGRES(SIGTERM);
-    SIGRES(SIGCHLD);
-}
+    { SIGHUP  , sighandler, NULL, {{0}}, 0 },
+    { SIGINT  , sighandler, NULL, {{0}}, 0 },
+    { SIGQUIT , sighandler, NULL, {{0}}, 0 },
+    { SIGTERM , sighandler, NULL, {{0}}, 0 },
+    { SIGCHLD , sighandler, NULL, {{0}}, 0 },
+    { SIGTTIN , SIG_IGN   , NULL, {{0}}, 0 },
+    { SIGTTOU , SIG_IGN   , NULL, {{0}}, 0 },
+    { 0       , NULL      , NULL, {{0}}, 0 },
+};
 
 static int cjail_kill(pid_t pid)
 {
@@ -130,14 +111,15 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         RETERR(EINVAL);
     exec_para.para = *para;
 
-    installsig();
+    installsigs(lib_sigrules, 0);
+    stack_push(&cstack, CLN_SIGSET, lib_sigrules);
 
     //setup pipe
     IFERR(pipe_c(exec_para.resultpipe))
     {
         PRINTERR("create pipe");
         ret = -1;
-        goto out_sig;
+        goto out_cleanup;
     }
     stack_push(&cstack, CLN_CLOSE, exec_para.resultpipe[0]);
 
@@ -253,11 +235,13 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     IFERR(cjail_wait(initpid, &wstatus))
         ret = -1;
 
+    if(isatty(STDIN_FILENO))
+        IFERR(tcsetpgrp(STDIN_FILENO, getpgrp()))
+            PRINTERR("set back control terminal");
+
     out_cleanup:
     do_cleanup(&cstack);
 
-    out_sig:
-    restoresig();
     return ret;
 }
 

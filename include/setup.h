@@ -6,7 +6,6 @@
 
 int setup_fs();
 int setup_fd();
-int setup_signals();
 int setup_cpumask();
 int setup_rlimit();
 int setup_taskstats(struct ts_socket* s);

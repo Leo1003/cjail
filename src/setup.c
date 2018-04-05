@@ -148,27 +148,6 @@ int setup_fd()
     return -1;
 }
 
-int setup_signals()
-{
-    for(int s = SIGHUP; s < SIGSYS; s++)
-    {
-        __sighandler_t v = SIG_DFL;
-        switch(s)
-        {
-            case SIGTTIN:
-            case SIGTTOU:
-                v = SIG_IGN;
-                break;
-        }
-        IFERR(signal(s, v))
-        {
-            PRINTERR("setup_signals");
-            return -1;
-        }
-    }
-    return 0;
-}
-
 int setup_cpumask()
 {
     if(exec_para.para.cpuset)

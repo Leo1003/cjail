@@ -1,6 +1,7 @@
 #ifndef CLEANUP_H
 #define CLEANUP_H
 
+#include "sigset.h"
 #include "taskstats.h"
 #include "utils.h"
 
@@ -13,7 +14,8 @@ enum tasktype
     CLN_CLOSE,
     CLN_KILL,
     CLN_CGROUP,
-    CLN_TASKSTAT
+    CLN_TASKSTAT,
+    CLN_SIGSET
 };
 
 struct cleanuptask
@@ -21,15 +23,16 @@ struct cleanuptask
     int type;
     union
     {
-        void **ptr;                  //CLN_FREE
+        void **ptr;                 //CLN_FREE
         int fd;                     //CLN_CLOSE
         struct
         {
             pid_t pid;
             int sig;
         } kill;                     //CLN_KILL
-        const char *subsystem;            //CLN_CGROUP
+        const char *subsystem;      //CLN_CGROUP
         struct ts_socket *tssock;   //CLN_TASKSTAT
+        struct sig_rule *rules;     //CLN_SIGSET
     } arg;
 };
 
@@ -40,7 +43,7 @@ struct cleanupstack
 };
 
 void stack_push(struct cleanupstack *stack, int type, ...);
-void stack_push_task(struct cleanupstack *stack, struct cleanuptask *task);
+void push_task(struct cleanupstack *stack, struct cleanuptask *task);
 struct cleanuptask * stack_top(struct cleanupstack *stack);
 int stack_pop(struct cleanupstack *stack, struct cleanuptask *task);
 void do_cleanup(struct cleanupstack *stack);

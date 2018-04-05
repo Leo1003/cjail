@@ -5,8 +5,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <seccomp.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 extern char** environ;
+static volatile sig_atomic_t interrupted = 0;
+
+void sigint(int sig)
+{
+    interrupted++;
+}
+
 int main()
 {
     char *cargv[] = {"/usr/bin/uname", "-a", NULL};
@@ -35,6 +44,10 @@ int main()
     para.workingDir = "/tmp";
     para.preservefd = 1;
     //para.seccomplist = seccomplist;
+
+    signal(SIGHUP, sigint);
+    signal(SIGINT, sigint);
+    signal(SIGTERM, sigint);
 
     int ret;
     if((ret = cjail_exec(&para, &res)) == 0)
@@ -78,5 +91,7 @@ int main()
     {
         printf("Failed: %s\n", strerror(-ret));
     }
+    pause();
+    printf("Interrupted: %d\n", interrupted);
     return 0;
 }

@@ -1,6 +1,7 @@
 #include "cjail.h"
 #include "child_init.h"
 #include "setup.h"
+#include "sigset.h"
 #include "taskstats.h"
 #include "utils.h"
 
@@ -22,9 +23,30 @@
 
 static volatile sig_atomic_t alarmed = 0, interrupted = 0;
 static int child_exit_fd;
-inline static void init_signalset();
 void sigact(int sig);
 inline static void child_exit();
+
+static struct sig_rule init_sigrules[] =
+{
+    { SIGHUP  , sigact , NULL, {{0}}, 0 },
+    { SIGINT  , sigact , NULL, {{0}}, 0 },
+    { SIGQUIT , sigact , NULL, {{0}}, 0 },
+    { SIGALRM , sigact , NULL, {{0}}, 0 },
+    { SIGTERM , sigact , NULL, {{0}}, 0 },
+    { SIGCHLD , sigact , NULL, {{0}}, 0 },
+    { SIGTTIN , SIG_IGN, NULL, {{0}}, 0 },
+    { SIGTTOU , SIG_IGN, NULL, {{0}}, 0 },
+    { 34      , sigact , NULL, {{0}}, 0 },
+    { 0       , NULL   , NULL, {{0}}, 0 },
+};
+
+static struct sig_rule child_sigrules[] =
+{
+    { SIGTTIN , SIG_IGN, NULL, {{0}}, 0 },
+    { SIGTTOU , SIG_IGN, NULL, {{0}}, 0 },
+    { 34      , SIG_IGN, NULL, {{0}}, 0 },
+    { 0       , NULL   , NULL, {{0}}, 0 },
+};
 
 int child_init(void *arg UNUSED)
 {
@@ -39,7 +61,12 @@ int child_init(void *arg UNUSED)
     }
 
     //we should register the signals, otherwise they will be ignored because we are init process
-    init_signalset();
+    //init_signalset();
+    IFERR(installsigs(init_sigrules, SA_NOCLDSTOP))
+    {
+        PRINTERR("install init signals");
+        exit(errno);
+    }
 
     close(exec_para.resultpipe[0]);
     IFERR(prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0))
@@ -54,9 +81,7 @@ int child_init(void *arg UNUSED)
     //block the signal SIGRTMIN
     int sig;
     sigset_t rtset;
-    sigemptyset(&rtset);
-    sigaddset(&rtset, SIGCHLD); //Detect child exit
-    sigaddset(&rtset, SIGRTMIN);
+    sigsetset(&rtset, 2, SIGCHLD, SIGRTMIN);
     sigprocmask(SIG_BLOCK, &rtset, NULL);
 
     //save tty setting and restore it back if needed
@@ -162,11 +187,6 @@ int child_init(void *arg UNUSED)
 
         if(ttymode)
         {
-            //set back control tty
-            //because we are in the pid namespace, getpgrp() will always return 0
-            //using getpid() instead
-            IFERR(tcsetpgrp(STDIN_FILENO, getpid()))
-                PRINTERR("set back control terminal");
             IFERR(tcsetattr(STDIN_FILENO, TCSANOW, &term))
                 PRINTERR("restore terminal setting");
         }
@@ -186,9 +206,14 @@ int child_init(void *arg UNUSED)
     }
     else if(pid == 0)
     {
+        /*
+         *  Child process part
+         */
         close(errorpipe[0]);
         child_exit_fd = errorpipe[1];
-        IFERR(setup_signals())
+        IFERR(clearsigs())
+            child_exit();
+        IFERR(installsigs(child_sigrules, 0))
             child_exit();
         uid_t uid = exec_para.para.uid;
         gid_t gid = exec_para.para.gid;
@@ -274,31 +299,6 @@ void sigact(int sig)
         case SIGCHLD:
             break;
     }
-}
-
-inline static void init_signalset()
-{
-    struct sigaction sa;
-    bzero(&sa, sizeof(sa));
-    sigemptyset(&sa.sa_mask);
-    sigaddset(&sa.sa_mask, SIGHUP);
-    sigaddset(&sa.sa_mask, SIGINT);
-    sigaddset(&sa.sa_mask, SIGQUIT);
-    sigaddset(&sa.sa_mask, SIGALRM);
-    sigaddset(&sa.sa_mask, SIGTERM);
-    sigaddset(&sa.sa_mask, SIGCHLD);
-    sigaddset(&sa.sa_mask, SIGRTMIN);
-    sa.sa_handler = sigact;
-    sa.sa_flags = SA_NOCLDSTOP;
-    sigaction(SIGHUP , &sa, NULL);
-    sigaction(SIGINT , &sa, NULL);
-    sigaction(SIGQUIT, &sa, NULL);
-    sigaction(SIGALRM, &sa, NULL);
-    sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGCHLD, &sa, NULL);
-    sigaction(SIGRTMIN, &sa, NULL);
-    signal(SIGTTIN, SIG_IGN);
-    signal(SIGTTOU, SIG_IGN);
 }
 
 inline static void child_exit()
