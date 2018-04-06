@@ -176,7 +176,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     {
         cgroup_write("memory", "tasks", "%d", childpid);
     }
-    kill(initpid, SIGRTMIN);
+    kill(initpid, SIGREADY);
 
     //socket buffer may overflow while the child process are executing
     while(!tsgot)

@@ -2,6 +2,7 @@
 #define SIGSET_H
 
 #include <signal.h>
+#define SIGREADY 34
 
 struct sig_rule
 {
