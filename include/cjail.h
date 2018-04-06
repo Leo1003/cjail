@@ -30,6 +30,8 @@ struct cjail_result
     struct taskstats stats;
     siginfo_t info;
     struct timeval time;
+    int timekill;
+    int oomkill;
 };
 
 

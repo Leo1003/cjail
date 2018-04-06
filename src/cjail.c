@@ -226,10 +226,19 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
         IFERR(n)
             PRINTERR("get result");
         result->stats = ts;
+        if(exec_para.para.cg_rss)
+        {
+            IFERR(cgroup_read("memory", "memory.oom_control", "oom_kill_disable %*d\nunder_oom %*d\noom_kill %d", &result->oomkill))
+            {
+                perrf("Can't read memory.oom_control\n");
+                perrf("oomkill value invalid!\n");
+                result->oomkill = -1;
+            }
+        }
     }
 
     out_kill:
-    if(interrupted && !child)
+    if((interrupted && !child) || tsgot != 1)
         IFERR(cjail_kill(initpid))
             ret = -1;
     IFERR(cjail_wait(initpid, &wstatus))
@@ -238,6 +247,10 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     if(isatty(STDIN_FILENO))
         IFERR(tcsetpgrp(STDIN_FILENO, getpgrp()))
             PRINTERR("set back control terminal");
+
+    int oomkill;
+    cgroup_read("memory", "memory.oom_control","oom_kill_disable %*d\nunder_oom %*d\noom_kill %d", &oomkill);
+    pdebugf("oomkill: %d\n", oomkill);
 
     out_cleanup:
     do_cleanup(&cstack);

@@ -229,7 +229,9 @@ int main(int argc, char *argv[], char *envp[])
         exit(1);
     }
     printf("Time: %ld.%06ld sec\n", res.time.tv_sec, res.time.tv_usec);
-    printf("---\n");
+    printf("Timeout: %d\n", res.timekill);
+    printf("Oomkill: %d\n", res.oomkill);
+    printf("----------TASKSTAT----------\n");
     printf("PID: %u\n", res.stats.ac_pid);
     printf("UID: %u\n", res.stats.ac_uid);
     printf("GID: %u\n", res.stats.ac_gid);

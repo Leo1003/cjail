@@ -53,6 +53,8 @@ int main()
     if((ret = cjail_exec(&para, &res)) == 0)
     {
         printf("Time: %ld.%06ld sec\n", res.time.tv_sec, res.time.tv_usec);
+        printf("Timeout: %d\n", res.timekill);
+        printf("Oomkill: %d\n", res.oomkill);
         printf("---\n");
         printf("PID: %u\n", res.stats.ac_pid);
         printf("command: %s\n", res.stats.ac_comm);

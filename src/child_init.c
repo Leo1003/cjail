@@ -167,6 +167,7 @@ int child_init(void *arg UNUSED)
                         exit(errno);
                     }
                 }
+                result.timekill = 1;
                 continue;
             }
             if(sinfo.si_pid == pid)
