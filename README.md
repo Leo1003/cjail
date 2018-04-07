@@ -15,6 +15,51 @@ make
 
 ---
 
+## Command line
+
+```text
+Usage: cjail [OPTIONS...] [--] PROGRAM... [ARG...]
+       cjail --help
+
+  -C, --chroot=PATH         set the root path of the jail
+  -D, --workingDir=PATH     change the working directory of the program
+  -u, --uid=UID             set the user of the program
+  -g, --gid=GID             set the group of the program
+  -S, --cpuset=SET          set cpu affinity of the program with a list separated by ','
+                            each entry shou be <CPU> or <CPU>-<CPU>
+      --share-net           not to unshare the net namespace while creating the jail
+      --cgroup-root=PATH    change cgroup filesystem root path (default: /sys/fs/cgroup)
+  -h, --help                show this help
+
+ Resource Limit Options:
+  -v, --limit-vss=SIZE      limit the memory space size can be allocated per process (KB)
+  -c, --limit-core=SIZE     limit the core file size can be generated (KB)
+  -z, --limit-fsize=SIZE    limit the max file size can be created (KB)
+  -p, --limit-proc=NUM      limit the process number in the jail
+  -s, --limit-stack=SIZE    limit the stack size of one process (KB)
+  -t, --limit-time=SEC      limit the total running time of the jail (sec)
+  -m, --limit-rss=SIZE      limit the memory size can be used of the jail (KB)
+
+ I/O Options:
+  -i, --file-input=FILE     redirect stdin of the program to the file
+  -o, --file-output=FILE    redirect stdout of the program to the file
+  -r, --file-err=FILE       redirect stderr of the program to the file
+  -I, --fd-input=FD         redirect stdin of the program to the file descriptor
+  -O, --fd-output=FD        redirect stdout of the program to the file descriptor
+  -R, --fd-err=FD           redirect stderr of the program to the file descriptor
+      --preserve-fd         do not close file descriptors greater than 2
+
+ Environment Variables Options:
+  -e, --environ=ENV         set the environment variables of the program with a list separated by ';'
+                            each entry should be <name>, !<name>, <name>=<value>
+                            <name>        : try to inherit the environment variable from the parent process
+                            !<name>       : unset the environment variable inheriting from the parent process
+                            <name>=<value>: set the environment variable using giving name and value
+  -E, --inherit-env         inherit all environment variables from the parent process
+```
+
+---
+
 ## Library call
 cjail provide a interface to use the jail directly, without the need to call the command.
 
