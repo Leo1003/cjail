@@ -138,7 +138,7 @@ Set to NULL will make the working directory unchanged.
 - long long **rlim_fsize**: Limit the maximum file size(KB) of a file that can be created. Set to 0 to disable this limit.
 - long long **rlim_proc**: Limit the maximum processes can be created. Set to 0 to disable this limit.
 - long long **rlim_stack**: Limit the maximum size(KB) of the stack of the process. Set to 0 to disable this limit.
-- timeval* **lim_time**: Limit the running time. If the time is exceeded, all of the processes in the namespace will be killed.
+- timeval **lim_time**: Limit the running time. If the time is exceeded, all of the processes in the namespace will be killed. Set to zero to disable this feature.
 - char* **cgroup_root**: Change the cgroup filesystem root path(outside the chroot jail). Default: "/sys/fs/cgroup"
 - long long **cg_rss**: Limit the maximum size(KB) of memory of the cgroup. Set to 0 to disable this limit.
 
@@ -150,4 +150,5 @@ struct cjail_result;
 - struct taskstats **stats**: The resource stats of the child process.
 - siginfo_t **info**: The child process's return status.
 - struct timeval **time**: The total execution time of the container.
-
+- int **oomkill**: The number of processes killed by OOM killer.
+- int **timekill**: Set to 1 if the jail was killed because of time limit excess.

@@ -144,10 +144,6 @@ int parse_env(const char *str, char **dest[], char *envp[])
 
     envz_strip(&envz, &envz_len);
 
-    // i = NULL;
-    // while((i = argz_next(envz, envz_len, i)))
-    //     pdebugf("ENVZ: %s\n", i);
-
     *dest = malloc((argz_count(envz, envz_len) + 1) * sizeof(char *));
     argz_extract(envz, envz_len, *dest);
     return 0;

@@ -134,6 +134,8 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         stack_push(&cstack, CLN_CGROUP, "memory");
 
     //setup taskstats
+    //FIXME: Serious issue! process may change their cpu affinity of its
+    //       So, taskstats need to listen all the cpus
     IFERR(setup_taskstats(&tssock))
     {
         ret = -1;

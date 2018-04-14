@@ -190,6 +190,7 @@ int child_init(void *arg UNUSED)
                 PRINTERR("restore terminal setting");
         }
         //check child setup process failed
+        //TODO: Better methods for checking child setup process error
         int childerr = 0;
         if(result.info.si_code == CLD_KILLED && result.info.si_status == SIGUSR1)
         {
