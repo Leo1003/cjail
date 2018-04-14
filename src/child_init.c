@@ -60,13 +60,17 @@ int child_init(void *arg UNUSED)
         exit(EINVAL);
     }
 
-    //we should register the signals, otherwise they will be ignored because we are init process
-    //init_signalset();
+    //it should register the signals, otherwise, they will be ignored because it's a init process
     IFERR(installsigs(init_sigrules, SA_NOCLDSTOP))
     {
         PRINTERR("install init signals");
         exit(errno);
     }
+    //block the signal SIGRTMIN
+    int rtsig;
+    sigset_t rtset;
+    sigsetset(&rtset, 2, SIGCHLD, SIGREADY);
+    sigprocmask(SIG_BLOCK, &rtset, NULL);
 
     close(exec_para.resultpipe[0]);
     IFERR(prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0))
@@ -77,12 +81,6 @@ int child_init(void *arg UNUSED)
 
     IFERR(setup_fs())
         exit(errno);
-
-    //block the signal SIGRTMIN
-    int sig;
-    sigset_t rtset;
-    sigsetset(&rtset, 2, SIGCHLD, SIGRTMIN);
-    sigprocmask(SIG_BLOCK, &rtset, NULL);
 
     //save tty setting and restore it back if needed
     ttymode = (tcgetattr(STDIN_FILENO, &term) == 0);
@@ -116,13 +114,13 @@ int child_init(void *arg UNUSED)
         pdebugf("Writed into tasks file\n");
 
         //prevent race condition
-        sigwait(&rtset, &sig);
-        if(sig == SIGCHLD)
+        sigwait(&rtset, &rtsig);
+        if(rtsig == SIGCHLD)
         {
             //child should not exit now
             perrf("Child process exit unexpectedly!\n");
         }
-        if(sig == SIGRTMIN)
+        if(rtsig == SIGRTMIN)
         {
             pdebugf("init continued from rt_signal\n");
             kill(pid, SIGRTMIN);
@@ -134,8 +132,8 @@ int child_init(void *arg UNUSED)
         {
             pdebugf("Setting timer...\n");
             struct itimerval it;
+            memset(&it, 0, sizeof(it));
             it.it_value = exec_para.para.lim_time;
-            memset(&it.it_interval, 0, sizeof(it.it_interval));
             IFERR(setitimer(ITIMER_REAL, &it, NULL))
             {
                 PRINTERR("setitimer");
@@ -157,7 +155,6 @@ int child_init(void *arg UNUSED)
             }
             if(alarmed)
             {
-                alarmed = 0;
                 pdebugf("Execution timeout, killing process...\n");
                 IFERR(kill(-1, SIGKILL))
                 {
@@ -168,6 +165,7 @@ int child_init(void *arg UNUSED)
                     }
                 }
                 result.timekill = 1;
+                alarmed = 0;
                 continue;
             }
             if(sinfo.si_pid == pid)
@@ -191,19 +189,23 @@ int child_init(void *arg UNUSED)
             IFERR(tcsetattr(STDIN_FILENO, TCSANOW, &term))
                 PRINTERR("restore terminal setting");
         }
-        //move setup failed to here
+        //check child setup process failed
+        int childerr = 0;
         if(result.info.si_code == CLD_KILLED && result.info.si_status == SIGUSR1)
         {
-            perrf("setup child process failed\n");
-            int childerr = 0;
-            read(errorpipe[0], &childerr, sizeof(childerr));
-            exit(childerr);
+            pdebugf("Reading child error...\n");
+            IFERR(read(errorpipe[0], &childerr, sizeof(childerr)))
+            {
+                PRINTERR("read child errno");
+                exit(errno);
+            }
+            if(childerr != 0)
+                perrf("setup child process failed\n");
         }
-
         pdebugf("Sending result...\n");
         write(exec_para.resultpipe[1], &result, sizeof(result));
 
-        exit(0);
+        exit(childerr);
     }
     else if(pid == 0)
     {
@@ -242,8 +244,7 @@ int child_init(void *arg UNUSED)
         {
             IFERR(tcsetpgrp(STDIN_FILENO, getpgrp()))
             {
-                PRINTERR("setpgrp");
-                child_exit();
+                PRINTERR("get control terminal");
             }
         }
         IFERR(setup_cpumask())
@@ -254,7 +255,7 @@ int child_init(void *arg UNUSED)
             child_exit();
         //To avoid seccomp block the systemcall
         //We move before it.
-        sigwait(&rtset, &sig);
+        sigwait(&rtset, &rtsig);
         pdebugf("child continued from rt_signal\n");
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
@@ -272,8 +273,6 @@ int child_init(void *arg UNUSED)
         pdebugf(" }\n");
 #endif
         execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
-        if(errno == ENOENT)
-            exit(255);
         child_exit();
     }
     else

@@ -260,7 +260,6 @@ int setup_cgroup(int *pidfd)
 int setup_seccomp(void* exec_argv)
 {
     prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
-    pdebugf("SET_NO_NEW_PRIVS\n");
     if(!exec_para.para.seccomplist)
         return 0;
     scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_TRAP);

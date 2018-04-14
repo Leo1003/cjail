@@ -59,7 +59,7 @@ static int cjail_kill(pid_t pid)
     return 0;
 }
 
-static int cjail_wait(pid_t initpid, int *wstatus)
+static int cjail_wait(pid_t initpid, int *wstatus, int *initerrno)
 {
     pid_t retp;
     retry:
@@ -78,16 +78,15 @@ static int cjail_wait(pid_t initpid, int *wstatus)
             goto retry;
         }
     }
-    if(retp == initpid)
+
+    if((WIFEXITED(*wstatus) && WEXITSTATUS(*wstatus) != 0) || WIFSIGNALED(*wstatus))
     {
-        if((WIFEXITED(*wstatus) && WEXITSTATUS(*wstatus) != 0) || WIFSIGNALED(*wstatus))
-        {
-            perrf("child namespace init process abnormal terminated\n");
-            errno = WIFEXITED(*wstatus) ? WEXITSTATUS(*wstatus) : (interrupted ? EINTR : EFAULT);
-            PRINTERR("setup child");
-            goto error;
-        }
+        perrf("child namespace init process abnormal terminated\n");
+        *initerrno = WIFEXITED(*wstatus) ? WEXITSTATUS(*wstatus) : (interrupted ? EINTR : EFAULT);
+        PRINTERR("setup child");
+        goto error;
     }
+
     return retp;
 
     error:
@@ -97,10 +96,10 @@ static int cjail_wait(pid_t initpid, int *wstatus)
 int cjail_exec(struct cjail_para* para, struct cjail_result* result)
 {
     void *child_stack = NULL;
-    int wstatus, ret = 0, tsgot = 0;
+    int wstatus, ret = 0, tsgot = 0, initerr = 0;
     pid_t initpid, childpid;
-    struct ts_socket tssock;
-    struct taskstats ts;
+    struct ts_socket tssock = { 0 };
+    struct taskstats ts = { 0 };
     struct cleanupstack cstack = { 0 };
     child = 0;
     interrupted = 0;
@@ -222,6 +221,7 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     if(result)
     {
         //get result from pipe
+        memset(result, 0, sizeof(*result));
         size_t n = read(exec_para.resultpipe[0], result, sizeof(*result));
         IFERR(n)
             PRINTERR("get result");
@@ -241,20 +241,17 @@ int cjail_exec(struct cjail_para* para, struct cjail_result* result)
     if((interrupted && !child) || tsgot != 1)
         IFERR(cjail_kill(initpid))
             ret = -1;
-    IFERR(cjail_wait(initpid, &wstatus))
+    IFERR(cjail_wait(initpid, &wstatus, &initerr))
         ret = -1;
 
     if(isatty(STDIN_FILENO))
         IFERR(tcsetpgrp(STDIN_FILENO, getpgrp()))
             PRINTERR("set back control terminal");
 
-    int oomkill;
-    cgroup_read("memory", "memory.oom_control","oom_kill_disable %*d\nunder_oom %*d\noom_kill %d", &oomkill);
-    pdebugf("oomkill: %d\n", oomkill);
-
     out_cleanup:
     do_cleanup(&cstack);
 
+    errno = (initerr ? initerr : errno);
     return ret;
 }
 
