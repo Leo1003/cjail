@@ -197,7 +197,7 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
                 PRINTERR("getstats (recv error)");
                 break;
         }
-        return -2;
+        return -1;
     }
     if (msg.n.nlmsg_type == NLMSG_ERROR || !NLMSG_OK((&msg.n), rep_len)) {
         struct nlmsgerr* err = NLMSG_DATA(&msg);

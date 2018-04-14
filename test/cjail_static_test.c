@@ -5,11 +5,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <seccomp.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 extern char** environ;
+static volatile sig_atomic_t interrupted = 0;
+
+void sigint(int sig)
+{
+    interrupted++;
+}
+
 int main()
 {
-    char *cargv[] = {"/bin/java", "MemoryEater", NULL};
+    char *cargv[] = {"/usr/bin/uname", "-a", NULL};
     cpu_set_t cpuset;
     struct cjail_para para;
     struct cjail_result res;
@@ -27,7 +36,8 @@ int main()
     para.rlim_fsize = 1024;
     para.rlim_proc = 10;
     para.rlim_core = 0;
-    para.lim_time = &limt;
+    para.lim_time.tv_sec = 0;
+    para.lim_time.tv_usec = 0;
     para.cg_rss = 2048;
     para.uid = 10000;
     para.gid = 10000;
@@ -35,10 +45,16 @@ int main()
     para.preservefd = 1;
     //para.seccomplist = seccomplist;
 
+    signal(SIGHUP, sigint);
+    signal(SIGINT, sigint);
+    signal(SIGTERM, sigint);
+
     int ret;
     if((ret = cjail_exec(&para, &res)) == 0)
     {
         printf("Time: %ld.%06ld sec\n", res.time.tv_sec, res.time.tv_usec);
+        printf("Timeout: %d\n", res.timekill);
+        printf("Oomkill: %d\n", res.oomkill);
         printf("---\n");
         printf("PID: %u\n", res.stats.ac_pid);
         printf("command: %s\n", res.stats.ac_comm);
@@ -77,5 +93,7 @@ int main()
     {
         printf("Failed: %s\n", strerror(-ret));
     }
+    pause();
+    printf("Interrupted: %d\n", interrupted);
     return 0;
 }

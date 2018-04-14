@@ -1,6 +1,7 @@
 #include "cjail.h"
 #include "child_init.h"
 #include "setup.h"
+#include "sigset.h"
 #include "taskstats.h"
 #include "utils.h"
 
@@ -21,55 +22,37 @@
 #include <sys/wait.h>
 
 static volatile sig_atomic_t alarmed = 0, interrupted = 0;
+static int child_exit_fd;
+void sigact(int sig);
+inline static void child_exit();
 
-void sigact(int sig)
+static struct sig_rule init_sigrules[] =
 {
-    switch(sig)
-    {
-        case SIGHUP:
-        case SIGINT:
-        case SIGQUIT:
-        case SIGTERM:
-            interrupted = 1;
-            break;
-        case SIGALRM:
-            alarmed = 1;
-            break;
-        case SIGCHLD:
-            break;
-    }
-}
+    { SIGHUP  , sigact , NULL, {{0}}, 0 },
+    { SIGINT  , sigact , NULL, {{0}}, 0 },
+    { SIGQUIT , sigact , NULL, {{0}}, 0 },
+    { SIGALRM , sigact , NULL, {{0}}, 0 },
+    { SIGTERM , sigact , NULL, {{0}}, 0 },
+    { SIGCHLD , sigact , NULL, {{0}}, 0 },
+    { SIGTTIN , SIG_IGN, NULL, {{0}}, 0 },
+    { SIGTTOU , SIG_IGN, NULL, {{0}}, 0 },
+    { SIGREADY, sigact , NULL, {{0}}, 0 },
+    { 0       , NULL   , NULL, {{0}}, 0 },
+};
 
-inline static void init_signalset()
+static struct sig_rule child_sigrules[] =
 {
-    struct sigaction sa;
-    bzero(&sa, sizeof(sa));
-    sigemptyset(&sa.sa_mask);
-    sigaddset(&sa.sa_mask, SIGHUP);
-    sigaddset(&sa.sa_mask, SIGINT);
-    sigaddset(&sa.sa_mask, SIGQUIT);
-    sigaddset(&sa.sa_mask, SIGALRM);
-    sigaddset(&sa.sa_mask, SIGTERM);
-    sigaddset(&sa.sa_mask, SIGCHLD);
-    sigaddset(&sa.sa_mask, SIGRTMIN);
-    sa.sa_handler = sigact;
-    sa.sa_flags = SA_NOCLDSTOP;
-    sigaction(SIGHUP , &sa, NULL);
-    sigaction(SIGINT , &sa, NULL);
-    sigaction(SIGQUIT, &sa, NULL);
-    sigaction(SIGALRM, &sa, NULL);
-    sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGCHLD, &sa, NULL);
-    sigaction(SIGRTMIN, &sa, NULL);
-    signal(SIGTTIN, SIG_IGN);
-    signal(SIGTTOU, SIG_IGN);
-}
+    { SIGTTIN , SIG_IGN, NULL, {{0}}, 0 },
+    { SIGTTOU , SIG_IGN, NULL, {{0}}, 0 },
+    { SIGREADY, SIG_IGN, NULL, {{0}}, 0 },
+    { 0       , NULL   , NULL, {{0}}, 0 },
+};
 
 int child_init(void *arg UNUSED)
 {
     pid_t pid;
     struct termios term;
-    int ttymode, chwaited = 0;
+    int ttymode, chwaited = 0, errorpipe[2];
 
     if(getpid() != 1)
     {
@@ -77,12 +60,19 @@ int child_init(void *arg UNUSED)
         exit(EINVAL);
     }
 
-    //we should register the signals, otherwise they will be ignored because we are init process
-    init_signalset();
+    //it should register the signals, otherwise, they will be ignored because it's a init process
+    IFERR(installsigs(init_sigrules, SA_NOCLDSTOP))
+    {
+        PRINTERR("install init signals");
+        exit(errno);
+    }
+    //block the signal SIGRTMIN
+    int rtsig;
+    sigset_t rtset;
+    sigsetset(&rtset, 2, SIGCHLD, SIGREADY);
+    sigprocmask(SIG_BLOCK, &rtset, NULL);
 
     close(exec_para.resultpipe[0]);
-    IFERR(setcloexec(exec_para.resultpipe[1]))
-        exit(errno);
     IFERR(prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0))
     {
         PRINTERR("set parent death signal");
@@ -92,16 +82,14 @@ int child_init(void *arg UNUSED)
     IFERR(setup_fs())
         exit(errno);
 
-    //block the signal SIGRTMIN
-    int sig;
-    sigset_t rtset;
-    sigemptyset(&rtset);
-    sigaddset(&rtset, SIGCHLD); //Prevent child error
-    sigaddset(&rtset, SIGRTMIN);
-    sigprocmask(SIG_BLOCK, &rtset, NULL);
-
     //save tty setting and restore it back if needed
     ttymode = (tcgetattr(STDIN_FILENO, &term) == 0);
+
+    IFERR(pipe_c(errorpipe))
+    {
+        PRINTERR("create pipe");
+        exit(errno);
+    }
 
     pid = fork();
     if(pid > 0)
@@ -110,6 +98,8 @@ int child_init(void *arg UNUSED)
         siginfo_t sinfo;
         struct timeval stime, etime, timespan;
         memset(&result, 0, sizeof(result));
+
+        close(errorpipe[1]);
 
         pdebugf("Writing tasks file, PID: %d\n", pid);
         FILE *pidfile = fdopen(exec_para.cgtasksfd, "r+");
@@ -124,22 +114,26 @@ int child_init(void *arg UNUSED)
         pdebugf("Writed into tasks file\n");
 
         //prevent race condition
-        sigwait(&rtset, &sig);
-        if(sig == SIGCHLD)
+        sigwait(&rtset, &rtsig);
+        if(rtsig == SIGCHLD)
         {
             //child should not exit now
             perrf("Child process exit unexpectedly!\n");
         }
-        if(sig == SIGRTMIN)
+        if(rtsig == SIGRTMIN)
+        {
             pdebugf("init continued from rt_signal\n");
+            kill(pid, SIGRTMIN);
+        }
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
         gettimeofday(&stime, NULL);
-        if(exec_para.para.lim_time)
+        if(timerisset(&exec_para.para.lim_time))
         {
+            pdebugf("Setting timer...\n");
             struct itimerval it;
-            it.it_value = *exec_para.para.lim_time;
-            memset(&it.it_interval, 0, sizeof(it.it_interval));
+            memset(&it, 0, sizeof(it));
+            it.it_value = exec_para.para.lim_time;
             IFERR(setitimer(ITIMER_REAL, &it, NULL))
             {
                 PRINTERR("setitimer");
@@ -161,7 +155,6 @@ int child_init(void *arg UNUSED)
             }
             if(alarmed)
             {
-                alarmed = 0;
                 pdebugf("Execution timeout, killing process...\n");
                 IFERR(kill(-1, SIGKILL))
                 {
@@ -171,6 +164,8 @@ int child_init(void *arg UNUSED)
                         exit(errno);
                     }
                 }
+                result.timekill = 1;
+                alarmed = 0;
                 continue;
             }
             if(sinfo.si_pid == pid)
@@ -191,80 +186,81 @@ int child_init(void *arg UNUSED)
 
         if(ttymode)
         {
-            //set back control tty
-            //because we are in the pid namespace, getpgrp() will always return 0
-            //using getpid() instead
-            IFERR(tcsetpgrp(STDIN_FILENO, getpid()))
-            {
-                PRINTERR("set back control terminal");
-            }
-            IFERR(tcsetattr(STDIN_FILENO, TCSADRAIN, &term))
-            {
+            IFERR(tcsetattr(STDIN_FILENO, TCSANOW, &term))
                 PRINTERR("restore terminal setting");
-            }
         }
-
+        //check child setup process failed
+        int childerr = 0;
+        if(result.info.si_code == CLD_KILLED && result.info.si_status == SIGUSR1)
+        {
+            pdebugf("Reading child error...\n");
+            IFERR(read(errorpipe[0], &childerr, sizeof(childerr)))
+            {
+                PRINTERR("read child errno");
+                exit(errno);
+            }
+            if(childerr != 0)
+                perrf("setup child process failed\n");
+        }
         pdebugf("Sending result...\n");
         write(exec_para.resultpipe[1], &result, sizeof(result));
 
-        //move setup failed to here
-        if(result.info.si_code == CLD_KILLED && result.info.si_status == SIGUSR1)
-        {
-            perrf("setup child process failed\n");
-            exit(1);
-        }
-        exit(0);
+        exit(childerr);
     }
     else if(pid == 0)
     {
-        IFERR(setup_signals())
-            raise(SIGUSR1);
+        /*
+         *  Child process part
+         */
+        close(errorpipe[0]);
+        child_exit_fd = errorpipe[1];
+        IFERR(clearsigs())
+            child_exit();
+        IFERR(installsigs(child_sigrules, 0))
+            child_exit();
         uid_t uid = exec_para.para.uid;
         gid_t gid = exec_para.para.gid;
         IFERR(setresgid(gid, gid, gid))
         {
             PRINTERR("setgid");
-            raise(SIGUSR1);
+            child_exit();
         }
         IFERR(setgroups(0, NULL))
         {
             PRINTERR("setgroups");
-            raise(SIGUSR1);
+            child_exit();
         }
         IFERR(setresuid(uid, uid, uid))
         {
             PRINTERR("setuid");
-            raise(SIGUSR1);
+            child_exit();
         }
         IFERR(setpgrp())
         {
             PRINTERR("setpgrp");
-            raise(SIGUSR1);
+            child_exit();
         }
         if(isatty(STDIN_FILENO))
         {
             IFERR(tcsetpgrp(STDIN_FILENO, getpgrp()))
             {
-                PRINTERR("setpgrp");
-                raise(SIGUSR1);
+                PRINTERR("get control terminal");
             }
         }
         IFERR(setup_cpumask())
-            raise(SIGUSR1);
+            child_exit();
         IFERR(setup_rlimit())
-            raise(SIGUSR1);
+            child_exit();
         IFERR(setup_fd())
-            raise(SIGUSR1);
+            child_exit();
         //To avoid seccomp block the systemcall
         //We move before it.
-        sigwait(&rtset, &sig);
+        sigwait(&rtset, &rtsig);
         pdebugf("child continued from rt_signal\n");
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
-        signal(SIGRTMIN, SIG_DFL);
 
         IFERR(setup_seccomp(exec_para.para.argv))
-            raise(SIGUSR1);
-        pdebugf("Every things ready, execing target process\n");
+            child_exit();
 #ifndef NDEBUG
         pdebugf("argv: {");
         for(int i = 0; exec_para.para.argv[i]; i++)
@@ -279,7 +275,7 @@ int child_init(void *arg UNUSED)
         execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
         if(errno == ENOENT)
             exit(255);
-        raise(SIGUSR1);
+        child_exit();
     }
     else
     {
@@ -287,4 +283,28 @@ int child_init(void *arg UNUSED)
         exit(errno);
     }
     exit(EFAULT); // it shouldn't be here!
+}
+
+void sigact(int sig)
+{
+    switch(sig)
+    {
+        case SIGHUP:
+        case SIGINT:
+        case SIGQUIT:
+        case SIGTERM:
+            interrupted = 1;
+            break;
+        case SIGALRM:
+            alarmed = 1;
+            break;
+        case SIGCHLD:
+            break;
+    }
+}
+
+inline static void child_exit()
+{
+    write(child_exit_fd, &errno, sizeof(errno));
+    raise(SIGUSR1);
 }

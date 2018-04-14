@@ -2,7 +2,9 @@
 #include "child_init.h"
 #include "cgroup.h"
 #include "setup.h"
+#include "sigset.h"
 #include "utils.h"
+#include "cleanup.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -15,12 +17,9 @@
 #include <sys/signal.h>
 #include <sys/wait.h>
 
-#define RETRYTIMES 3
-
 struct __exec_para exec_para;
 
-static struct sigaction sa_save[32];
-static volatile sig_atomic_t child = 0, interrupted = 0, error = 0;
+static volatile sig_atomic_t child = 0, interrupted = 0;
 static void sighandler(int sig)
 {
     switch(sig)
@@ -37,42 +36,73 @@ static void sighandler(int sig)
     }
 }
 
-#define SIGSAV(x) sigaction(x , &sa, &sa_save[x])
-#define SIGRES(x) sigaction(x , &sa_save[x], NULL)
-inline static void installsig()
+static struct sig_rule lib_sigrules[] =
 {
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sigaddset(&sa.sa_mask, SIGHUP);
-    sigaddset(&sa.sa_mask, SIGINT);
-    sigaddset(&sa.sa_mask, SIGQUIT);
-    sigaddset(&sa.sa_mask, SIGTERM);
-    sigaddset(&sa.sa_mask, SIGCHLD);
-    sigaddset(&sa.sa_mask, SIGRTMIN);
-    sa.sa_handler = sighandler;
-    SIGSAV(SIGHUP);
-    SIGSAV(SIGINT);
-    SIGSAV(SIGQUIT);
-    SIGSAV(SIGTERM);
-    SIGSAV(SIGCHLD);
+    { SIGHUP  , sighandler, NULL, {{0}}, 0 },
+    { SIGINT  , sighandler, NULL, {{0}}, 0 },
+    { SIGQUIT , sighandler, NULL, {{0}}, 0 },
+    { SIGTERM , sighandler, NULL, {{0}}, 0 },
+    { SIGCHLD , sighandler, NULL, {{0}}, 0 },
+    { SIGTTIN , SIG_IGN   , NULL, {{0}}, 0 },
+    { SIGTTOU , SIG_IGN   , NULL, {{0}}, 0 },
+    { 0       , NULL      , NULL, {{0}}, 0 },
+};
+
+static int cjail_kill(pid_t pid)
+{
+    IFERR(kill(pid, SIGKILL))
+    {
+        if(errno != ESRCH)
+            return -1;
+    }
+    usleep(100000);
+    return 0;
 }
 
-inline static void restoresig()
+static int cjail_wait(pid_t initpid, int *wstatus, int *initerrno)
 {
-    SIGRES(SIGHUP);
-    SIGRES(SIGINT);
-    SIGRES(SIGQUIT);
-    SIGRES(SIGTERM);
-    SIGRES(SIGCHLD);
+    pid_t retp;
+    retry:
+    retp = waitpid(initpid, wstatus, 0);
+    IFERR(retp)
+    {
+        if(errno == ECHILD)
+        {
+            perrf("Lost control of child namespace init process\n");
+            goto error;
+        }
+        if(errno == EINTR)
+        {
+            if(interrupted && !child)
+                cjail_kill(initpid);
+            goto retry;
+        }
+    }
+
+    if((WIFEXITED(*wstatus) && WEXITSTATUS(*wstatus) != 0) || WIFSIGNALED(*wstatus))
+    {
+        perrf("child namespace init process abnormal terminated\n");
+        *initerrno = WIFEXITED(*wstatus) ? WEXITSTATUS(*wstatus) : (interrupted ? EINTR : EFAULT);
+        PRINTERR("setup child");
+        goto error;
+    }
+
+    return retp;
+
+    error:
+    return -1;
 }
 
 int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
 {
-    void *child_stack;
-    int wstatus, ret = 0;
+    void *child_stack = NULL;
+    int wstatus, ret = 0, tsgot = 0, initerr = 0;
     pid_t initpid, childpid;
-    struct ts_socket tssock;
-    struct taskstats ts;
+    struct ts_socket tssock = { 0 };
+    struct taskstats ts = { 0 };
+    struct cleanupstack cstack = { 0 };
+    child = 0;
+    interrupted = 0;
 
     if(geteuid())
         RETERR(EPERM);
@@ -80,29 +110,36 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         RETERR(EINVAL);
     exec_para.para = *para;
 
-    installsig();
+    installsigs(lib_sigrules, 0);
+    stack_push(&cstack, CLN_SIGSET, lib_sigrules);
 
     //setup pipe
-    IFERR(pipe(exec_para.resultpipe))
+    IFERR(pipe_c(exec_para.resultpipe))
     {
         PRINTERR("create pipe");
         ret = -1;
-        goto out_sig;
+        goto out_cleanup;
     }
+    stack_push(&cstack, CLN_CLOSE, exec_para.resultpipe[0]);
 
     //setup cgroup stage I
     IFERR(setup_cgroup(&exec_para.cgtasksfd))
     {
         ret = -1;
-        goto out_pipe;
+        goto out_cleanup;
     }
+    stack_push(&cstack, CLN_CLOSE, exec_para.cgtasksfd);
+    stack_push(&cstack, CLN_CGROUP, "pids");
+    if(exec_para.para.cg_rss > 0)
+        stack_push(&cstack, CLN_CGROUP, "memory");
 
     //setup taskstats
     IFERR(setup_taskstats(&tssock))
     {
         ret = -1;
-        goto out_cgroup;
+        goto out_cleanup;
     }
+    stack_push(&cstack, CLN_TASKSTAT, &tssock);
 
     //clone
     child_stack = malloc(STACKSIZE);
@@ -110,8 +147,9 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
     {
         PRINTERR("malloc stack");
         ret = -1;
-        goto out_taskstats;
+        goto out_cleanup;
     }
+    stack_push(&cstack, CLN_FREE, &child_stack);
     int optionflag = 0;
     optionflag |= exec_para.para.sharenet ? 0 : CLONE_NEWNET;
     initpid = clone(child_init, child_stack + STACKSIZE,
@@ -119,8 +157,8 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
     IFERR(initpid)
     {
         PRINTERR("clone child namespace init process");
-        ret = -errno;
-        goto out_free;
+        ret = -1;
+        goto out_cleanup;
     }
     close(exec_para.resultpipe[1]);
     pdebugf("Init PID: %d\n", initpid);
@@ -129,31 +167,20 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
     while(cgroup_read("pids", "tasks", "%d", &childpid) == EOF)
     {
         if(child || interrupted)
-        {
-            error = 1;
-            break;
-        }
+            goto out_kill;
         usleep(100000);
     }
-    if(!error)
+    pdebugf("Got childpid: %d\n", childpid);
+    if(exec_para.para.cg_rss)
     {
-        pdebugf("Got childpid: %d\n", childpid);
-        if(exec_para.para.cg_rss)
-        {
-            cgroup_write("memory", "tasks", "%d", childpid);
-        }
-        kill(childpid, SIGRTMIN);
-        kill(initpid, SIGRTMIN);
+        cgroup_write("memory", "tasks", "%d", childpid);
     }
+    kill(initpid, SIGREADY);
 
     //socket buffer may overflow while the child process are executing
-    int tsret = 0, waited = 0, tsgot = 0, retry = RETRYTIMES;
-    if(error)
-        tsgot = -1;
-    while(!waited || !tsgot)
+    while(!tsgot)
     {
-        //wait for init process return
-        if(interrupted)
+        if(interrupted && !child)
         {
             IFERR(kill(initpid, SIGTERM))
             {
@@ -164,55 +191,23 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
                 }
             }
         }
-        if(!waited)
+        int tsret = taskstats_getstats(&tssock, &ts);
+        if(tsret == 0 && ts.ac_pid == childpid)
+            tsgot = 1;
+        else if(tsret < 0)
         {
-            pid_t retp = waitpid(initpid, &wstatus, (tsgot ? 0 : WNOHANG));
-            IFERR(retp)
+            switch(errno)
             {
-                if(errno == ECHILD)
-                {
-                    perrf("Lost control of child namespace init process\n");
-                    ret = -errno;
-                    goto out_kill;
-                }
-            }
-            if(retp == initpid)
-            {
-                if((WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0) || WIFSIGNALED(wstatus))
-                {
-                    perrf("child namespace init process abnormal terminated\n");
-                    errno = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : EFAULT;
-                    ret = -1;
-                    waited = 1;
-                    goto out_kill;
-                }
-                waited = 1;
-            }
-        }
-        //taskstats get stats
-        if(!tsgot)
-        {
-            tsret = taskstats_getstats(&tssock, &ts);
-            if(tsret == 0)
-            {
-                if(ts.ac_pid == childpid)
-                    tsgot = 1;
-                retry = RETRYTIMES;
-            }
-            if(tsret < 0)
-            {
-                switch(errno)
-                {
-                    case EAGAIN:
-                    case ETIMEDOUT:
-                    case EBUSY:
-                        if(waited && !retry--)
-                            tsgot = -1;
-                        break;
-                    default:
+                case EAGAIN:
+                case ETIMEDOUT:
+                case EINTR:
+                case EBUSY:
+                    if(child)
                         tsgot = -1;
-                        break;
-                }
+                    break;
+                default:
+                    tsgot = -1;
+                    break;
             }
         }
     }
@@ -223,48 +218,40 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         goto out_kill;
     }
 
-    if(!error && result)
+    if(result)
     {
         //get result from pipe
+        memset(result, 0, sizeof(*result));
         size_t n = read(exec_para.resultpipe[0], result, sizeof(*result));
         IFERR(n)
             PRINTERR("get result");
         result->stats = ts;
+        if(exec_para.para.cg_rss)
+        {
+            IFERR(cgroup_read("memory", "memory.oom_control", "oom_kill_disable %*d\nunder_oom %*d\noom_kill %d", &result->oomkill))
+            {
+                perrf("Can't read memory.oom_control\n");
+                perrf("oomkill value invalid!\n");
+                result->oomkill = -1;
+            }
+        }
     }
 
     out_kill:
-    if(!waited)
-    {
-        kill(childpid, SIGKILL);
-        kill(initpid, SIGKILL);
-        usleep(200000);
-    }
+    if((interrupted && !child) || tsgot != 1)
+        IFERR(cjail_kill(initpid))
+            ret = -1;
+    IFERR(cjail_wait(initpid, &wstatus, &initerr))
+        ret = -1;
 
-    out_free:
-    free(child_stack);
+    if(isatty(STDIN_FILENO))
+        IFERR(tcsetpgrp(STDIN_FILENO, getpgrp()))
+            PRINTERR("set back control terminal");
 
-    out_taskstats:
-    IFERR(taskstats_destory(&tssock))
-        perrf("Failed to destory taskstats\n");
+    out_cleanup:
+    do_cleanup(&cstack);
 
-    out_cgroup:
-    IFERR(close(exec_para.cgtasksfd))
-        PRINTERR("close cgroup tasks file");
-    IFERR(cgroup_destory("pids"))
-        perrf("Failed to destory pids cgroup\n");
-    if(exec_para.para.cg_rss > 0)
-    {
-        IFERR(cgroup_destory("memory"))
-            perrf("Failed to destory memory cgroup\n");
-    }
-
-    out_pipe:
-    IFERR(close(exec_para.resultpipe[0]))
-        PRINTERR("close pipe");
-    close(exec_para.resultpipe[1]);
-
-    out_sig:
-    restoresig();
+    errno = (initerr ? initerr : errno);
     return ret;
 }
 

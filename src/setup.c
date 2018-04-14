@@ -148,27 +148,6 @@ int setup_fd()
     return -1;
 }
 
-int setup_signals()
-{
-    for(int s = SIGHUP; s < SIGSYS; s++)
-    {
-        __sighandler_t v = SIG_DFL;
-        switch(s)
-        {
-            case SIGTTIN:
-            case SIGTTOU:
-                v = SIG_IGN;
-                break;
-        }
-        IFERR(signal(s, v))
-        {
-            PRINTERR("setup_signals");
-            return -1;
-        }
-    }
-    return 0;
-}
-
 int setup_cpumask()
 {
     if(exec_para.para.cpuset)
@@ -281,7 +260,6 @@ int setup_cgroup(int *pidfd)
 int setup_seccomp(void* exec_argv)
 {
     prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
-    pdebugf("SET_NO_NEW_PRIVS\n");
     if(!exec_para.para.seccomplist)
         return 0;
     scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_TRAP);

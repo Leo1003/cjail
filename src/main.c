@@ -256,7 +256,7 @@ int main(int argc, char *argv[], char *envp[])
                 break;
             case 't':
                 time = totime(optarg, 1);
-                para.lim_time = &time;
+                para.lim_time = time;
                 break;
             case OPT_CGR:
                 para.cgroup_root = optarg;
@@ -304,11 +304,13 @@ int main(int argc, char *argv[], char *envp[])
     para_env = NULL;
     if(ret)
     {
-        perrf("Error: cjail failure.\n");
-        exit(ret);
+        perrf("Error: cjail failure. %s\n", strerror(errno));
+        exit(1);
     }
     printf("Time: %ld.%06ld sec\n", res.time.tv_sec, res.time.tv_usec);
-    printf("---\n");
+    printf("Timeout: %d\n", res.timekill);
+    printf("Oomkill: %d\n", res.oomkill);
+    printf("----------TASKSTAT----------\n");
     printf("PID: %u\n", res.stats.ac_pid);
     printf("UID: %u\n", res.stats.ac_uid);
     printf("GID: %u\n", res.stats.ac_gid);

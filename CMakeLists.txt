@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
 project(cjail)
-set(VERSION 0.4.13)
-set(SOVERSION 0)
+set(VERSION 0.5.0)
+set(SOVERSION 2)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 if(NOT CMAKE_BUILD_TYPE)
