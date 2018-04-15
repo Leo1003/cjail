@@ -18,6 +18,7 @@
 #include <sys/resource.h>
 #include <sys/signal.h>
 #include <sys/stat.h>
+#include <sys/sysinfo.h>
 #include <sys/time.h>
 #include <sys/wait.h>
 
@@ -210,22 +211,14 @@ int setup_taskstats(struct ts_socket *s)
 {
     IFERR(taskstats_create(s))
         goto error;
-    if(exec_para.para.cpuset)
-    {
-        IFERR(taskstats_setcpuset(s, exec_para.para.cpuset))
-            goto error;
-    }
-    else
-    {
-        cpu_set_t cur;
-        IFERR(sched_getaffinity(getpid(), sizeof(cur), &cur))
-        {
-            PRINTERR("get CPU affinity");
-            goto error;
-        }
-        IFERR(taskstats_setcpuset(s, &cur))
-            goto error;
-    }
+
+    cpu_set_t cur;
+    CPU_ZERO(&cur);
+    for(int i = 0; i < get_nprocs(); i++)
+        CPU_SET(i, &cur);
+    IFERR(taskstats_setcpuset(s, &cur))
+        goto error;
+
     return 0;
 
     error:
