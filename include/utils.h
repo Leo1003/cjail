@@ -14,7 +14,7 @@
 #ifdef NDEBUG
 #define pdebugf(x, ...)
 #else
-#define pdebugf(x, ...) do { fprintf(stderr, x, ##__VA_ARGS__); } while(0)
+#define pdebugf(x, ...) do { fprintf(stderr, "%s->%d: "x, __func__, __LINE__, ##__VA_ARGS__); } while(0)
 #endif
 
 int closefrom(int minfd);

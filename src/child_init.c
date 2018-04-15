@@ -180,6 +180,7 @@ int child_init(void *arg UNUSED)
             exit(ECHILD);
         }
 
+        //TODO: deregister alarm here
         gettimeofday(&etime, NULL);
         timersub(&etime, &stime, &timespan);
         result.time = timespan;
@@ -262,17 +263,6 @@ int child_init(void *arg UNUSED)
 
         IFERR(setup_seccomp(exec_para.para.argv))
             child_exit();
-#ifndef NDEBUG
-        pdebugf("argv: {");
-        for(int i = 0; exec_para.para.argv[i]; i++)
-        {
-            pdebugf(" ");
-            if(i > 0)
-                pdebugf(", ");
-            pdebugf("%s", exec_para.para.argv[i]);
-        }
-        pdebugf(" }\n");
-#endif
         execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
         if(errno == ENOENT)
             exit(255);

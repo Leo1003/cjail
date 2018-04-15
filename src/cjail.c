@@ -83,7 +83,7 @@ static int cjail_wait(pid_t initpid, int *wstatus, int *initerrno)
     {
         perrf("child namespace init process abnormal terminated\n");
         *initerrno = WIFEXITED(*wstatus) ? WEXITSTATUS(*wstatus) : (interrupted ? EINTR : EFAULT);
-        PRINTERR("setup child");
+        perrf("Failed to setup child: %s\n", strerror(*initerrno));
         goto error;
     }
 

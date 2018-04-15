@@ -131,7 +131,6 @@ int cpuset_parse(const char *str, cpu_set_t *cpuset)
 
 int mkdir_r(const char* path)
 {
-    pdebugf("mkdir_r: %s: ", path);
     int l;
     if((l = strlen(path)) == 0)
         return 0;
@@ -139,39 +138,23 @@ int mkdir_r(const char* path)
     IFERR(stat(path, &st))
     {
         if(!strcmp(path, "."))
-        {
-            pdebugf("PWD\n");
             return 0;
-        }
         char dpath[PATH_MAX];
         if(strlcpy(dpath, path, sizeof(dpath)) >= sizeof(dpath))
-        {
-            pdebugf("TooLong\n");
             RETERR(ENAMETOOLONG);
-        }
         char *ppath = dirname(dpath);
 
-        pdebugf("Recursive\n");
         int ret = mkdir_r(ppath);
         if(!ret)
-        {
-            pdebugf("mkdir: %s\n", path);
             ret = mkdir(path, 0755);
-        }
         return ret;
     }
     else
     {
         if(S_ISDIR(st.st_mode))
-        {
-            pdebugf("Return\n");
             return 0;
-        }
         else
-        {
-            pdebugf("Not dir\n");
             RETERR(ENOTDIR);
-        }
     }
 }
 
