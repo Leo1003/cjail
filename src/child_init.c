@@ -15,6 +15,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/param.h>
 #include <sys/prctl.h>
 #include <sys/signal.h>
 #include <sys/time.h>
@@ -22,9 +23,9 @@
 #include <sys/wait.h>
 
 static volatile sig_atomic_t alarmed = 0, interrupted = 0;
-static int child_exit_fd;
 void sigact(int sig);
 inline static void child_exit();
+static int ifchildfailed(pid_t pid);
 
 static struct sig_rule init_sigrules[] =
 {
@@ -50,9 +51,9 @@ static struct sig_rule child_sigrules[] =
 
 int child_init(void *arg UNUSED)
 {
-    pid_t pid;
+    pid_t childpid;
     struct termios term;
-    int ttymode, chwaited = 0, errorpipe[2];
+    int ttymode, childstatus = 0;
 
     if(getpid() != 1)
     {
@@ -85,30 +86,22 @@ int child_init(void *arg UNUSED)
     //save tty setting and restore it back if needed
     ttymode = (tcgetattr(STDIN_FILENO, &term) == 0);
 
-    IFERR(pipe_c(errorpipe))
-    {
-        PRINTERR("create pipe");
-        exit(errno);
-    }
-
-    pid = fork();
-    if(pid > 0)
+    childpid = fork();
+    if(childpid > 0)
     {
         struct cjail_result result;
         siginfo_t sinfo;
         struct timeval stime, etime, timespan;
         memset(&result, 0, sizeof(result));
 
-        close(errorpipe[1]);
-
-        pdebugf("Writing tasks file, PID: %d\n", pid);
+        pdebugf("Writing tasks file, PID: %d\n", childpid);
         FILE *pidfile = fdopen(exec_para.cgtasksfd, "r+");
         if(!pidfile)
         {
             PRINTERR("fdopen cgroup task");
             exit(errno);
         }
-        fprintf(pidfile, "%d", pid);
+        fprintf(pidfile, "%d", childpid);
         fflush(pidfile);
         fclose(pidfile);
         pdebugf("Writed into tasks file\n");
@@ -123,7 +116,7 @@ int child_init(void *arg UNUSED)
         if(rtsig == SIGRTMIN)
         {
             pdebugf("init continued from rt_signal\n");
-            kill(pid, SIGRTMIN);
+            kill(childpid, SIGRTMIN);
         }
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
@@ -143,7 +136,7 @@ int child_init(void *arg UNUSED)
 
         while(1)
         {
-            IFERR(waitid(P_ALL, 0, &sinfo, WEXITED))
+            IFERR(waitid(P_ALL, 0, &sinfo, WEXITED | WNOWAIT))
             {
                 if(errno == ECHILD)
                     break;
@@ -168,13 +161,24 @@ int child_init(void *arg UNUSED)
                 alarmed = 0;
                 continue;
             }
-            if(sinfo.si_pid == pid)
+            if(sinfo.si_pid == childpid)
             {
-                chwaited = 1;
+                switch(ifchildfailed(sinfo.si_pid))
+                {
+                    case 1:
+                        childstatus = -1;
+                        break;
+                    case 0:
+                        childstatus = 1;
+                        break;
+                    case -1:
+                        exit(errno);
+                }
                 result.info = sinfo;
             }
+            waitpid(sinfo.si_pid, NULL, 0); // Cleanup the zombie process here
         }
-        if(!chwaited)
+        if(!childstatus)
         {
             perrf("Lost control of child process\n");
             exit(ECHILD);
@@ -191,31 +195,51 @@ int child_init(void *arg UNUSED)
                 PRINTERR("restore terminal setting");
         }
         //check child setup process failed
-        //TODO: Better methods for checking child setup process error
-        int childerr = 0;
-        if(result.info.si_code == CLD_KILLED && result.info.si_status == SIGUSR1)
+        error_t childerr = 0;
+        if(childstatus == -1)
         {
-            pdebugf("Reading child error...\n");
-            IFERR(read(errorpipe[0], &childerr, sizeof(childerr)))
+            switch (result.info.si_code)
             {
-                PRINTERR("read child errno");
-                exit(errno);
+                case CLD_EXITED:
+                    childerr = result.info.si_status;
+                    break;
+                case CLD_KILLED:
+                case CLD_DUMPED:
+                    perrf("Child process killed by %s\n", strsignal(result.info.si_status));
+                    switch (result.info.si_status)
+                    {
+                        case SIGHUP:
+                        case SIGINT:
+                        case SIGQUIT:
+                        case SIGTERM:
+                            childerr = EINTR;
+                            break;
+                        case SIGKILL:
+                            //check if killed by oom killer
+                            //TODO: test setup process max rss usage
+                            if(exec_para.para.cg_rss && exec_para.para.cg_rss < 256)
+                                childerr = ENOMEM;
+                            break;
+                        case SIGSYS:
+                            childerr = ENOSYS;
+                            break;
+                        default:
+                            childerr = EFAULT;
+                            break;
+                    }
+                    break;
             }
-            if(childerr != 0)
-                perrf("setup child process failed\n");
         }
         pdebugf("Sending result...\n");
         write(exec_para.resultpipe[1], &result, sizeof(result));
 
         exit(childerr);
     }
-    else if(pid == 0)
+    else if(childpid == 0)
     {
         /*
          *  Child process part
          */
-        close(errorpipe[0]);
-        child_exit_fd = errorpipe[1];
         IFERR(clearsigs())
             child_exit();
         IFERR(installsigs(child_sigrules, 0))
@@ -264,8 +288,6 @@ int child_init(void *arg UNUSED)
         IFERR(setup_seccomp(exec_para.para.argv))
             child_exit();
         execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
-        if(errno == ENOENT)
-            exit(255);
         child_exit();
     }
     else
@@ -294,8 +316,29 @@ void sigact(int sig)
     }
 }
 
+static int ifchildfailed(pid_t pid)
+{
+    FILE *fp;
+    char statpath[PATH_MAX];
+    unsigned long procflag;
+    snprintf(statpath, sizeof(char) * PATH_MAX, "/proc/%d/stat", pid);
+    fp = fopen(statpath, "r");
+    if (!fp) {
+        PRINTERR("open proc stat file");
+        return -1;
+    }
+    IFERR(fscanf(fp, "%*s %*s %*s %*s %*s %*s %*s %*s %lu", &procflag))
+    {
+        PRINTERR("read proc stat file");
+        return -1;
+    }
+    fclose(fp);
+    if(procflag & 0x00000040) /* PF_FORKNOEXEC: forked but didn't exec */
+        return 1;
+    return 0;
+}
+
 inline static void child_exit()
 {
-    write(child_exit_fd, &errno, sizeof(errno));
-    raise(SIGUSR1);
+    exit(errno);
 }
