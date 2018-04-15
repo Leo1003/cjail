@@ -116,7 +116,7 @@ int child_init(void *arg UNUSED)
         if(rtsig == SIGRTMIN)
         {
             pdebugf("init continued from rt_signal\n");
-            kill(childpid, SIGRTMIN);
+            kill(childpid, SIGREADY);
         }
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
@@ -178,13 +178,15 @@ int child_init(void *arg UNUSED)
             }
             waitpid(sinfo.si_pid, NULL, 0); // Cleanup the zombie process here
         }
-        if(!childstatus)
-        {
-            perrf("Lost control of child process\n");
-            exit(ECHILD);
+
+        //deregister alarm
+        if (timerisset(&exec_para.para.lim_time)) {
+            struct itimerval itz;
+            memset(&itz, 0, sizeof(itz));
+            IFERR (setitimer(ITIMER_REAL, &itz, NULL))
+                PRINTERR("stop itimer");
         }
 
-        //TODO: deregister alarm here
         gettimeofday(&etime, NULL);
         timersub(&etime, &stime, &timespan);
         result.time = timespan;
@@ -194,7 +196,12 @@ int child_init(void *arg UNUSED)
             IFERR(tcsetattr(STDIN_FILENO, TCSANOW, &term))
                 PRINTERR("restore terminal setting");
         }
+
         //check child setup process failed
+        if (!childstatus) {
+            perrf("Lost control of child process\n");
+            exit(ECHILD);
+        }
         error_t childerr = 0;
         if(childstatus == -1)
         {
