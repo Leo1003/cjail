@@ -1,6 +1,6 @@
  - [ ] Imporve log output
  - [ ] filesystem mount layer
- - [ ] compile seccomp bpf in the init process
+ - [x] compile seccomp bpf in the init process
  - [x] rlimit nofile support
  - [ ] better seccomp rule
  - [ ] only create basic device node in /dev

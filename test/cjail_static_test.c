@@ -16,16 +16,20 @@ void sigint(int sig)
     interrupted++;
 }
 
-int main()
+extern int seccomplist[];
+
+int main(int argc, char *argv[])
 {
-    char *cargv[] = {"/usr/bin/uname", "-a", NULL};
+    if (argc < 2) {
+        fprintf(stderr, "Please specify command!\n");
+        exit(1);
+    }
     cpu_set_t cpuset;
     struct cjail_para para;
     struct cjail_result res;
     bzero(&para, sizeof(para));
-    para.argv = cargv;
+    para.argv = argv + 1;
     struct timeval limt = { .tv_sec = 0, .tv_usec = 0 };
-    //int seccomplist[1024] = { 31, 0 };
 
     CPU_ZERO(&cpuset);
     CPU_SET(0, &cpuset);
@@ -33,17 +37,17 @@ int main()
     para.cpuset = &cpuset;
     para.environ = NULL;
     //para.rlim_as = 65536;
+    para.rlim_nofile = 5;
     para.rlim_fsize = 1024;
     para.rlim_proc = 10;
     para.rlim_core = 0;
-    para.lim_time.tv_sec = 0;
-    para.lim_time.tv_usec = 0;
+    para.lim_time = limt;
     para.cg_rss = 2048;
     para.uid = 10000;
     para.gid = 10000;
     para.workingDir = "/tmp";
     para.preservefd = 1;
-    //para.seccomplist = seccomplist;
+    para.seccomplist = seccomplist;
 
     signal(SIGHUP, sigint);
     signal(SIGINT, sigint);
@@ -93,7 +97,7 @@ int main()
     {
         printf("Failed: %s\n", strerror(-ret));
     }
-    pause();
+    //pause();
     printf("Interrupted: %d\n", interrupted);
     return 0;
 }

@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <linux/filter.h>
 #include <linux/taskstats.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -55,15 +56,13 @@ int child_init(void *arg UNUSED)
     struct termios term;
     int ttymode, childstatus = 0;
 
-    if(getpid() != 1)
-    {
+    if (getpid() != 1) {
         perrf("This process should be run as init process.\n");
         exit(EINVAL);
     }
 
     //it should register the signals, otherwise, they will be ignored because it's a init process
-    IFERR(installsigs(init_sigrules, SA_NOCLDSTOP))
-    {
+    IFERR (installsigs(init_sigrules, SA_NOCLDSTOP)) {
         PRINTERR("install init signals");
         exit(errno);
     }
@@ -74,17 +73,22 @@ int child_init(void *arg UNUSED)
     sigprocmask(SIG_BLOCK, &rtset, NULL);
 
     close(exec_para.resultpipe[0]);
-    IFERR(prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0))
-    {
+    IFERR (prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0)) {
         PRINTERR("set parent death signal");
         exit(errno);
     }
 
-    IFERR(setup_fs())
+    IFERR (setup_fs())
         exit(errno);
 
     //save tty setting and restore it back if needed
     ttymode = (tcgetattr(STDIN_FILENO, &term) == 0);
+
+    //precompile seccomp bpf to reduce the impact on timing
+    struct sock_fprog bpf;
+    IFERR (setup_seccomp_compile(&bpf, exec_para.para.argv))
+        exit(errno);
+
 
     childpid = fork();
     if(childpid > 0)
@@ -223,7 +227,6 @@ int child_init(void *arg UNUSED)
                             break;
                         case SIGKILL:
                             //check if killed by oom killer
-                            //TODO: test setup process max rss usage
                             if(exec_para.para.cg_rss && exec_para.para.cg_rss < 256)
                                 childerr = ENOMEM;
                             break;
@@ -292,7 +295,7 @@ int child_init(void *arg UNUSED)
         pdebugf("child continued from rt_signal\n");
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
-        IFERR(setup_seccomp(exec_para.para.argv))
+        IFERR(setup_seccomp_load(&bpf))
             child_exit();
         execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
         child_exit();

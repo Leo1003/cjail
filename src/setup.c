@@ -5,6 +5,8 @@
 #include "utils.h"
 
 #include <linux/limits.h>
+#include <linux/memfd.h>
+#include <linux/seccomp.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -13,6 +15,8 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <syscall.h>
+#include <sys/mman.h>
 #include <sys/mount.h>
 #include <sys/prctl.h>
 #include <sys/resource.h>
@@ -256,17 +260,15 @@ int setup_cgroup(int *pidfd)
     return 0;
 }
 
-int setup_seccomp(void* exec_argv)
+int setup_seccomp_compile(struct sock_fprog *bpf, void* exec_argv)
 {
-    prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
     if(!exec_para.para.seccomplist)
         return 0;
     scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_TRAP);
-    pdebugf("inited scmp filter\n");
     if(!ctx)
         goto error;
-    int i = 0;
-    while(exec_para.para.seccomplist[i])
+
+    for (int i = 0; exec_para.para.seccomplist[i] >= 0; i++)
     {
 #ifndef NDEBUG
         char *scname = seccomp_syscall_resolve_num_arch(seccomp_arch_native(), exec_para.para.seccomplist[i]);
@@ -279,7 +281,6 @@ int setup_seccomp(void* exec_argv)
 #endif
         IFERR(seccomp_rule_add(ctx, SCMP_ACT_ALLOW, exec_para.para.seccomplist[i], 0))
             goto error;
-        i++;
     }
     if(exec_argv)
     {
@@ -288,13 +289,51 @@ int setup_seccomp(void* exec_argv)
         IFERR(seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(execve), 1, SCMP_A1(SCMP_CMP_EQ, (scmp_datum_t)exec_argv)))
             goto error;
     }
-    IFERR(seccomp_load(ctx))
+
+    // compile libseccomp rule to bpf program
+    // libseccomp only accept fd, so we use memfd to generate bpf program
+    size_t bpf_size;
+    int memfd = syscall( __NR_memfd_create, "", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+    if (memfd < 0) {
+        PRINTERR("create memfd");
         goto error;
+    }
+    seccomp_export_bpf(ctx, memfd);
+    bpf_size = lseek(memfd, 0, SEEK_END);
+    IFERR (bpf_size) {
+        PRINTERR("get memfd size");
+        goto error_memfd;
+    }
+    bpf->len = bpf_size / sizeof(struct sock_filter);
+    bpf->filter = mmap(NULL, bpf_size, PROT_READ, MAP_PRIVATE, memfd, 0);
+    if (bpf->filter == MAP_FAILED) {
+        PRINTERR("mmap memfd");
+        goto error_memfd;
+    }
+
     seccomp_release(ctx);
     return 0;
 
-    error:
+error_memfd:
+    close(memfd);
+error:
     PRINTERR("setup_seccomp");
     seccomp_release(ctx);
     return -1;
+}
+
+int setup_seccomp_load(struct sock_fprog* bpf)
+{
+    IFERR (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
+        PRINTERR("set no new privs");
+        return -1;
+    }
+    if(!exec_para.para.seccomplist)
+        return 0;
+
+    IFERR (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, bpf, 0, 0)) {
+        PRINTERR("load seccomp filter");
+        return -1;
+    }
+    return 0;
 }
