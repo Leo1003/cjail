@@ -3,6 +3,7 @@
  - [x] compile seccomp bpf in the init process
  - [x] rlimit nofile support
  - [ ] better seccomp rule
+ - [ ] show seccomp blocked syscall
  - [ ] only create basic device node in /dev
  - [ ] detect if required kernel features are supported in cmake
  - [ ] add user namespace support
