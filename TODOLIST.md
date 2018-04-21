@@ -1,9 +1,12 @@
  - [ ] Imporve log output
  - [ ] filesystem mount layer
- - [ ] rlimit nofile support
+ - [ ] compile seccomp bpf in the init process
+ - [x] rlimit nofile support
  - [ ] better seccomp rule
  - [ ] only create basic device node in /dev
  - [ ] detect if required kernel features are supported in cmake
  - [ ] add user namespace support
  - [ ] init process rename itself to prevent cmdline being seen by child process
  - [ ] unit tests for cjail_exec
+ - [ ] set a new hostname in the UTS namespace
+

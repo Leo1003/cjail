@@ -20,7 +20,7 @@ enum OPTVAL
     OPT_CGR
 };
 
-const char opts[] = "e:EC:D:u:g:i:o:r:I:O:R:S:v:c:z:p:s:t:G:m:h";
+const char opts[] = "e:EC:D:u:g:i:o:r:I:O:R:S:f:v:c:z:p:s:t:G:m:h";
 const struct option longopts[] =
 {
     {"environ",     required_argument,  NULL, 'e'},
@@ -40,6 +40,7 @@ const struct option longopts[] =
     {"cpuset",      required_argument,  NULL, 'S'},
     {"limit-vss",   required_argument,  NULL, 'v'},
     {"limit-core",  required_argument,  NULL, 'c'},
+    {"limit-nofile",required_argument,  NULL, 'f'},
     {"limit-fsize", required_argument,  NULL, 'z'},
     {"limit-proc",  required_argument,  NULL, 'p'},
     {"limit-stack", required_argument,  NULL, 's'},
@@ -240,6 +241,9 @@ int main(int argc, char *argv[], char *envp[])
                 break;
             case 'c':
                 para.rlim_core = toll(optarg, 1);
+                break;
+            case 'f':
+                para.rlim_nofile = toll(optarg, 1);
                 break;
             case 'z':
                 para.rlim_fsize = toll(optarg, 1);

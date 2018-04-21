@@ -19,7 +19,7 @@ struct cjail_para
     cpu_set_t *cpuset;
     uid_t uid;
     gid_t gid;
-    long long rlim_as, rlim_core, rlim_fsize, rlim_proc, rlim_stack;
+    long long rlim_as, rlim_core, rlim_nofile, rlim_fsize, rlim_proc, rlim_stack;
     long long cg_rss;
     struct timeval lim_time;
     int *seccomplist;

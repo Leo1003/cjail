@@ -273,6 +273,8 @@ int child_init(void *arg UNUSED)
             PRINTERR("setpgrp");
             child_exit();
         }
+        IFERR(setup_fd())
+            child_exit();
         if(isatty(STDIN_FILENO))
         {
             IFERR(tcsetpgrp(STDIN_FILENO, getpgrp()))
@@ -283,8 +285,6 @@ int child_init(void *arg UNUSED)
         IFERR(setup_cpumask())
             child_exit();
         IFERR(setup_rlimit())
-            child_exit();
-        IFERR(setup_fd())
             child_exit();
         //To avoid seccomp block the systemcall
         //We move before it.

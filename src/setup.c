@@ -162,7 +162,7 @@ int setup_cpumask()
     return 0;
 }
 
-static int set_rlimit(int res, long long val)
+inline static int set_rlimit(int res, long long val)
 {
     struct rlimit rl;
     rl.rlim_cur = rl.rlim_max = val;
@@ -181,6 +181,12 @@ int setup_rlimit()
         IFERR(set_rlimit(RLIMIT_CORE, exec_para.para.rlim_core * 1024))
             goto error;
         pdebugf("setup_rlimit: RLIMIT_CORE set to %lld KB\n", exec_para.para.rlim_core);
+    }
+    if(exec_para.para.rlim_nofile > 0)
+    {
+        IFERR(set_rlimit(RLIMIT_NOFILE, exec_para.para.rlim_nofile))
+        goto error;
+        pdebugf("setup_rlimit: RLIMIT_NOFILE set to %lld\n", exec_para.para.rlim_nofile);
     }
     if(exec_para.para.rlim_fsize > 0)
     {
