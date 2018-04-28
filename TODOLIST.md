@@ -1,5 +1,6 @@
  - [ ] Imporve log output
  - [ ] filesystem mount layer
+ - [ ] redesign fd redirection
  - [x] compile seccomp bpf in the init process
  - [x] rlimit nofile support
  - [ ] better seccomp rule
