@@ -78,6 +78,12 @@ int child_init(void *arg UNUSED)
         exit(errno);
     }
 
+    //set new hostname in UTS namespace
+    IFERR (sethostname(UTSNAME, sizeof(UTSNAME))) {
+        PRINTERR("set hostname");
+    }
+
+    //mount filesystems
     IFERR (setup_fs())
         exit(errno);
 

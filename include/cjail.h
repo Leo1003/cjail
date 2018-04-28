@@ -10,6 +10,7 @@
 #include <time.h>
 
 #define STACKSIZE 1024 * 1024
+#define UTSNAME "cjail"
 
 struct cjail_para
 {

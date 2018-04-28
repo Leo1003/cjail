@@ -10,5 +10,5 @@
  - [ ] add user namespace support
  - [ ] init process rename itself to prevent cmdline being seen by child process
  - [ ] unit tests for cjail_exec
- - [ ] set a new hostname in the UTS namespace
+ - [x] set a new hostname in the UTS namespace
 
