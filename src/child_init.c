@@ -54,6 +54,7 @@ int child_init(void *arg UNUSED)
 {
     pid_t childpid;
     struct termios term;
+    char *new_argc = INITNAME;
     int ttymode, childstatus = 0;
 
     if (getpid() != 1) {
@@ -82,6 +83,13 @@ int child_init(void *arg UNUSED)
     IFERR (sethostname(UTSNAME, sizeof(UTSNAME))) {
         PRINTERR("set hostname");
     }
+
+    //replace cmdline
+    if (prctl(PR_SET_MM, PR_SET_MM_ARG_START, new_argc, 0, 0) ||
+        prctl(PR_SET_MM, PR_SET_MM_ARG_END, new_argc + strlen(new_argc) + 1, 0, 0) ||
+        prctl(PR_SET_NAME, PROCNAME, 0, 0, 0)) {
+            PRINTERR("set argc");
+        }
 
     //mount filesystems
     IFERR (setup_fs())

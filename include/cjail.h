@@ -11,6 +11,8 @@
 
 #define STACKSIZE 1024 * 1024
 #define UTSNAME "cjail"
+#define INITNAME "/sbin/init"
+#define PROCNAME "init"
 
 struct cjail_para
 {
