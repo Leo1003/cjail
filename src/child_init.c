@@ -46,7 +46,6 @@ static struct sig_rule child_sigrules[] =
 {
     { SIGTTIN , SIG_IGN, NULL, {{0}}, 0 },
     { SIGTTOU , SIG_IGN, NULL, {{0}}, 0 },
-    { SIGREADY, SIG_IGN, NULL, {{0}}, 0 },
     { 0       , NULL   , NULL, {{0}}, 0 },
 };
 
