@@ -261,4 +261,7 @@ void cjail_para_init(struct cjail_para* para)
     para->rlim_core = -1;
     para->uid = 65534;
     para->gid = 65534;
+    para->fd_input = STDIN_FILENO;
+    para->fd_output = STDOUT_FILENO;
+    para->fd_err = STDERR_FILENO;
 }
