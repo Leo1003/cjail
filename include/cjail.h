@@ -14,8 +14,7 @@
 #define INITNAME "/sbin/init"
 #define PROCNAME "init"
 
-struct cjail_para
-{
+struct cjail_para {
     unsigned int preservefd, sharenet;
     int fd_input, fd_output, fd_err;
     char **argv, **environ, *chroot, *workingDir, *redir_input, *redir_output, *redir_err, *cgroup_root;
@@ -28,8 +27,7 @@ struct cjail_para
     int *seccomplist;
 };
 
-struct cjail_result
-{
+struct cjail_result {
     struct taskstats stats;
     siginfo_t info;
     struct timeval time;
@@ -38,8 +36,7 @@ struct cjail_result
 };
 
 
-struct __exec_para
-{
+struct __exec_para {
     struct cjail_para para;
     int resultpipe[2];
     int cgtasksfd;
