@@ -4,6 +4,8 @@
  - [x] compile seccomp bpf in the init process
  - [x] rlimit nofile support
  - [ ] add rusage in result
+ - [ ] split up setup.c into different files
+ - [ ] refactor source code
  - [ ] better seccomp rule
  - [ ] seccomp_debug mode
  - [ ] only create basic device node in /dev
