@@ -3,13 +3,14 @@
  - [x] redesign fd redirection
  - [x] compile seccomp bpf in the init process
  - [x] rlimit nofile support
+ - [ ] add rusage in result
  - [ ] better seccomp rule
  - [ ] seccomp_debug mode
  - [ ] only create basic device node in /dev
  - [ ] detect if required kernel features are supported in cmake
  - [ ] add user namespace support
  - [x] init process rename itself to prevent cmdline being seen by child process
- - [ ] unit tests for cjail_exec
+ - [ ] unit tests
  - [x] set a new hostname in the UTS namespace
  - [ ] cjail log problem after setup_fd()
 
