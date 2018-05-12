@@ -17,7 +17,6 @@
 #define pdebugf(x, ...) do { fprintf(stderr, "%s->%d: "x, __func__, __LINE__, ##__VA_ARGS__); } while(0)
 #endif
 
-int closefrom(int minfd);
 int mkdir_r(const char *path);
 int combine_path(char *s, const char *root, const char *path);
 int strrmchr(char* str, int index);

@@ -2,7 +2,6 @@
 #include "utils.h"
 
 #include <bsd/string.h>
-#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
@@ -10,35 +9,6 @@
 #include <unistd.h>
 #include <sys/param.h>
 #include <sys/stat.h>
-
-int closefrom(int minfd)
-{
-    DIR *fddir = opendir("/proc/self/fd");
-    if(!fddir)
-        goto error;
-    struct dirent *dent;
-    int dfd = dirfd(fddir);
-    while((dent = readdir(fddir)) != NULL)
-    {
-        if(!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
-            continue;
-        int fd = strtol(dent->d_name, NULL, 10);
-        if(fd >= minfd && fd != dfd)
-        {
-            pdebugf("closing fd: %d\n", fd);
-            IFERR(close(fd))
-                goto error_dir;
-        }
-    }
-    closedir(fddir);
-    return 0;
-
-    error_dir:
-    closedir(fddir);
-    error:
-    PRINTERR("closefrom");
-    return -1;
-}
 
 int cpuset_tostr(const cpu_set_t* cpuset, char* str, size_t len)
 {

@@ -1,5 +1,6 @@
 #include "cjail.h"
 #include "cgroup.h"
+#include "fds.h"
 #include "setup.h"
 #include "taskstats.h"
 #include "utils.h"
@@ -81,94 +82,6 @@ int setup_fs()
 
     error:
     PRINTERR("setup_fs");
-    return -1;
-}
-
-int setup_fd() {
-    int tmpfd[3] = { -1, -1, -1 };
-    if (exec_para.para.redir_input) {
-        close(STDIN_FILENO);
-        IFERR (open(exec_para.para.redir_input, O_RDONLY)) {
-            pdebugf("open(): %s\n", exec_para.para.redir_input);
-            goto error;
-        }
-    }
-    if (exec_para.para.redir_output) {
-        close(STDOUT_FILENO);
-        IFERR (open(exec_para.para.redir_output, O_WRONLY | O_CREAT | O_TRUNC, 0666)) {
-            pdebugf("open(): %s\n", exec_para.para.redir_output);
-            goto error;
-        }
-    }
-    if (exec_para.para.redir_err) {
-        close(STDERR_FILENO);
-        IFERR (open(exec_para.para.redir_err, O_WRONLY | O_CREAT | O_TRUNC, 0666)) {
-            pdebugf("open(): %s\n", exec_para.para.redir_err);
-            goto error;
-        }
-    }
-
-    /*
-     * If users want to dup from standard fds, e.g., swapping stdout and stderr,
-     * this will cause strange behaviors.
-     * So we need to dup them all before closing them.
-     */
-    if (exec_para.para.fd_input != STDIN_FILENO) {
-        tmpfd[0] = dup(exec_para.para.fd_input);
-        IFERR (tmpfd[0]) {
-            pdebugf("dup(): %d\n", exec_para.para.fd_input);
-            goto error;
-        }
-    }
-    if (exec_para.para.fd_output != STDOUT_FILENO) {
-        tmpfd[1] = dup(exec_para.para.fd_output);
-        IFERR (tmpfd[1]) {
-            pdebugf("dup(): %d\n", exec_para.para.fd_output);
-            goto error;
-        }
-    }
-    if (exec_para.para.fd_err != STDERR_FILENO) {
-        tmpfd[2] = dup(exec_para.para.fd_err);
-        IFERR (tmpfd[2]) {
-            pdebugf("dup(): %d\n", exec_para.para.fd_err);
-            goto error;
-        }
-    }
-    if (tmpfd[0] > -1) {
-        IFERR (dup2(tmpfd[0], STDIN_FILENO)) {
-            pdebugf("dup2(): %d -> %d\n", tmpfd[0], STDIN_FILENO);
-            goto error;
-        }
-        IFERR (close(tmpfd[0])) {
-            goto error;
-        }
-    }
-    if (tmpfd[1] > -1) {
-        IFERR (dup2(tmpfd[1], STDOUT_FILENO)) {
-            pdebugf("dup2(): %d -> %d\n", tmpfd[0], STDOUT_FILENO);
-            goto error;
-        }
-        IFERR (close(tmpfd[1])) {
-            goto error;
-        }
-    }
-    if (tmpfd[2] > -1) {
-        IFERR (dup2(tmpfd[2], STDERR_FILENO)) {
-            pdebugf("dup2(): %d -> %d\n", tmpfd[0], STDERR_FILENO);
-            goto error;
-        }
-        IFERR (close(tmpfd[2])) {
-            goto error;
-        }
-    }
-
-    if (!exec_para.para.preservefd)
-        IFERR (closefrom(STDERR_FILENO + 1))
-            return -1;
-    return 0;
-
-    error:
-    PRINTERR("setup_fd");
     return -1;
 }
 

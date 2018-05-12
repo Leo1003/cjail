@@ -1,5 +1,6 @@
 #include "cjail.h"
 #include "child_init.h"
+#include "fds.h"
 #include "setup.h"
 #include "sigset.h"
 #include "taskstats.h"
