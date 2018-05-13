@@ -363,7 +363,7 @@ void usage(char *name)
     printf("  -u, --uid=UID\t\t\tset the user of the program\n");
     printf("  -g, --gid=GID\t\t\tset the group of the program\n");
     printf("  -S, --cpuset=SET\t\tset cpu affinity of the program with a list separated by ','\n");
-    printf("      \t\t\t\teach entry shou be <CPU> or <CPU>-<CPU>\n");
+    printf("      \t\t\t\teach entry should be <CPU> or <CPU>-<CPU>\n");
     printf("      --share-net\t\tnot to unshare the net namespace while creating the jail\n");
     printf("      --cgroup-root=PATH\tchange cgroup filesystem root path (default: /sys/fs/cgroup)\n");
     printf("  -h, --help\t\t\tshow this help\n");
