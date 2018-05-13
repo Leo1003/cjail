@@ -71,7 +71,7 @@ err:
 
 int cgroup_read(const char* subsystem, const char* name, const char* fmt, ...)
 {
-    int ret = -1;
+    int ret = -1, is_eof = 0;
     va_list ap;
     char cgpath[PATH_MAX];
     if (get_cgpath(cgpath, subsystem, name) < 0) {
@@ -84,11 +84,12 @@ int cgroup_read(const char* subsystem, const char* name, const char* fmt, ...)
 
     va_start(ap, fmt);
     ret = vfscanf(fp, fmt, ap);
+    is_eof = feof(fp);
     va_end(ap);
     fclose(fp);
 
 err:
-    if (ret < 0) {
+    if (ret < 0 && !is_eof) {
         pdebugf("cgroup_read error: %s\n", cgpath);
         PRINTERR("read cgroup");
     }
