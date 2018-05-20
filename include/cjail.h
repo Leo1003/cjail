@@ -9,7 +9,7 @@
 #include <sys/types.h>
 #include <time.h>
 
-#define STACKSIZE 1024 * 1024
+#define STACKSIZE 16
 #define UTSNAME "cjail"
 #define INITNAME "/sbin/init"
 #define PROCNAME "init"

@@ -5,7 +5,7 @@
 #include "taskstats.h"
 #include "utils.h"
 
-#define MAX_CLNSTACK 1024
+#define MAX_CLNSTACK 64
 
 enum tasktype
 {
