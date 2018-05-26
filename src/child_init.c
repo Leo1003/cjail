@@ -45,22 +45,22 @@ void sigact(int sig)
 }
 
 static struct sig_rule init_sigrules[] = {
-    { SIGHUP  , sigact , NULL, {{0}}, 0 },
-    { SIGINT  , sigact , NULL, {{0}}, 0 },
-    { SIGQUIT , sigact , NULL, {{0}}, 0 },
-    { SIGALRM , sigact , NULL, {{0}}, 0 },
-    { SIGTERM , sigact , NULL, {{0}}, 0 },
-    { SIGCHLD , sigact , NULL, {{0}}, 0 },
-    { SIGTTIN , SIG_IGN, NULL, {{0}}, 0 },
-    { SIGTTOU , SIG_IGN, NULL, {{0}}, 0 },
-    { SIGREADY, sigact , NULL, {{0}}, 0 },
-    { 0       , NULL   , NULL, {{0}}, 0 },
+    { SIGHUP  , sigact , NULL, 0, {{0}}, 0 },
+    { SIGINT  , sigact , NULL, 0, {{0}}, 0 },
+    { SIGQUIT , sigact , NULL, 0, {{0}}, 0 },
+    { SIGALRM , sigact , NULL, 0, {{0}}, 0 },
+    { SIGTERM , sigact , NULL, 0, {{0}}, 0 },
+    { SIGCHLD , sigact , NULL, SA_NOCLDSTOP, {{0}}, 0 },
+    { SIGTTIN , SIG_IGN, NULL, 0, {{0}}, 0 },
+    { SIGTTOU , SIG_IGN, NULL, 0, {{0}}, 0 },
+    { SIGREADY, sigact , NULL, 0, {{0}}, 0 },
+    { 0       , NULL   , NULL, 0, {{0}}, 0 },
 };
 
 static struct sig_rule child_sigrules[] = {
-    { SIGTTIN , SIG_IGN, NULL, {{0}}, 0 },
-    { SIGTTOU , SIG_IGN, NULL, {{0}}, 0 },
-    { 0       , NULL   , NULL, {{0}}, 0 },
+    { SIGTTIN , SIG_IGN, NULL, 0, {{0}}, 0 },
+    { SIGTTOU , SIG_IGN, NULL, 0, {{0}}, 0 },
+    { 0       , NULL   , NULL, 0, {{0}}, 0 },
 };
 
 static int ifchildfailed(pid_t pid)
@@ -182,7 +182,7 @@ int child_init(void *arg UNUSED)
     }
 
     //it should register the signals, otherwise, they will be ignored because it's a init process
-    if (installsigs(init_sigrules, SA_NOCLDSTOP)) {
+    if (installsigs(init_sigrules)) {
         PRINTERR("install init signals");
         exit(errno);
     }
@@ -322,7 +322,7 @@ int child_init(void *arg UNUSED)
          */
         if (clearsigs())
             child_exit();
-        if (installsigs(child_sigrules, 0))
+        if (installsigs(child_sigrules))
             child_exit();
         uid_t uid = exec_para.para.uid;
         gid_t gid = exec_para.para.gid;

@@ -9,12 +9,13 @@ struct sig_rule
     int sig;
     void (* handler) (int);
     void (* ac_handler) (int, siginfo_t *, void *);
+    int flags;
     struct sigaction sa_res;
     int saved;
 };
 
 int clearsigs();
-int installsigs(struct sig_rule *rules, int flags);
+int installsigs(struct sig_rule* rules);
 int restoresigs(struct sig_rule *rules);
 void sigsetset(sigset_t *set, int cnt, ...);
 

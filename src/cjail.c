@@ -36,14 +36,14 @@ static void sighandler(int sig)
 }
 
 static struct sig_rule lib_sigrules[] = {
-    { SIGHUP  , sighandler, NULL, {{0}}, 0 },
-    { SIGINT  , sighandler, NULL, {{0}}, 0 },
-    { SIGQUIT , sighandler, NULL, {{0}}, 0 },
-    { SIGTERM , sighandler, NULL, {{0}}, 0 },
-    { SIGCHLD , sighandler, NULL, {{0}}, 0 },
-    { SIGTTIN , SIG_IGN   , NULL, {{0}}, 0 },
-    { SIGTTOU , SIG_IGN   , NULL, {{0}}, 0 },
-    { 0       , NULL      , NULL, {{0}}, 0 },
+    { SIGHUP  , sighandler, NULL, 0, {{0}}, 0 },
+    { SIGINT  , sighandler, NULL, 0, {{0}}, 0 },
+    { SIGQUIT , sighandler, NULL, 0, {{0}}, 0 },
+    { SIGTERM , sighandler, NULL, 0, {{0}}, 0 },
+    { SIGCHLD , sighandler, NULL, 0, {{0}}, 0 },
+    { SIGTTIN , SIG_IGN   , NULL, 0, {{0}}, 0 },
+    { SIGTTOU , SIG_IGN   , NULL, 0, {{0}}, 0 },
+    { 0       , NULL      , NULL, 0, {{0}}, 0 },
 };
 
 static int cjail_kill(pid_t pid)
@@ -106,7 +106,7 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         RETERR(EINVAL);
     exec_para.para = *para;
 
-    installsigs(lib_sigrules, 0);
+    installsigs(lib_sigrules);
     stack_push(&cstack, CLN_SIGSET, lib_sigrules);
 
     //setup pipe
