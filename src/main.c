@@ -12,17 +12,16 @@
 #include <time.h>
 
 void usage(char *name);
+void print_result(const struct cjail_result *res);
 
-enum OPTVAL
-{
+enum OPTVAL {
     OPT_PFD = 256,
     OPT_NET,
     OPT_CGR
 };
 
 const char opts[] = "e:EC:D:u:g:i:o:r:I:O:R:S:f:v:c:z:p:s:t:G:m:h";
-const struct option longopts[] =
-{
+const struct option longopts[] = {
     {"environ",     required_argument,  NULL, 'e'},
     {"inherit-env", no_argument,        NULL, 'E'},
     {"chroot",      required_argument,  NULL, 'C'},
@@ -56,10 +55,9 @@ unsigned long toul(char* str, int abr)
     char *p;
     unsigned long ret;
     ret = strtoul(str, &p, 10);
-    if(strlen(p))
-    {
+    if (strlen(p)) {
         perrf("Error: Invalid number: %s\n", str);
-        if(abr)
+        if (abr)
             exit(1);
     }
     return ret;
@@ -70,10 +68,9 @@ long long int toll(char* str, int abr)
     char *p;
     long long int ret;
     ret = strtoll(str, &p, 10);
-    if(strlen(p))
-    {
+    if (strlen(p)) {
         perrf("Error: Invalid number: %s\n", str);
-        if(abr)
+        if (abr)
             exit(1);
     }
     return ret;
@@ -85,10 +82,9 @@ struct timeval totime(char* str, int abr)
     double sec;
     struct timeval ret;
     sec = strtod(str, &p);
-    if(strlen(p))
-    {
+    if (strlen(p)) {
         perrf("Error: Invalid number: %s\n", str);
-        if(abr)
+        if (abr)
             exit(1);
     }
     ret.tv_sec = floor(sec);
@@ -100,40 +96,31 @@ int parse_env(const char *str, char **dest[], char *envp[])
 {
     char *argz = NULL, *envz = NULL, *i = NULL;
     size_t argz_len = 0, envz_len = 0;
-    if(argz_create_sep(str, ';', &argz, &argz_len))
-    {
+    if (argz_create_sep(str, ';', &argz, &argz_len)) {
         PRINTERR("create list");
         goto error;
     }
 
-    if(envp)
-        if(argz_create(envp, &envz, &envz_len))
-        {
+    if (envp)
+        if (argz_create(envp, &envz, &envz_len)) {
             PRINTERR("create envz");
             goto error;
         }
     envz_strip(&envz, &envz_len);
 
-    while ((i = argz_next(argz, argz_len, i)))
-    {
-        if(i[0] == '!')
-        {
+    while ((i = argz_next(argz, argz_len, i))) {
+        if (i[0] == '!') {
             pdebugf("removing: %s\n", i + 1);
             envz_remove(&envz, &envz_len, i + 1);
             continue;
         }
-        if(!strchr(i, '='))
-        {
-            if(envz_add(&envz, &envz_len, i, getenv(i)))
-            {
+        if (!strchr(i, '=')) {
+            if (envz_add(&envz, &envz_len, i, getenv(i))) {
                 PRINTERR("add environ");
                 goto error;
             }
-        }
-        else
-        {
-            if(argz_add(&envz, &envz_len, i))
-            {
+        } else {
+            if (argz_add(&envz, &envz_len, i)) {
                 PRINTERR("inherit environ");
                 goto error;
             }
@@ -150,7 +137,7 @@ int parse_env(const char *str, char **dest[], char *envp[])
     return 0;
 
     error:
-    if(argz)
+    if (argz)
         free(argz);
     return -1;
 }
@@ -161,17 +148,15 @@ int main(int argc, char *argv[], char *envp[])
     cpu_set_t cpuset;
     struct cjail_para para;
     struct cjail_result res;
-    cjail_para_init(&para);
     struct timeval time;
     int inherenv = 0;
     char *envstr = NULL, **para_env = NULL;
 #ifndef NDEBUG
     char cpustr[1024];
 #endif
-    while((o = getopt_long(argc, argv, opts, longopts, NULL)) >= 0)
-    {
-        switch(o)
-        {
+    cjail_para_init(&para);
+    while ((o = getopt_long(argc, argv, opts, longopts, NULL)) >= 0) {
+        switch(o) {
             case 'e':
                 envstr = optarg;
                 break;
@@ -186,16 +171,14 @@ int main(int argc, char *argv[], char *envp[])
                 break;
             case 'u':
                 para.uid = toul(optarg, 1);
-                if(para.uid == 65535)
-                {
+                if (para.uid >= 65535) {
                     perrf("Error: Invalid UID: %s\n", optarg);
                     exit(1);
                 }
                 break;
             case 'g':
                 para.gid = toul(optarg, 1);
-                if(para.gid == 65535)
-                {
+                if (para.gid >= 65535) {
                     perrf("Invalid GID: %s", optarg);
                     exit(1);
                 }
@@ -225,8 +208,7 @@ int main(int argc, char *argv[], char *envp[])
                 para.sharenet = 1;
                 break;
             case 'S':
-                if(cpuset_parse(optarg, &cpuset) < 0)
-                {
+                if (cpuset_parse(optarg, &cpuset) < 0) {
                     perrf("Invalid cpuset string: %s\n", optarg);
                     exit(1);
                 }
@@ -273,84 +255,85 @@ int main(int argc, char *argv[], char *envp[])
                 exit(1);
         }
     }
-    if(optind >= argc)
-    {
+    if (optind >= argc) {
         perrf("Error: command not specified\n");
         exit(1);
     }
     para.argv = argv + optind;
     pdebugf("arguments parsing completed\n");
-    if(!para.uid)
+    if (!para.uid)
         perrf("Warning: Running with UID 0\n");
-    if(!para.gid)
+    if (!para.gid)
         perrf("Warning: Running with GID 0\n");
 
-    if(envstr)
-    {
-        IFERR(parse_env(envstr, &para_env, (inherenv ? envp : NULL )))
-        {
+    if (envstr) {
+        if (parse_env(envstr, &para_env, (inherenv ? envp : NULL ))) {
             perrf("Error: Parsing environment variables\n");
             exit(1);
         }
         para.environ = para_env;
     }
-    if(inherenv && !envstr)
+    if (inherenv && !envstr)
         para.environ = envp;
 
     int ret = cjail_exec(&para, &res);
 
-    if(para_env)
+    if (para_env) {
         free(para_env);
-    para_env = NULL;
-    if(ret)
-    {
+        para_env = NULL;
+    }
+    if (ret) {
         perrf("Error: cjail failure. %s\n", strerror(errno));
         exit(1);
     }
-    printf("Time: %ld.%06ld sec\n", res.time.tv_sec, res.time.tv_usec);
-    printf("Timeout: %d\n", res.timekill);
-    printf("Oomkill: %d\n", res.oomkill);
+    print_result(&res);
+    return 0;
+}
+
+void print_result(const struct cjail_result *res)
+{
+    printf("Time: %ld.%06ld sec\n", res->time.tv_sec, res->time.tv_usec);
+    printf("Timeout: %d\n", res->timekill);
+    printf("Oomkill: %d\n", res->oomkill);
     printf("----------TASKSTAT----------\n");
-    printf("PID: %u\n", res.stats.ac_pid);
-    printf("UID: %u\n", res.stats.ac_uid);
-    printf("GID: %u\n", res.stats.ac_gid);
-    printf("command: %s\n", res.stats.ac_comm);
-    printf("exit status: %u\n", res.stats.ac_exitcode);
-    printf("NICE: %u\n", res.stats.ac_nice);
+    printf("PID: %u\n", res->stats.ac_pid);
+    printf("UID: %u\n", res->stats.ac_uid);
+    printf("GID: %u\n", res->stats.ac_gid);
+    printf("command: %s\n", res->stats.ac_comm);
+    printf("exit status: %u\n", res->stats.ac_exitcode);
+    printf("NICE: %u\n", res->stats.ac_nice);
     printf("time:\n");
-    printf("    start: %u\n", res.stats.ac_btime);
-    printf("        elapsed: %llu\n", res.stats.ac_etime);
-    printf("        user: %llu\n", res.stats.ac_utime);
-    printf("        system: %llu\n", res.stats.ac_stime);
+    printf("    start: %u\n", res->stats.ac_btime);
+    printf("        elapsed: %llu\n", res->stats.ac_etime);
+    printf("        user: %llu\n", res->stats.ac_utime);
+    printf("        system: %llu\n", res->stats.ac_stime);
     printf("CPU:\n");
-    printf("    count: %llu\n", res.stats.cpu_count);
-    printf("    realtime: %llu\n", res.stats.cpu_run_real_total);
-    printf("    virttime: %llu\n", res.stats.cpu_run_virtual_total);
+    printf("    count: %llu\n", res->stats.cpu_count);
+    printf("    realtime: %llu\n", res->stats.cpu_run_real_total);
+    printf("    virttime: %llu\n", res->stats.cpu_run_virtual_total);
     printf("memory:\n");
     printf("    bytetime:\n");
-    printf("        rss: %llu\n", res.stats.coremem);
-    printf("        vsz: %llu\n", res.stats.virtmem);
+    printf("        rss: %llu\n", res->stats.coremem);
+    printf("        vsz: %llu\n", res->stats.virtmem);
     printf("    peak:\n");
-    printf("        rss: %llu\n", res.stats.hiwater_rss);
-    printf("        vsz: %llu\n", res.stats.hiwater_vm);
+    printf("        rss: %llu\n", res->stats.hiwater_rss);
+    printf("        vsz: %llu\n", res->stats.hiwater_vm);
     printf("io:\n");
     printf("    bytes:\n");
-    printf("        read: %llu\n", res.stats.read_char);
-    printf("        write: %llu\n", res.stats.write_char);
+    printf("        read: %llu\n", res->stats.read_char);
+    printf("        write: %llu\n", res->stats.write_char);
     printf("    syscalls:\n");
-    printf("        read: %llu\n", res.stats.read_syscalls);
-    printf("        write: %llu\n", res.stats.write_syscalls);
-    switch(res.info.si_code)
-    {
+    printf("        read: %llu\n", res->stats.read_syscalls);
+    printf("        write: %llu\n", res->stats.write_syscalls);
+    switch (res->info.si_code) {
         case CLD_EXITED:
-            printf("Exitcode: %d\n", res.info.si_status);
+            printf("Exitcode: %d\n", res->info.si_status);
             break;
         case CLD_KILLED:
         case CLD_DUMPED:
-            printf("Signaled: %d %s\n", res.info.si_status, strsignal(res.info.si_status));
+            printf("Signaled: %d %s\n", res->info.si_status, strsignal(res->info.si_status));
             break;
     }
-    return 0;
 }
 
 void usage(char *name)
