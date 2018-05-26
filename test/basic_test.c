@@ -12,9 +12,12 @@ START_TEST(basic_test_1)
     }
     char *argv[] = { "/bin/echo", NULL };
     struct cjail_para para;
+    struct cjail_result result;
     cjail_para_init(&para);
     para.argv = argv;
-    ck_assert_int_eq(cjail_exec(&para, NULL), 0);
+    ck_assert_int_eq(cjail_exec(&para, &result), 0);
+    ck_assert_int_eq(result.info.si_code, CLD_EXITED);
+    ck_assert_int_eq(result.info.si_status, EXIT_SUCCESS);
 }
 END_TEST
 
