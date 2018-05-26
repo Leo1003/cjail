@@ -10,5 +10,9 @@ add_executable(basic_test basic_test.c)
 target_link_libraries(basic_test ${CHECK_LIBRARIES} libcjail)
 add_test(basic_test "${CMAKE_CURRENT_BINARY_DIR}/basic_test")
 
+add_executable(timing_test timing_test.c)
+target_link_libraries(timing_test ${CHECK_LIBRARIES} libcjail)
+add_test(timing_test "${CMAKE_CURRENT_BINARY_DIR}/timing_test")
+
 add_executable(cjail_static_test cjail_static_test.c seccomptest.c)
 target_link_libraries(cjail_static_test libcjail)

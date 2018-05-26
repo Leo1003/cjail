@@ -7,9 +7,6 @@
 
 START_TEST(basic_test_1)
 {
-    if (geteuid()) {
-        ck_abort_msg("Should be tested as root!");
-    }
     char *argv[] = { "/bin/echo", NULL };
     struct cjail_para para;
     struct cjail_result result;
@@ -34,6 +31,10 @@ Suite* suite()
 
 int main()
 {
+    if (geteuid()) {
+        fprintf(stderr, "Should be tested as root!\n");
+        return EXIT_FAILURE;
+    }
     int number_failed;
     Suite *s;
     SRunner *sr;
