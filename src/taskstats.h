@@ -32,8 +32,7 @@ struct msgtemplate {
     char buf[MAX_MSG_SIZE];
 };
 
-struct ts_socket
-{
+struct ts_socket {
     int socketfd, maskset;
     unsigned short familyid;
     char cpumask[MAX_CPU_MASK];

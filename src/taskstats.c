@@ -25,14 +25,16 @@ static int create_nl_socket(int protocol)
     struct sockaddr_nl local;
 
     fd = socket(AF_NETLINK, SOCK_RAW, protocol);
-    if(fd < 0)
+    if (fd < 0) {
         return -1;
+    }
 
     memset(&local, 0, sizeof(local));
     local.nl_family = AF_NETLINK;
 
-    if(bind(fd, (struct sockaddr *) &local, sizeof(local)) < 0)
+    if (bind(fd, (struct sockaddr *) &local, sizeof(local))) {
         goto error;
+    }
 
     return fd;
 
@@ -70,26 +72,21 @@ static int send_cmd(int sd, __u16 nlmsg_type, __u32 nlmsg_pid,
     buflen = msg.n.nlmsg_len;
     memset(&nladdr, 0, sizeof(nladdr));
     nladdr.nl_family = AF_NETLINK;
-    while((r = sendto(sd, buf, buflen, 0, (struct sockaddr *) &nladdr, sizeof(nladdr))) < buflen)
-    {
-        if(r > 0)
-        {
+    while ((r = sendto(sd, buf, buflen, 0,
+            (struct sockaddr *) &nladdr, sizeof(nladdr))) < buflen) {
+        if (r > 0) {
             buf += r;
             buflen -= r;
-        }
-        else if(errno != EAGAIN)
+        } else if (errno != EAGAIN) {
             return -1;
+        }
     }
     return 0;
 }
 
 static int get_family_id(int sd)
 {
-    struct {
-        struct nlmsghdr n;
-        struct genlmsghdr g;
-        char buf[256];
-    } ans;
+    struct msgtemplate ans;
 
     int id = 0, rc;
     struct nlattr *na;
@@ -98,26 +95,23 @@ static int get_family_id(int sd)
     char name[64];
     strcpy(name, TASKSTATS_GENL_NAME);
     rc = send_cmd(sd, GENL_ID_CTRL, getpid(), CTRL_CMD_GETFAMILY,
-                  CTRL_ATTR_FAMILY_NAME, (void *)name,
-                  strlen(TASKSTATS_GENL_NAME)+1);
-    if (rc < 0)
-    {
+              CTRL_ATTR_FAMILY_NAME, (void *)name, strlen(TASKSTATS_GENL_NAME) + 1);
+    if (rc < 0) {
         pdebugf("send_cmd() failed\n");
         return 0;
-    }	/* sendto() failure? */
+    }   /* sendto() failure? */
 
     rep_len = recv(sd, &ans, sizeof(ans), 0);
     if (ans.n.nlmsg_type == NLMSG_ERROR ||
-        (rep_len < 0) || !NLMSG_OK((&ans.n), rep_len))
-        {
-            pdebugf("recv() failed\n");
-            pdebugf("NLMSG_ERROR: %d\n", ans.n.nlmsg_type == NLMSG_ERROR);
-            pdebugf("rep_len: %d\n", rep_len);
-            struct nlmsgerr* err = NLMSG_DATA(&ans);
-            pdebugf("Error: %d\n", err->error);
-            errno = err->error;
-            return 0;
-        }
+            (rep_len < 0) || !NLMSG_OK((&ans.n), rep_len)) {
+        pdebugf("recv() failed\n");
+        pdebugf("NLMSG_ERROR: %d\n", ans.n.nlmsg_type == NLMSG_ERROR);
+        pdebugf("rep_len: %d\n", rep_len);
+        struct nlmsgerr* err = NLMSG_DATA(&ans);
+        pdebugf("Error: %d\n", err->error);
+        errno = err->error;
+        return 0;
+    }
 
     na = (struct nlattr *) GENLMSG_DATA(&ans);
     na = (struct nlattr *) ((char *) na + NLA_ALIGN(na->nla_len));
@@ -130,24 +124,22 @@ static int get_family_id(int sd)
 int taskstats_create(struct ts_socket *s)
 {
     memset(s, 0, sizeof(*s)); //empty socket object
-    IFERR(s->socketfd = create_nl_socket(NETLINK_GENERIC))
-    {
+    if ((s->socketfd = create_nl_socket(NETLINK_GENERIC)) < 0) {
         PRINTERR("create netlink socket");
         return -1;
     }
-    IFERR(setcloexec(s->socketfd))
+    if (setcloexec(s->socketfd)) {
         return -1;
+    }
     pdebugf("Created netlink socket: fd %d\n", s->socketfd);
-    if(!(s->familyid = get_family_id(s->socketfd)))
-    {
+    if (!(s->familyid = get_family_id(s->socketfd))) {
         PRINTERR("get family id");
         return -1;
     }
     pdebugf("Got family id: %d\n", s->familyid);
 
     struct timeval timeout = { .tv_sec = 1, .tv_usec = 0 };
-    IFERR(setsockopt(s->socketfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)))
-    {
+    if (setsockopt(s->socketfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout))) {
         PRINTERR("set socket timeout");
     }
     return 0;
@@ -155,15 +147,14 @@ int taskstats_create(struct ts_socket *s)
 
 int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
 {
-    IFERR(cpuset_tostr(cpuset, s->cpumask, sizeof(s->cpumask)))
-    {
+    if (cpuset_tostr(cpuset, s->cpumask, sizeof(s->cpumask)) < 0) {
         PRINTERR("parse_cpuset");
         return -1;
     }
     pdebugf("Setting cpumask to: %s\n", s->cpumask);
-    IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
-                   TASKSTATS_CMD_ATTR_REGISTER_CPUMASK, s->cpumask, strlen(s->cpumask) + 1))
-    {
+    if (send_cmd(s->socketfd, s->familyid, getpid(),
+            TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_REGISTER_CPUMASK,
+            s->cpumask, strlen(s->cpumask) + 1)) {
         PRINTERR("taskstats_setcpuset");
         return -1;
     }
@@ -173,9 +164,8 @@ int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
 
 int taskstats_setpid(struct ts_socket* s, pid_t pid)
 {
-    IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
-        TASKSTATS_CMD_ATTR_PID, &pid, sizeof(pid)))
-    {
+    if (send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
+            TASKSTATS_CMD_ATTR_PID, &pid, sizeof(pid))) {
         PRINTERR("taskstats_setpid\n");
         return -1;
     }
@@ -187,8 +177,7 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
     struct msgtemplate msg;
     int rep_len = recv(s->socketfd, &msg, sizeof(msg), 0);
     if (rep_len < 0) {
-        switch(errno)
-        {
+        switch (errno) {
             case EAGAIN:
             case ETIMEDOUT:
             case EBUSY:
@@ -209,25 +198,22 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
     rep_len = GENLMSG_PAYLOAD(&msg.n);
     struct nlattr* na = (struct nlattr*) GENLMSG_DATA(&msg);
     int len = 0;
-    while (len < rep_len)
-    {
+    while (len < rep_len) {
         len += NLA_ALIGN(na->nla_len);
-        switch (na->nla_type)
-        {
+        switch (na->nla_type) {
             case TASKSTATS_TYPE_AGGR_TGID:
-            case TASKSTATS_TYPE_AGGR_PID:
-            {
+            case TASKSTATS_TYPE_AGGR_PID: {
                 int aggr_len = NLA_PAYLOAD(na->nla_len);
                 int len2 = 0;
                 /* For nested attributes, na follows */
                 na = (struct nlattr*) NLA_DATA(na);
-                while (len2 < aggr_len)
-                {
+                while (len2 < aggr_len) {
                     switch (na->nla_type) {
                         case TASKSTATS_TYPE_PID: break;
                         case TASKSTATS_TYPE_TGID: break;
                         case TASKSTATS_TYPE_STATS:
-                            memcpy(ts, (struct taskstats*) NLA_DATA(na), sizeof(struct taskstats));
+                            memcpy(ts, (struct taskstats*) NLA_DATA(na),
+                                   sizeof(struct taskstats));
                             return 0;
                             break;
                         default:
@@ -251,16 +237,14 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
 
 int taskstats_destory(struct ts_socket* s)
 {
-    if(s->maskset)
-    {
-        IFERR(send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
-                          TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK,
-                          s->cpumask, strlen(s->cpumask) + 1))
-            PRINTERR("deregister cpumask");
-        // nonfatal error
+    if (s->maskset) {
+        if (send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
+                      TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK,
+                      s->cpumask, strlen(s->cpumask) + 1)) {
+            PRINTERR("deregister cpumask"); // nonfatal error
+        }
     }
-    IFERR(close(s->socketfd))
-    {
+    if (close(s->socketfd)) {
         PRINTERR("close socket");
         return -1;
     }
