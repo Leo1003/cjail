@@ -1,6 +1,7 @@
 #include "cjail.h"
 #include "cgroup.h"
 #include "fds.h"
+#include "filesystem.h"
 #include "setup.h"
 #include "taskstats.h"
 #include "utils.h"
@@ -33,8 +34,9 @@ typedef void * scmp_filter_ctx;
 
 int setup_fs()
 {
-    IFERR(mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL))
+    if (privatize_fs()) {
         goto error;
+    }
     int rmflag = 0;
     if(!exec_para.para.chroot)
         rmflag |= MS_REMOUNT;
@@ -58,17 +60,8 @@ int setup_fs()
             goto deverror;
         }
     }
-    if(exec_para.para.chroot)
-    {
-        IFERR(chroot(exec_para.para.chroot))
-            goto error;
-        IFERR(chdir("/"))
-            goto error;
-    }
-    if(exec_para.para.workingDir)
-    {
-        IFERR(chdir(exec_para.para.workingDir))
-            goto error;
+    if (jail_chroot(exec_para.para.chroot, exec_para.para.workingDir)) {
+        goto error;
     }
     return 0;
 
