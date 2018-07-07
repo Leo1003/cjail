@@ -2,7 +2,7 @@
 #define FDS_H
 
 int setup_fd();
-int is_available_fd(int fd);
+int is_valid_fd(int fd);
 int closefrom(int minfd);
 
 #endif
