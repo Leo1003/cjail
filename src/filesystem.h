@@ -19,8 +19,12 @@ struct jail_mount_option {
     unsigned int flags;
 };
 
-int jail_mount(char *source, char *root, char *target, unsigned flags, char *option);
-int jail_chroot(char *path, char *cdpath);
+int get_filetype(const char *path);
+int is_same_inode(const char *patha, const char *pathb);
+int jail_symlinkat(const char *root, const char *target, int fd, const char *name);
+int jail_mount(const char *source, const char *root, const char *target,
+               unsigned flags, const char *option);
+int jail_chroot(const char *path, const char *cdpath);
 int privatize_fs();
 
 #endif

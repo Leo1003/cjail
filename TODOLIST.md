@@ -1,5 +1,5 @@
  - [ ] better log output
- - [ ] filesystem mount layer
+ - [x] filesystem mount layer
  - [x] redesign fd redirection
  - [x] compile seccomp bpf in the init process
  - [x] rlimit nofile support
@@ -8,7 +8,7 @@
  - [ ] refactor source code
  - [ ] better seccomp rule
  - [ ] seccomp_debug mode
- - [ ] only create basic device node in /dev
+ - [x] only create basic device node in /dev
  - [ ] detect if required kernel features are supported in cmake
  - [ ] add user namespace support
  - [x] init process rename itself to prevent cmdline being seen by child process

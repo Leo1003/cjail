@@ -37,41 +37,18 @@ int setup_fs()
     if (privatize_fs()) {
         goto error;
     }
-    int rmflag = 0;
-    if(!exec_para.para.chroot)
-        rmflag |= MS_REMOUNT;
-
-    char procpath[PATH_MAX];
-    combine_path(procpath, exec_para.para.chroot, "/proc");
-    IFERR(mkdir_r(procpath))
-        goto procerror;
-    IFERR(mount("proc", procpath, "proc", MS_NODEV | MS_NOEXEC | MS_NOSUID, ""))
-        goto procerror;
-
-    if(exec_para.para.chroot)
-    {
-        char devpath[PATH_MAX];
-        combine_path(devpath, exec_para.para.chroot, "/dev");
-        IFERR(mkdir_r(devpath))
-            goto deverror;
-        IFERR(mount("dev", devpath, "devtmpfs", MS_NOEXEC | MS_NOSUID, ""))
-        {
-            PRINTERR("mount devtmpfs");
-            goto deverror;
-        }
+    if (jail_mount("", exec_para.para.chroot, "/proc", FS_PROC, "")) {
+        PRINTERR("mount procfs");
+        goto error;
+    }
+    if (jail_mount("", exec_para.para.chroot, "/dev", FS_UDEV, "")) {
+        PRINTERR("mount devfs");
+        goto error;
     }
     if (jail_chroot(exec_para.para.chroot, exec_para.para.workingDir)) {
         goto error;
     }
     return 0;
-
-    procerror:
-    PRINTERR("mount procfs");
-    return -1;
-
-    deverror:
-    PRINTERR("mount devfs");
-    return -1;
 
     error:
     PRINTERR("setup_fs");

@@ -98,8 +98,10 @@ int cpuset_parse(const char *str, cpu_set_t *cpuset)
 int mkdir_r(const char* path)
 {
     int l;
-    if ((l = strlen(path)) == 0)
-        return 0;
+    if (!path || (l = strlen(path)) == 0) {
+        errno = EINVAL;
+        return -1;
+    }
     struct stat st;
     if (stat(path, &st)) {
         if (!strcmp(path, "."))
