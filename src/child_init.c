@@ -171,7 +171,7 @@ int child_init(void *arg UNUSED)
      * The address passed with PR_SET_MM_ARG_START, PR_SET_MM_ARG_END should
      * belong to a process stack area.
      */
-    char *new_argv = INITNAME;
+    char new_argv[4096] = INITNAME;
     int ttymode, childstatus = -1;
     pid_t childpid;
     struct termios term;
