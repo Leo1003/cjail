@@ -25,8 +25,7 @@ static void push_free(struct cleanupstack *stack, void **ptr)
 }
 static void clean_free(void **ptr)
 {
-    if(*ptr)
-    {
+    if (*ptr) {
         free(*ptr);
         *ptr = NULL;
     }
@@ -42,8 +41,7 @@ static void push_close(struct cleanupstack *stack, int fd)
 }
 static void clean_close(int fd)
 {
-    IFERR(close(fd))
-    {
+    if (close(fd)) {
         PRINTERR("cleanup fd");
     }
 }
@@ -59,8 +57,7 @@ static void push_kill(struct cleanupstack *stack, pid_t pid, int sig)
 }
 static void clean_kill(pid_t pid, int sig)
 {
-    IFERR(kill(pid, sig))
-    {
+    if (kill(pid, sig)) {
         PRINTERR("cleanup process");
     }
 }
@@ -75,8 +72,7 @@ static void push_cgroup(struct cleanupstack *stack, const char *subsystem)
 }
 static void clean_cgroup(const char *subsystem)
 {
-    IFERR(cgroup_destory(subsystem))
-    {
+    if (cgroup_destory(subsystem)) {
         PRINTERR("cleanup cgroup");
     }
 }
@@ -90,8 +86,7 @@ static void push_taskstat(struct cleanupstack *stack, struct ts_socket *tssock)
 }
 static void clean_taskstat(struct ts_socket *tssock)
 {
-    IFERR(taskstats_destory(tssock))
-    {
+    if (taskstats_destory(tssock)) {
         PRINTERR("cleanup taskstats");
     }
 }
@@ -110,13 +105,11 @@ static void clean_sigset(struct sig_rule *rules)
 }
 
 
-
 void stack_push(struct cleanupstack *stack, int type, ...)
 {
     va_list args;
     va_start(args, type);
-    switch(type)
-    {
+    switch (type) {
         case CLN_FREE:
             push_free(stack, va_arg(args, void *));
             break;
@@ -143,8 +136,9 @@ void stack_push(struct cleanupstack *stack, int type, ...)
 
 void push_task(struct cleanupstack* stack, struct cleanuptask* task)
 {
-    if(stack->count >= MAX_CLNSTACK)
+    if (stack->count >= MAX_CLNSTACK) {
         return;
+    }
     stack->stack[stack->count] = *task;
     stack->count++;
     return;
@@ -152,15 +146,15 @@ void push_task(struct cleanupstack* stack, struct cleanuptask* task)
 
 struct cleanuptask * stack_top(struct cleanupstack *stack)
 {
-    if(stack->count)
+    if (stack->count) {
         return &stack->stack[stack->count - 1];
+    }
     return NULL;
 }
 
 int stack_pop(struct cleanupstack *stack, struct cleanuptask *task)
 {
-    if(stack->count)
-    {
+    if (stack->count) {
         stack->count--;
         *task = stack->stack[stack->count];
         return 1;
@@ -171,10 +165,8 @@ int stack_pop(struct cleanupstack *stack, struct cleanuptask *task)
 void do_cleanup(struct cleanupstack* stack)
 {
     struct cleanuptask task;
-    while(stack_pop(stack, &task))
-    {
-        switch(task.type)
-        {
+    while (stack_pop(stack, &task)) {
+        switch (task.type) {
             case CLN_FREE:
                 clean_free(task.arg.ptr);
                 break;

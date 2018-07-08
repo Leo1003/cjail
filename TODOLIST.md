@@ -5,7 +5,7 @@
  - [x] rlimit nofile support
  - [ ] add rusage in result
  - [ ] split up setup.c into different files
- - [ ] refactor source code
+ - [x] refactor source code
  - [ ] better seccomp rule
  - [ ] seccomp_debug mode
  - [x] only create basic device node in /dev

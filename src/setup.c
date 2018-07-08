@@ -57,10 +57,8 @@ int setup_fs()
 
 int setup_cpumask()
 {
-    if(exec_para.para.cpuset)
-    {
-        IFERR(sched_setaffinity(getpid(), sizeof(*exec_para.para.cpuset), exec_para.para.cpuset))
-        {
+    if (exec_para.para.cpuset) {
+        if (sched_setaffinity(getpid(), sizeof(*exec_para.para.cpuset), exec_para.para.cpuset)) {
             PRINTERR("setup_cpumask");
             return -1;
         }
@@ -76,39 +74,33 @@ inline static int set_rlimit(int res, long long val)
 }
 int setup_rlimit()
 {
-    if(exec_para.para.rlim_as > 0)
-    {
-        IFERR(set_rlimit(RLIMIT_AS, exec_para.para.rlim_as * 1024))
+    if (exec_para.para.rlim_as > 0) {
+        if (set_rlimit(RLIMIT_AS, exec_para.para.rlim_as * 1024))
             goto error;
         pdebugf("setup_rlimit: RLIMIT_AS set to %lld KB\n", exec_para.para.rlim_as);
     }
-    if(exec_para.para.rlim_core >= 0)
-    {
-        IFERR(set_rlimit(RLIMIT_CORE, exec_para.para.rlim_core * 1024))
+    if (exec_para.para.rlim_core >= 0) {
+        if (set_rlimit(RLIMIT_CORE, exec_para.para.rlim_core * 1024))
             goto error;
         pdebugf("setup_rlimit: RLIMIT_CORE set to %lld KB\n", exec_para.para.rlim_core);
     }
-    if(exec_para.para.rlim_nofile > 0)
-    {
-        IFERR(set_rlimit(RLIMIT_NOFILE, exec_para.para.rlim_nofile))
+    if (exec_para.para.rlim_nofile > 0) {
+        if (set_rlimit(RLIMIT_NOFILE, exec_para.para.rlim_nofile))
         goto error;
         pdebugf("setup_rlimit: RLIMIT_NOFILE set to %lld\n", exec_para.para.rlim_nofile);
     }
-    if(exec_para.para.rlim_fsize > 0)
-    {
-        IFERR(set_rlimit(RLIMIT_FSIZE, exec_para.para.rlim_fsize * 1024))
+    if (exec_para.para.rlim_fsize > 0) {
+        if (set_rlimit(RLIMIT_FSIZE, exec_para.para.rlim_fsize * 1024))
             goto error;
         pdebugf("setup_rlimit: RLIMIT_FSIZE set to %lld KB\n", exec_para.para.rlim_fsize);
     }
-    if(exec_para.para.rlim_proc > 0)
-    {
-        IFERR(set_rlimit(RLIMIT_NPROC, exec_para.para.rlim_proc))
+    if (exec_para.para.rlim_proc > 0) {
+        if (set_rlimit(RLIMIT_NPROC, exec_para.para.rlim_proc))
             goto error;
         pdebugf("setup_rlimit: RLIMIT_NPROC set to %lld\n", exec_para.para.rlim_proc);
     }
-    if(exec_para.para.rlim_stack > 0)
-    {
-        IFERR(set_rlimit(RLIMIT_STACK, exec_para.para.rlim_stack * 1024))
+    if (exec_para.para.rlim_stack > 0) {
+        if (set_rlimit(RLIMIT_STACK, exec_para.para.rlim_stack * 1024))
             goto error;
         pdebugf("setup_rlimit: RLIMIT_STACK set to %lld KB\n", exec_para.para.rlim_stack);
     }
@@ -121,16 +113,18 @@ int setup_rlimit()
 
 int setup_taskstats(struct ts_socket *s)
 {
-    IFERR(taskstats_create(s))
+    if (taskstats_create(s)) {
         goto error;
+    }
 
     cpu_set_t cur;
     CPU_ZERO(&cur);
-    for(int i = 0; i < get_nprocs(); i++)
+    for (int i = 0; i < get_nprocs(); i++) {
         CPU_SET(i, &cur);
-    IFERR(taskstats_setcpuset(s, &cur))
+    }
+    if (taskstats_setcpuset(s, &cur)) {
         goto error;
-
+    }
     return 0;
 
     error:
@@ -140,56 +134,67 @@ int setup_taskstats(struct ts_socket *s)
 
 int setup_cgroup(int *pidfd)
 {
-    if(exec_para.para.cgroup_root)
-        IFERR(cgroup_set_root(exec_para.para.cgroup_root))
+    if (exec_para.para.cgroup_root) {
+        if (cgroup_set_root(exec_para.para.cgroup_root)) {
             return -1;
+        }
+    }
 
-    IFERR(cgroup_create("pids"))
+    if (cgroup_create("pids")) {
         return -1;
-    *pidfd = cgroup_open_tasks("pids");
-        if(*pidfd < 0)
-            return -1;
+    }
+    if ((*pidfd = cgroup_open_tasks("pids")) < 0) {
+        return -1;
+    }
 
-    if(exec_para.para.cg_rss > 0)
-    {
-        IFERR(cgroup_create("memory"))
+    if (exec_para.para.cg_rss > 0) {
+        if (cgroup_create("memory")) {
             return -1;
-        IFERR(cgroup_write("memory", "memory.limit_in_bytes", "%lld", exec_para.para.cg_rss * 1024))
+        }
+        if (cgroup_write("memory", "memory.limit_in_bytes", "%lld",
+            exec_para.para.cg_rss * 1024)) {
             return -1;
-        IFERR(cgroup_write("memory", "memory.swappiness", "%u", 0))
+        }
+        if (cgroup_write("memory", "memory.swappiness", "%u", 0)) {
             return -1;
+        }
     }
     return 0;
 }
 
 int setup_seccomp_compile(struct sock_fprog *bpf, void* exec_argv)
 {
-    if(!exec_para.para.seccomplist)
+    if (!exec_para.para.seccomplist) {
         return 0;
+    }
     scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_TRAP);
-    if(!ctx)
+    if (!ctx) {
         goto error;
+    }
 
-    for (int i = 0; exec_para.para.seccomplist[i] >= 0; i++)
-    {
+    for (int i = 0; exec_para.para.seccomplist[i] >= 0; i++) {
 #ifndef NDEBUG
-        char *scname = seccomp_syscall_resolve_num_arch(seccomp_arch_native(), exec_para.para.seccomplist[i]);
+        char *scname = seccomp_syscall_resolve_num_arch(seccomp_arch_native(),
+                                exec_para.para.seccomplist[i]);
         pdebugf("seccomp_rule_add: %d %s\n", exec_para.para.seccomplist[i], scname);
         free(scname);
-        /* In the case of seccomp_syscall_resolve_num_arch() the associated syscall name is
-         * returned and it remains the callers responsibility to free the returned string
-         * via free(3).
+        /* In the case of seccomp_syscall_resolve_num_arch() the associated
+         * syscall name is returned and it remains the callers responsibility to
+         * free the returned string via free(3).
          */
 #endif
-        IFERR(seccomp_rule_add(ctx, SCMP_ACT_ALLOW, exec_para.para.seccomplist[i], 0))
+        if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW, exec_para.para.seccomplist[i], 0)) {
             goto error;
+        }
     }
-    if(exec_argv)
-    {
+    if (exec_argv) {
         //we have to prevent seccomp from blocking our execve()
         //only allow the certain argv pointer
-        IFERR(seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(execve), 1, SCMP_A1(SCMP_CMP_EQ, (scmp_datum_t)exec_argv)))
+        if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW,
+                SCMP_SYS(execve), 1,
+                SCMP_A1(SCMP_CMP_EQ, (scmp_datum_t)exec_argv))) {
             goto error;
+        }
     }
 
     // compile libseccomp rule to bpf program
@@ -202,7 +207,7 @@ int setup_seccomp_compile(struct sock_fprog *bpf, void* exec_argv)
     }
     seccomp_export_bpf(ctx, memfd);
     bpf_size = lseek(memfd, 0, SEEK_END);
-    IFERR (bpf_size) {
+    if (bpf_size < 0) {
         PRINTERR("get memfd size");
         goto error_memfd;
     }
@@ -226,14 +231,14 @@ error:
 
 int setup_seccomp_load(struct sock_fprog* bpf)
 {
-    IFERR (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
+    if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
         PRINTERR("set no new privs");
         return -1;
     }
-    if(!exec_para.para.seccomplist)
+    if (!exec_para.para.seccomplist)
         return 0;
 
-    IFERR (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, bpf, 0, 0)) {
+    if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, bpf, 0, 0)) {
         PRINTERR("load seccomp filter");
         return -1;
     }
