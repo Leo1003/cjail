@@ -1,18 +1,18 @@
- - [ ] better log output
  - [x] filesystem mount layer
+ - [x] only create basic device node in /dev
  - [x] redesign fd redirection
  - [x] compile seccomp bpf in the init process
+ - [x] init process rename itself to prevent cmdline being seen by child process
+ - [x] set a new hostname in the UTS namespace
  - [x] rlimit nofile support
+ - [x] refactor source code
  - [ ] add rusage in result
  - [ ] split up setup.c into different files
- - [x] refactor source code
+ - [ ] better log output
+ - [ ] cjail log problem after setup_fd()
  - [ ] better seccomp rule
  - [ ] seccomp_debug mode
- - [x] only create basic device node in /dev
- - [ ] detect if required kernel features are supported in cmake
- - [ ] add user namespace support
- - [x] init process rename itself to prevent cmdline being seen by child process
  - [ ] unit tests
- - [x] set a new hostname in the UTS namespace
- - [ ] cjail log problem after setup_fd()
+ - [ ] add user namespace support
+ - [ ] detect if required kernel features are supported in cmake
 
