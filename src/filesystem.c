@@ -199,10 +199,10 @@ static int mount_udev(const char *root, const char *target, const char *option)
     ret |= mknodat(rfd, "random", S_IFCHR | 0666, makedev(1, 8));
     ret |= mknodat(rfd, "urandom", S_IFCHR | 0666, makedev(1, 9));
     ret |= mknodat(rfd, "zero", S_IFCHR | 0666, makedev(1, 5));
-    ret |= jail_symlinkat(root, "/proc/self/fd", rfd, "fd");
-    ret |= jail_symlinkat(root, "/proc/self/fd/0", rfd, "stdin");
-    ret |= jail_symlinkat(root, "/proc/self/fd/1", rfd, "stdout");
-    ret |= jail_symlinkat(root, "/proc/self/fd/2", rfd, "stderr");
+    ret |= symlinkat("/proc/self/fd", rfd, "fd");
+    ret |= symlinkat("/proc/self/fd/0", rfd, "stdin");
+    ret |= symlinkat("/proc/self/fd/1", rfd, "stdout");
+    ret |= symlinkat("/proc/self/fd/2", rfd, "stderr");
     ret |= close(rfd);
 
     return ret;
