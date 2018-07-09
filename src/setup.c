@@ -152,10 +152,10 @@ int setup_cgroup(int *pidfd)
             return -1;
         }
         if (cgroup_write("memory", "memory.limit_in_bytes", "%lld",
-            exec_para.para.cg_rss * 1024)) {
+            exec_para.para.cg_rss * 1024) < 0) {
             return -1;
         }
-        if (cgroup_write("memory", "memory.swappiness", "%u", 0)) {
+        if (cgroup_write("memory", "memory.swappiness", "%u", 0) < 0) {
             return -1;
         }
     }
