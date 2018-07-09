@@ -6,7 +6,7 @@
  - [x] set a new hostname in the UTS namespace
  - [x] rlimit nofile support
  - [x] refactor source code
- - [ ] add rusage in result
+ - [x] add rusage in result
  - [ ] split up setup.c into different files
  - [ ] better log output
  - [ ] cjail log problem after setup_fd()

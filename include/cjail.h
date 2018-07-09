@@ -5,6 +5,7 @@
 #include <linux/taskstats.h>
 #include <sched.h>
 #include <signal.h>
+#include <sys/resource.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
@@ -29,6 +30,7 @@ struct cjail_para {
 
 struct cjail_result {
     struct taskstats stats;
+    struct rusage rus;
     siginfo_t info;
     struct timeval time;
     int timekill;

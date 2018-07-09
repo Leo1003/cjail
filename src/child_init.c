@@ -312,6 +312,7 @@ int child_init(void *arg UNUSED)
         } else if (childstatus) {
             childerr = get_child_error(&result.info, exec_para.para.cg_rss);
         }
+        getrusage(RUSAGE_CHILDREN, &result.rus);
         pdebugf("Sending result...\n");
         write(exec_para.resultpipe[1], &result, sizeof(result));
 

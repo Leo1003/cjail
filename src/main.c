@@ -325,6 +325,17 @@ void print_result(const struct cjail_result *res)
     printf("    syscalls:\n");
     printf("        read: %llu\n", res->stats.read_syscalls);
     printf("        write: %llu\n", res->stats.write_syscalls);
+    printf("-----------RUSAGE-----------\n");
+    printf("user time: %ld.%06ld\n", res->rus.ru_utime.tv_sec, res->rus.ru_utime.tv_usec);
+    printf("system time: %ld.%06ld\n", res->rus.ru_stime.tv_sec, res->rus.ru_stime.tv_usec);
+    printf("max_rss: %ld\n", res->rus.ru_maxrss);
+    printf("inblock: %ld\n", res->rus.ru_inblock);
+    printf("outblock: %ld\n", res->rus.ru_oublock);
+    printf("major fault: %ld\n", res->rus.ru_majflt);
+    printf("minor fault: %ld\n", res->rus.ru_minflt);
+    printf("content switch: %ld\n", res->rus.ru_nvcsw);
+    printf("icontent switch: %ld\n", res->rus.ru_nivcsw);
+    printf("----------------------------\n");
     switch (res->info.si_code) {
         case CLD_EXITED:
             printf("Exitcode: %d\n", res->info.si_status);
