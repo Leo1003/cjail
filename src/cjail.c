@@ -17,7 +17,7 @@
 #include <sys/signal.h>
 #include <sys/wait.h>
 
-struct __exec_para exec_para;
+#define STACKSIZE 16
 
 static volatile sig_atomic_t child = 0, interrupted = 0;
 static void sighandler(int sig)
@@ -80,6 +80,9 @@ static pid_t cjail_wait(pid_t initpid, int *wstatus, int *initerrno)
         perrf("child namespace init process abnormal terminated\n");
         *initerrno = WIFEXITED(*wstatus) ? WEXITSTATUS(*wstatus) : (interrupted ? EINTR : EFAULT);
         perrf("Failed to setup child: %s\n", strerror(*initerrno));
+        if (WIFSIGNALED(*wstatus)) {
+            perrf("Received signal: %d\n", WTERMSIG(*wstatus));
+        }
         goto error;
     }
 
@@ -97,6 +100,8 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
     struct ts_socket tssock = { 0 };
     struct taskstats ts = { 0 };
     struct cleanupstack cstack = { 0 }, pipestack = { 0 };
+    struct exec_para *ep = (struct exec_para *) malloc(sizeof(struct exec_para));
+    stack_push(&cstack, CLN_FREE, &ep);
     child = 0;
     interrupted = 0;
 
@@ -104,28 +109,28 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         RETERR(EPERM);
     if (!para)
         RETERR(EINVAL);
-    exec_para.para = *para;
+    ep->para = *para;
 
     installsigs(lib_sigrules);
     stack_push(&cstack, CLN_SIGSET, lib_sigrules);
 
     //setup pipe
-    if (pipe_c(exec_para.resultpipe)) {
+    if (pipe_c(ep->resultpipe)) {
         PRINTERR("create pipe");
         ret = -1;
         goto out_cleanup;
     }
-    stack_push(&cstack, CLN_CLOSE, exec_para.resultpipe[0]);
-    stack_push(&pipestack, CLN_CLOSE, exec_para.resultpipe[1]);
+    stack_push(&cstack, CLN_CLOSE, ep->resultpipe[0]);
+    stack_push(&pipestack, CLN_CLOSE, ep->resultpipe[1]);
 
     //setup cgroup stage I
-    if (setup_cgroup(&exec_para.cgtasksfd)) {
+    if (setup_cgroup(ep->para, &ep->cgtasksfd)) {
         ret = -1;
         goto out_cleanup;
     }
-    stack_push(&cstack, CLN_CLOSE, exec_para.cgtasksfd);
+    stack_push(&cstack, CLN_CLOSE, ep->cgtasksfd);
     stack_push(&cstack, CLN_CGROUP, "pids");
-    if (exec_para.para.cg_rss > 0)
+    if (ep->para.cg_rss > 0)
         stack_push(&cstack, CLN_CGROUP, "memory");
 
     //setup taskstats
@@ -137,9 +142,10 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
 
     //clone
     int optionflag = 0;
-    optionflag |= exec_para.para.sharenet ? 0 : CLONE_NEWNET;
+    optionflag |= ep->para.sharenet ? 0 : CLONE_NEWNET;
     initpid = clone(child_init, child_stack + STACKSIZE,
-                      SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWPID | optionflag, NULL);
+                      SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS |
+                      CLONE_NEWPID | optionflag, (void *) ep);
     if (initpid < 0) {
         PRINTERR("clone child namespace init process");
         ret = -1;
@@ -156,7 +162,7 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         usleep(100000);
     }
     pdebugf("Got childpid: %d\n", childpid);
-    if (exec_para.para.cg_rss) {
+    if (ep->para.cg_rss) {
         cgroup_write("memory", "tasks", "%d", childpid);
     }
     kill(initpid, SIGREADY);
@@ -197,11 +203,11 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
     if (result) {
         //get result from pipe
         memset(result, 0, sizeof(*result));
-        size_t n = read(exec_para.resultpipe[0], result, sizeof(*result));
+        size_t n = read(ep->resultpipe[0], result, sizeof(*result));
         if (n < 0)
             PRINTERR("get result");
         result->stats = ts;
-        if (exec_para.para.cg_rss) {
+        if (ep->para.cg_rss) {
             if (cgroup_read("memory", "memory.oom_control",
                               "oom_kill_disable %*d\n"
                               "under_oom %*d\n"

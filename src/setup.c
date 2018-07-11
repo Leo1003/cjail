@@ -32,20 +32,20 @@
 
 typedef void * scmp_filter_ctx;
 
-int setup_fs()
+int setup_fs(const struct cjail_para para)
 {
     if (privatize_fs()) {
         goto error;
     }
-    if (jail_mount("", exec_para.para.chroot, "/proc", FS_PROC, "")) {
+    if (jail_mount("", para.chroot, "/proc", FS_PROC, "")) {
         PRINTERR("mount procfs");
         goto error;
     }
-    if (jail_mount("", exec_para.para.chroot, "/dev", FS_UDEV, "")) {
+    if (jail_mount("", para.chroot, "/dev", FS_UDEV, "")) {
         PRINTERR("mount devfs");
         goto error;
     }
-    if (jail_chroot(exec_para.para.chroot, exec_para.para.workingDir)) {
+    if (jail_chroot(para.chroot, para.workingDir)) {
         goto error;
     }
     return 0;
@@ -55,10 +55,10 @@ int setup_fs()
     return -1;
 }
 
-int setup_cpumask()
+int setup_cpumask(const struct cjail_para para)
 {
-    if (exec_para.para.cpuset) {
-        if (sched_setaffinity(getpid(), sizeof(*exec_para.para.cpuset), exec_para.para.cpuset)) {
+    if (para.cpuset) {
+        if (sched_setaffinity(getpid(), sizeof(*para.cpuset), para.cpuset)) {
             PRINTERR("setup_cpumask");
             return -1;
         }
@@ -72,37 +72,37 @@ inline static int set_rlimit(int res, long long val)
     rl.rlim_cur = rl.rlim_max = val;
     return setrlimit(res, &rl);
 }
-int setup_rlimit()
+int setup_rlimit(const struct cjail_para para)
 {
-    if (exec_para.para.rlim_as > 0) {
-        if (set_rlimit(RLIMIT_AS, exec_para.para.rlim_as * 1024))
+    if (para.rlim_as > 0) {
+        if (set_rlimit(RLIMIT_AS, para.rlim_as * 1024))
             goto error;
-        pdebugf("setup_rlimit: RLIMIT_AS set to %lld KB\n", exec_para.para.rlim_as);
+        pdebugf("setup_rlimit: RLIMIT_AS set to %lld KB\n", para.rlim_as);
     }
-    if (exec_para.para.rlim_core >= 0) {
-        if (set_rlimit(RLIMIT_CORE, exec_para.para.rlim_core * 1024))
+    if (para.rlim_core >= 0) {
+        if (set_rlimit(RLIMIT_CORE, para.rlim_core * 1024))
             goto error;
-        pdebugf("setup_rlimit: RLIMIT_CORE set to %lld KB\n", exec_para.para.rlim_core);
+        pdebugf("setup_rlimit: RLIMIT_CORE set to %lld KB\n", para.rlim_core);
     }
-    if (exec_para.para.rlim_nofile > 0) {
-        if (set_rlimit(RLIMIT_NOFILE, exec_para.para.rlim_nofile))
+    if (para.rlim_nofile > 0) {
+        if (set_rlimit(RLIMIT_NOFILE, para.rlim_nofile))
         goto error;
-        pdebugf("setup_rlimit: RLIMIT_NOFILE set to %lld\n", exec_para.para.rlim_nofile);
+        pdebugf("setup_rlimit: RLIMIT_NOFILE set to %lld\n", para.rlim_nofile);
     }
-    if (exec_para.para.rlim_fsize > 0) {
-        if (set_rlimit(RLIMIT_FSIZE, exec_para.para.rlim_fsize * 1024))
+    if (para.rlim_fsize > 0) {
+        if (set_rlimit(RLIMIT_FSIZE, para.rlim_fsize * 1024))
             goto error;
-        pdebugf("setup_rlimit: RLIMIT_FSIZE set to %lld KB\n", exec_para.para.rlim_fsize);
+        pdebugf("setup_rlimit: RLIMIT_FSIZE set to %lld KB\n", para.rlim_fsize);
     }
-    if (exec_para.para.rlim_proc > 0) {
-        if (set_rlimit(RLIMIT_NPROC, exec_para.para.rlim_proc))
+    if (para.rlim_proc > 0) {
+        if (set_rlimit(RLIMIT_NPROC, para.rlim_proc))
             goto error;
-        pdebugf("setup_rlimit: RLIMIT_NPROC set to %lld\n", exec_para.para.rlim_proc);
+        pdebugf("setup_rlimit: RLIMIT_NPROC set to %lld\n", para.rlim_proc);
     }
-    if (exec_para.para.rlim_stack > 0) {
-        if (set_rlimit(RLIMIT_STACK, exec_para.para.rlim_stack * 1024))
+    if (para.rlim_stack > 0) {
+        if (set_rlimit(RLIMIT_STACK, para.rlim_stack * 1024))
             goto error;
-        pdebugf("setup_rlimit: RLIMIT_STACK set to %lld KB\n", exec_para.para.rlim_stack);
+        pdebugf("setup_rlimit: RLIMIT_STACK set to %lld KB\n", para.rlim_stack);
     }
     return 0;
 
@@ -132,10 +132,10 @@ int setup_taskstats(struct ts_socket *s)
     return -1;
 }
 
-int setup_cgroup(int *pidfd)
+int setup_cgroup(const struct cjail_para para, int *pidfd)
 {
-    if (exec_para.para.cgroup_root) {
-        if (cgroup_set_root(exec_para.para.cgroup_root)) {
+    if (para.cgroup_root) {
+        if (cgroup_set_root(para.cgroup_root)) {
             return -1;
         }
     }
@@ -147,12 +147,12 @@ int setup_cgroup(int *pidfd)
         return -1;
     }
 
-    if (exec_para.para.cg_rss > 0) {
+    if (para.cg_rss > 0) {
         if (cgroup_create("memory")) {
             return -1;
         }
         if (cgroup_write("memory", "memory.limit_in_bytes", "%lld",
-            exec_para.para.cg_rss * 1024) < 0) {
+            para.cg_rss * 1024) < 0) {
             return -1;
         }
         if (cgroup_write("memory", "memory.swappiness", "%u", 0) < 0) {
@@ -162,9 +162,9 @@ int setup_cgroup(int *pidfd)
     return 0;
 }
 
-int setup_seccomp_compile(struct sock_fprog *bpf, void* exec_argv)
+int setup_seccomp_compile(const struct cjail_para para, struct sock_fprog *bpf)
 {
-    if (!exec_para.para.seccomplist) {
+    if (!para.seccomplist) {
         return 0;
     }
     scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_TRAP);
@@ -172,27 +172,27 @@ int setup_seccomp_compile(struct sock_fprog *bpf, void* exec_argv)
         goto error;
     }
 
-    for (int i = 0; exec_para.para.seccomplist[i] >= 0; i++) {
+    for (int i = 0; para.seccomplist[i] >= 0; i++) {
 #ifndef NDEBUG
         char *scname = seccomp_syscall_resolve_num_arch(seccomp_arch_native(),
-                                exec_para.para.seccomplist[i]);
-        pdebugf("seccomp_rule_add: %d %s\n", exec_para.para.seccomplist[i], scname);
+                                para.seccomplist[i]);
+        pdebugf("seccomp_rule_add: %d %s\n", para.seccomplist[i], scname);
         free(scname);
         /* In the case of seccomp_syscall_resolve_num_arch() the associated
          * syscall name is returned and it remains the callers responsibility to
          * free the returned string via free(3).
          */
 #endif
-        if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW, exec_para.para.seccomplist[i], 0)) {
+        if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW, para.seccomplist[i], 0)) {
             goto error;
         }
     }
-    if (exec_argv) {
+    if (para.argv) {
         //we have to prevent seccomp from blocking our execve()
         //only allow the certain argv pointer
         if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW,
                 SCMP_SYS(execve), 1,
-                SCMP_A1(SCMP_CMP_EQ, (scmp_datum_t)exec_argv))) {
+                SCMP_A1(SCMP_CMP_EQ, (scmp_datum_t)para.argv))) {
             goto error;
         }
     }
@@ -229,13 +229,13 @@ error:
     return -1;
 }
 
-int setup_seccomp_load(struct sock_fprog* bpf)
+int setup_seccomp_load(const struct cjail_para para, struct sock_fprog* bpf)
 {
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
         PRINTERR("set no new privs");
         return -1;
     }
-    if (!exec_para.para.seccomplist)
+    if (!para.seccomplist)
         return 0;
 
     if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, bpf, 0, 0)) {

@@ -165,7 +165,7 @@ error_t get_child_error(const siginfo_t *info, int cg_rss) {
     }
 }
 
-int child_init(void *arg UNUSED)
+int child_init(void *arg)
 {
     /*
      * The address passed with PR_SET_MM_ARG_START, PR_SET_MM_ARG_END should
@@ -175,6 +175,7 @@ int child_init(void *arg UNUSED)
     int ttymode, childstatus = -1;
     pid_t childpid;
     struct termios term;
+    struct exec_para ep = *(struct exec_para *) arg;
 
     if (getpid() != 1) {
         perrf("This process should be run as init process.\n");
@@ -192,7 +193,7 @@ int child_init(void *arg UNUSED)
     sigsetset(&rtset, 2, SIGCHLD, SIGREADY);
     sigprocmask(SIG_BLOCK, &rtset, NULL);
 
-    close(exec_para.resultpipe[0]);
+    close(ep.resultpipe[0]);
     if (prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0)) {
         PRINTERR("set parent death signal");
         exit(errno);
@@ -207,7 +208,7 @@ int child_init(void *arg UNUSED)
     }
 
     //mount filesystems
-    if (setup_fs()) {
+    if (setup_fs(ep.para)) {
         exit(errno);
     }
 
@@ -216,7 +217,7 @@ int child_init(void *arg UNUSED)
 
     //precompile seccomp bpf to reduce the impact on timing
     struct sock_fprog bpf;
-    if (setup_seccomp_compile(&bpf, exec_para.para.argv))
+    if (setup_seccomp_compile(ep.para, &bpf))
         exit(errno);
 
     childpid = fork();
@@ -226,7 +227,7 @@ int child_init(void *arg UNUSED)
         struct timeval stime, etime, timespan;
         memset(&result, 0, sizeof(result));
 
-        if (write_tasks(exec_para.cgtasksfd, childpid)) {
+        if (write_tasks(ep.cgtasksfd, childpid)) {
             PRINTERR("write tasks file");
             exit(errno);
         }
@@ -248,9 +249,9 @@ int child_init(void *arg UNUSED)
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
         gettimeofday(&stime, NULL);
-        if (timerisset(&exec_para.para.lim_time)) {
+        if (timerisset(&ep.para.lim_time)) {
             pdebugf("Setting timer...\n");
-            if (set_timer(exec_para.para.lim_time)) {
+            if (set_timer(ep.para.lim_time)) {
                 PRINTERR("setitimer");
                 exit(errno);
             }
@@ -278,7 +279,6 @@ int child_init(void *arg UNUSED)
                 continue;
             }
             if (sinfo.si_pid == childpid) {
-                childstatus = ifchildfailed(sinfo.si_pid);
                 if ((childstatus = ifchildfailed(sinfo.si_pid)) < 0) {
                     exit(errno);
                 }
@@ -289,7 +289,7 @@ int child_init(void *arg UNUSED)
         }
 
         //deregister alarm
-        if (timerisset(&exec_para.para.lim_time)) {
+        if (timerisset(&ep.para.lim_time)) {
             if (unset_timer()) {
                 PRINTERR("stop itimer");
             }
@@ -310,11 +310,11 @@ int child_init(void *arg UNUSED)
             perrf("Lost control of child process\n");
             exit(ECHILD);
         } else if (childstatus) {
-            childerr = get_child_error(&result.info, exec_para.para.cg_rss);
+            childerr = get_child_error(&result.info, ep.para.cg_rss);
         }
         getrusage(RUSAGE_CHILDREN, &result.rus);
         pdebugf("Sending result...\n");
-        write(exec_para.resultpipe[1], &result, sizeof(result));
+        write(ep.resultpipe[1], &result, sizeof(result));
 
         exit(childerr);
     } else if(childpid == 0) {
@@ -325,8 +325,8 @@ int child_init(void *arg UNUSED)
             child_exit();
         if (installsigs(child_sigrules))
             child_exit();
-        uid_t uid = exec_para.para.uid;
-        gid_t gid = exec_para.para.gid;
+        uid_t uid = ep.para.uid;
+        gid_t gid = ep.para.gid;
         if (setresgid(gid, gid, gid)) {
             PRINTERR("setgid");
             child_exit();
@@ -343,16 +343,16 @@ int child_init(void *arg UNUSED)
             PRINTERR("setpgrp");
             child_exit();
         }
-        if (setup_fd())
+        if (setup_fd(ep.para))
             child_exit();
         if (isatty(STDIN_FILENO)) {
             if (tcsetpgrp(STDIN_FILENO, getpgrp())) {
                 PRINTERR("get control terminal");
             }
         }
-        if (setup_cpumask())
+        if (setup_cpumask(ep.para))
             child_exit();
-        if (setup_rlimit())
+        if (setup_rlimit(ep.para))
             child_exit();
         //To avoid seccomp block the systemcall
         //We move before it.
@@ -360,9 +360,9 @@ int child_init(void *arg UNUSED)
         pdebugf("child continued from rt_signal\n");
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
-        if (setup_seccomp_load(&bpf))
+        if (setup_seccomp_load(ep.para, &bpf))
             child_exit();
-        execve(exec_para.para.argv[0], exec_para.para.argv, exec_para.para.environ);
+        execve(ep.para.argv[0], ep.para.argv, ep.para.environ);
         child_exit();
     } else {
         PRINTERR("fork");

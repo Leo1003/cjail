@@ -32,7 +32,7 @@ int reopen(int fd, const char *path, char type)
         }
         nfd = open(path, flags, 0666);
         if (nfd < 0) {
-            pdebugf("reopen(): %s\n", exec_para.para.redir_input);
+            pdebugf("reopen(): %s\n", path);
             return -1;
         } else if (nfd != fd) {
             if (dup2(nfd, fd) < 0) {
@@ -83,20 +83,20 @@ int applyfd(int fd, int to, int clos)
     return 0;
 }
 
-int setup_fd()
+int setup_fd(const struct cjail_para para)
 {
     int tfd[3] = { -1, -1, -1 };
     int clo[3] = { 0, 0, 0 };
-    if (reopen(STDIN_FILENO, exec_para.para.redir_input, 'r')) {
-        pdebugf("reopen(): %s\n", exec_para.para.redir_input);
+    if (reopen(STDIN_FILENO, para.redir_input, 'r')) {
+        pdebugf("reopen(): %s\n", para.redir_input);
             goto error;
     }
-    if (reopen(STDOUT_FILENO, exec_para.para.redir_output, 'w')) {
-        pdebugf("reopen(): %s\n", exec_para.para.redir_output);
+    if (reopen(STDOUT_FILENO, para.redir_output, 'w')) {
+        pdebugf("reopen(): %s\n", para.redir_output);
             goto error;
     }
-    if (reopen(STDERR_FILENO, exec_para.para.redir_err, 'w')) {
-        pdebugf("reopen(): %s\n", exec_para.para.redir_err);
+    if (reopen(STDERR_FILENO, para.redir_err, 'w')) {
+        pdebugf("reopen(): %s\n", para.redir_err);
             goto error;
     }
 
@@ -105,13 +105,13 @@ int setup_fd()
      * this will cause strange behaviors.
      * So we need to dup them before closing them.
      */
-    if (tfddup(exec_para.para.fd_input, STDIN_FILENO, &tfd[0], &clo[0])) {
+    if (tfddup(para.fd_input, STDIN_FILENO, &tfd[0], &clo[0])) {
         goto error;
     }
-    if (tfddup(exec_para.para.fd_output, STDOUT_FILENO, &tfd[1], &clo[1])) {
+    if (tfddup(para.fd_output, STDOUT_FILENO, &tfd[1], &clo[1])) {
         goto error;
     }
-    if (tfddup(exec_para.para.fd_err, STDERR_FILENO, &tfd[2], &clo[2])) {
+    if (tfddup(para.fd_err, STDERR_FILENO, &tfd[2], &clo[2])) {
         goto error;
     }
 
@@ -125,7 +125,7 @@ int setup_fd()
         goto error;
     }
 
-    if (!exec_para.para.preservefd)
+    if (!para.preservefd)
         if (closefrom(STDERR_FILENO + 1) < 0)
             return -1;
     return 0;

@@ -10,7 +10,6 @@
 #include <sys/types.h>
 #include <time.h>
 
-#define STACKSIZE 16
 #define UTSNAME "cjail"
 #define INITNAME "/sbin/init"
 #define PROCNAME "init"
@@ -38,13 +37,11 @@ struct cjail_result {
 };
 
 
-struct __exec_para {
+struct exec_para {
     struct cjail_para para;
     int resultpipe[2];
     int cgtasksfd;
 };
-
-extern struct __exec_para exec_para;
 
 /**
 * @brief Initialize cjail_para struct
