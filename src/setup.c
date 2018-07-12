@@ -219,6 +219,7 @@ int setup_seccomp_compile(const struct cjail_para para, struct sock_fprog *bpf)
     }
 
     seccomp_release(ctx);
+    close(memfd);
     return 0;
 
 error_memfd:
