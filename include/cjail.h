@@ -2,6 +2,7 @@
 #define CJAIL_H
 
 #define _GNU_SOURCE
+#include <linux/filter.h>
 #include <linux/taskstats.h>
 #include <sched.h>
 #include <signal.h>
@@ -41,6 +42,7 @@ struct exec_para {
     struct cjail_para para;
     int resultpipe[2];
     int cgtasksfd;
+    struct sock_fprog bpf;
 };
 
 /**

@@ -7,7 +7,7 @@
  - [x] rlimit nofile support
  - [x] refactor source code
  - [x] add rusage in result
- - [ ] split up setup.c into different files
+ - [x] split up setup.c into different files
  - [ ] better log output
  - [ ] cjail log problem after setup_fd()
  - [ ] better seccomp rule

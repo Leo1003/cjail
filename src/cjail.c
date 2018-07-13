@@ -1,7 +1,6 @@
 #include "cjail.h"
 #include "init.h"
 #include "cgroup.h"
-#include "setup.h"
 #include "sigset.h"
 #include "utils.h"
 #include "cleanup.h"
@@ -15,6 +14,7 @@
 #include <unistd.h>
 
 #include <sys/signal.h>
+#include <sys/sysinfo.h>
 #include <sys/wait.h>
 
 #define STACKSIZE 16
@@ -45,6 +45,56 @@ static struct sig_rule lib_sigrules[] = {
     { SIGTTOU , SIG_IGN   , NULL, 0, {{0}}, 0 },
     { 0       , NULL      , NULL, 0, {{0}}, 0 },
 };
+
+static int init_taskstats(struct ts_socket *s)
+{
+    if (taskstats_create(s)) {
+        goto error;
+    }
+    cpu_set_t cur;
+    CPU_ZERO(&cur);
+    for (int i = 0; i < get_nprocs(); i++) {
+        CPU_SET(i, &cur);
+    }
+    if (taskstats_setcpuset(s, &cur)) {
+        goto error;
+    }
+    return 0;
+
+error:
+    PRINTERR("setup taskstats");
+    return -1;
+}
+
+static int init_cgroup(const struct cjail_para para, int *pidfd)
+{
+    if (para.cgroup_root) {
+        if (cgroup_set_root(para.cgroup_root)) {
+            return -1;
+        }
+    }
+
+    if (cgroup_create("pids")) {
+        return -1;
+    }
+    if ((*pidfd = cgroup_open_tasks("pids")) < 0) {
+        return -1;
+    }
+
+    if (para.cg_rss > 0) {
+        if (cgroup_create("memory")) {
+            return -1;
+        }
+        if (cgroup_write("memory", "memory.limit_in_bytes", "%lld",
+                para.cg_rss * 1024) < 0) {
+            return -1;
+        }
+        if (cgroup_write("memory", "memory.swappiness", "%u", 0) < 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
 
 static int cjail_kill(pid_t pid)
 {
@@ -124,7 +174,7 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
     stack_push(&pipestack, CLN_CLOSE, ep->resultpipe[1]);
 
     //setup cgroup stage I
-    if (setup_cgroup(ep->para, &ep->cgtasksfd)) {
+    if (init_cgroup(ep->para, &ep->cgtasksfd)) {
         ret = -1;
         goto out_cleanup;
     }
@@ -134,7 +184,7 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         stack_push(&cstack, CLN_CGROUP, "memory");
 
     //setup taskstats
-    if (setup_taskstats(&tssock)) {
+    if (init_taskstats(&tssock)) {
         ret = -1;
         goto out_cleanup;
     }

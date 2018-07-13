@@ -1,7 +1,9 @@
 #include "cjail.h"
 #include "init.h"
 #include "fds.h"
-#include "setup.h"
+#include "filesystem.h"
+#include "process.h"
+#include "scmp.h"
 #include "sigset.h"
 #include "taskstats.h"
 #include "utils.h"
@@ -54,12 +56,6 @@ static struct sig_rule init_sigrules[] = {
     { SIGTTIN , SIG_IGN, NULL, 0, {{0}}, 0 },
     { SIGTTOU , SIG_IGN, NULL, 0, {{0}}, 0 },
     { SIGREADY, sigact , NULL, 0, {{0}}, 0 },
-    { 0       , NULL   , NULL, 0, {{0}}, 0 },
-};
-
-static struct sig_rule child_sigrules[] = {
-    { SIGTTIN , SIG_IGN, NULL, 0, {{0}}, 0 },
-    { SIGTTOU , SIG_IGN, NULL, 0, {{0}}, 0 },
     { 0       , NULL   , NULL, 0, {{0}}, 0 },
 };
 
@@ -165,6 +161,29 @@ error_t get_child_error(const siginfo_t *info, int cg_rss) {
     }
 }
 
+static int mount_fs(const struct cjail_para para)
+{
+    if (privatize_fs()) {
+        goto error;
+    }
+    if (jail_mount("", para.chroot, "/proc", FS_PROC, "")) {
+        PRINTERR("mount procfs");
+        goto error;
+    }
+    if (jail_mount("", para.chroot, "/dev", FS_UDEV, "")) {
+        PRINTERR("mount devfs");
+        goto error;
+    }
+    if (jail_chroot(para.chroot, para.workingDir)) {
+        goto error;
+    }
+    return 0;
+
+    error:
+    PRINTERR("setup_fs");
+    return -1;
+}
+
 int child_init(void *arg)
 {
     /*
@@ -208,7 +227,7 @@ int child_init(void *arg)
     }
 
     //mount filesystems
-    if (setup_fs(ep.para)) {
+    if (mount_fs(ep.para)) {
         exit(errno);
     }
 
@@ -216,8 +235,7 @@ int child_init(void *arg)
     ttymode = (tcgetattr(STDIN_FILENO, &term) == 0);
 
     //precompile seccomp bpf to reduce the impact on timing
-    struct sock_fprog bpf;
-    if (setup_seccomp_compile(ep.para, &bpf))
+    if (compile_seccomp(ep.para, &ep.bpf))
         exit(errno);
 
     childpid = fork();
@@ -318,60 +336,10 @@ int child_init(void *arg)
 
         exit(childerr);
     } else if(childpid == 0) {
-        /*
-         *  Child process part
-         */
-        if (clearsigs())
-            child_exit();
-        if (installsigs(child_sigrules))
-            child_exit();
-        uid_t uid = ep.para.uid;
-        gid_t gid = ep.para.gid;
-        if (setresgid(gid, gid, gid)) {
-            PRINTERR("setgid");
-            child_exit();
-        }
-        if (setgroups(0, NULL)) {
-            PRINTERR("setgroups");
-            child_exit();
-        }
-        if (setresuid(uid, uid, uid)) {
-            PRINTERR("setuid");
-            child_exit();
-        }
-        if (setpgrp()) {
-            PRINTERR("setpgrp");
-            child_exit();
-        }
-        if (setup_fd(ep.para))
-            child_exit();
-        if (isatty(STDIN_FILENO)) {
-            if (tcsetpgrp(STDIN_FILENO, getpgrp())) {
-                PRINTERR("get control terminal");
-            }
-        }
-        if (setup_cpumask(ep.para))
-            child_exit();
-        if (setup_rlimit(ep.para))
-            child_exit();
-        //To avoid seccomp block the systemcall
-        //We move before it.
-        sigwait(&rtset, &rtsig);
-        pdebugf("child continued from rt_signal\n");
-        sigprocmask(SIG_UNBLOCK, &rtset, NULL);
-
-        if (setup_seccomp_load(ep.para, &bpf))
-            child_exit();
-        execve(ep.para.argv[0], ep.para.argv, ep.para.environ);
-        child_exit();
+        child_process(ep);
     } else {
         PRINTERR("fork");
         exit(errno);
     }
-    exit(EFAULT); // it shouldn't be here!
-}
-
-inline static void child_exit()
-{
-    exit(errno);
+    // unreachable
 }
