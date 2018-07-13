@@ -10,15 +10,11 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <grp.h>
-#include <linux/filter.h>
-#include <linux/taskstats.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
-#include <sys/ioctl.h>
 #include <sys/param.h>
 #include <sys/prctl.h>
 #include <sys/signal.h>
@@ -27,7 +23,6 @@
 #include <sys/wait.h>
 
 static volatile sig_atomic_t alarmed = 0, interrupted = 0;
-inline static void child_exit();
 
 void sigact(int sig)
 {

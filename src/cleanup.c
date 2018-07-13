@@ -9,9 +9,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <termios.h>
 #include <unistd.h>
-#include <sys/ioctl.h>
 #include <sys/signal.h>
 #include <sys/types.h>
 
