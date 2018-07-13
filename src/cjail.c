@@ -1,5 +1,5 @@
 #include "cjail.h"
-#include "child_init.h"
+#include "init.h"
 #include "cgroup.h"
 #include "setup.h"
 #include "sigset.h"
