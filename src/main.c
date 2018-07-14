@@ -1,4 +1,5 @@
 #include "cjail.h"
+#include "logger.h"
 #include "utils.h"
 
 #include <argz.h>
@@ -56,7 +57,7 @@ unsigned long toul(char* str, int abr)
     unsigned long ret;
     ret = strtoul(str, &p, 10);
     if (strlen(p)) {
-        perrf("Error: Invalid number: %s\n", str);
+        errorf("Error: Invalid number: %s\n", str);
         if (abr)
             exit(1);
     }
@@ -69,7 +70,7 @@ long long int toll(char* str, int abr)
     long long int ret;
     ret = strtoll(str, &p, 10);
     if (strlen(p)) {
-        perrf("Error: Invalid number: %s\n", str);
+        errorf("Error: Invalid number: %s\n", str);
         if (abr)
             exit(1);
     }
@@ -83,7 +84,7 @@ struct timeval totime(char* str, int abr)
     struct timeval ret;
     sec = strtod(str, &p);
     if (strlen(p)) {
-        perrf("Error: Invalid number: %s\n", str);
+        errorf("Error: Invalid number: %s\n", str);
         if (abr)
             exit(1);
     }
@@ -97,31 +98,31 @@ int parse_env(const char *str, char **dest[], char *envp[])
     char *argz = NULL, *envz = NULL, *i = NULL;
     size_t argz_len = 0, envz_len = 0;
     if (argz_create_sep(str, ';', &argz, &argz_len)) {
-        PRINTERR("create list");
+        PFTL("create list");
         goto error;
     }
 
     if (envp)
         if (argz_create(envp, &envz, &envz_len)) {
-            PRINTERR("create envz");
+            PFTL("create envz");
             goto error;
         }
     envz_strip(&envz, &envz_len);
 
     while ((i = argz_next(argz, argz_len, i))) {
         if (i[0] == '!') {
-            pdebugf("removing: %s\n", i + 1);
+            devf("removing: %s\n", i + 1);
             envz_remove(&envz, &envz_len, i + 1);
             continue;
         }
         if (!strchr(i, '=')) {
             if (envz_add(&envz, &envz_len, i, getenv(i))) {
-                PRINTERR("add environ");
+                PFTL("add environ");
                 goto error;
             }
         } else {
             if (argz_add(&envz, &envz_len, i)) {
-                PRINTERR("inherit environ");
+                PFTL("inherit environ");
                 goto error;
             }
         }
@@ -172,14 +173,14 @@ int main(int argc, char *argv[], char *envp[])
             case 'u':
                 para.uid = toul(optarg, 1);
                 if (para.uid >= 65535) {
-                    perrf("Error: Invalid UID: %s\n", optarg);
+                    errorf("Error: Invalid UID: %s\n", optarg);
                     exit(1);
                 }
                 break;
             case 'g':
                 para.gid = toul(optarg, 1);
                 if (para.gid >= 65535) {
-                    perrf("Invalid GID: %s", optarg);
+                    errorf("Invalid GID: %s", optarg);
                     exit(1);
                 }
                 break;
@@ -209,13 +210,13 @@ int main(int argc, char *argv[], char *envp[])
                 break;
             case 'S':
                 if (cpuset_parse(optarg, &cpuset) < 0) {
-                    perrf("Invalid cpuset string: %s\n", optarg);
+                    errorf("Invalid cpuset string: %s\n", optarg);
                     exit(1);
                 }
                 para.cpuset = &cpuset;
 #ifndef NDEBUG
                 cpuset_tostr(&cpuset, cpustr, 1024);
-                pdebugf("cpuset: %s\n", cpustr);
+                devf("cpuset: %s\n", cpustr);
 #endif
                 break;
             case 'v':
@@ -256,19 +257,19 @@ int main(int argc, char *argv[], char *envp[])
         }
     }
     if (optind >= argc) {
-        perrf("Error: command not specified\n");
+        errorf("Error: command not specified\n");
         exit(1);
     }
     para.argv = argv + optind;
-    pdebugf("arguments parsing completed\n");
+    devf("arguments parsing completed\n");
     if (!para.uid)
-        perrf("Warning: Running with UID 0\n");
+        warnf("Running with UID 0!!!\n");
     if (!para.gid)
-        perrf("Warning: Running with GID 0\n");
+        warnf("Running with GID 0!!!\n");
 
     if (envstr) {
         if (parse_env(envstr, &para_env, (inherenv ? envp : NULL ))) {
-            perrf("Error: Parsing environment variables\n");
+            errorf("Parsing environment variables\n");
             exit(1);
         }
         para.environ = para_env;
@@ -283,7 +284,7 @@ int main(int argc, char *argv[], char *envp[])
         para_env = NULL;
     }
     if (ret) {
-        perrf("Error: cjail failure. %s\n", strerror(errno));
+        errorf("cjail failure. %s\n", strerror(errno));
         exit(1);
     }
     print_result(&res);

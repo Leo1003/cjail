@@ -2,6 +2,7 @@
 #include "init.h"
 #include "fds.h"
 #include "filesystem.h"
+#include "logger.h"
 #include "process.h"
 #include "scmp.h"
 #include "sigset.h"
@@ -62,11 +63,11 @@ static int ifchildfailed(pid_t pid)
     snprintf(statpath, sizeof(char) * PATH_MAX, "/proc/%d/stat", pid);
     fp = fopen(statpath, "r");
     if (!fp) {
-        PRINTERR("open proc stat file");
+        PFTL("open proc stat file");
         return -1;
     }
     if (fscanf(fp, "%*s %*s %*s %*s %*s %*s %*s %*s %lu", &procflag) < 0) {
-        PRINTERR("read proc stat file");
+        PFTL("read proc stat file");
         return -1;
     }
     fclose(fp);
@@ -90,7 +91,7 @@ static int setprocname(const char *argv, const char *procname)
 
 static int write_tasks(int fd, pid_t pid)
 {
-    pdebugf("Writing tasks file, PID: %d\n", pid);
+    devf("Writing tasks file, PID: %d\n", pid);
     int dfd = dup(fd);
     FILE *pidfile = fdopen(dfd, "r+");
     if (!pidfile) {
@@ -100,7 +101,7 @@ static int write_tasks(int fd, pid_t pid)
     fprintf(pidfile, "%d", pid);
     fflush(pidfile);
     fclose(pidfile);
-    pdebugf("Writed into tasks file\n");
+    devf("Writed into tasks file\n");
     return 0;
 }
 
@@ -162,11 +163,11 @@ static int mount_fs(const struct cjail_para para)
         goto error;
     }
     if (jail_mount("", para.chroot, "/proc", FS_PROC, "")) {
-        PRINTERR("mount procfs");
+        PFTL("mount procfs");
         goto error;
     }
     if (jail_mount("", para.chroot, "/dev", FS_UDEV, "")) {
-        PRINTERR("mount devfs");
+        PFTL("mount devfs");
         goto error;
     }
     if (jail_chroot(para.chroot, para.workingDir)) {
@@ -175,7 +176,7 @@ static int mount_fs(const struct cjail_para para)
     return 0;
 
     error:
-    PRINTERR("setup_fs");
+    PFTL("setup_fs");
     return -1;
 }
 
@@ -192,13 +193,13 @@ int child_init(void *arg)
     struct exec_para ep = *(struct exec_para *) arg;
 
     if (getpid() != 1) {
-        perrf("This process should be run as init process.\n");
+        fatalf("This process should be run as init process.\n");
         exit(EINVAL);
     }
 
     //it should register the signals, otherwise, they will be ignored because it's a init process
     if (installsigs(init_sigrules)) {
-        PRINTERR("install init signals");
+        PFTL("install init signals");
         exit(errno);
     }
     //block the signal SIGREADY(SIGRTMIN)
@@ -209,16 +210,16 @@ int child_init(void *arg)
 
     close(ep.resultpipe[0]);
     if (prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0)) {
-        PRINTERR("set parent death signal");
+        PFTL("set parent death signal");
         exit(errno);
     }
     //set new hostname in UTS namespace
     if (sethostname(UTSNAME, sizeof(UTSNAME))) {
-        PRINTERR("set hostname");
+        PWRN("set hostname");
     }
     //replace cmdline
     if (setprocname(new_argv, PROCNAME)) {
-        PRINTERR("set process name");
+        PWRN("set process name");
     }
 
     //mount filesystems
@@ -241,31 +242,31 @@ int child_init(void *arg)
         memset(&result, 0, sizeof(result));
 
         if (write_tasks(ep.cgtasksfd, childpid)) {
-            PRINTERR("write tasks file");
+            PFTL("write tasks file");
             exit(errno);
         }
 
         sigwait(&rtset, &rtsig);
         switch (rtsig) {
             case SIGCHLD:
-                perrf("Child process exit unexpectedly!\n");
+                errorf("Child process exit unexpectedly!\n");
                 break;
             case SIGREADY:
-                pdebugf("init continued from rt_signal\n");
+                devf("init continued from rt_signal\n");
                 kill(childpid, SIGREADY);
                 break;
             default:
-                perrf("Unknown signal!\n");
-                exit(EFAULT);
+                fatalf("Unknown signal!\n");
+                exit(EINTR);
                 break;
         }
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
         gettimeofday(&stime, NULL);
         if (timerisset(&ep.para.lim_time)) {
-            pdebugf("Setting timer...\n");
+            devf("Setting timer...\n");
             if (set_timer(ep.para.lim_time)) {
-                PRINTERR("setitimer");
+                PFTL("setitimer");
                 exit(errno);
             }
         }
@@ -276,14 +277,14 @@ int child_init(void *arg)
                     break;
             }
             if (interrupted) {
-                perrf("Received signal, aborting...\n");
+                errorf("Received signal, aborting...\n");
                 exit(EINTR);
             }
             if (alarmed) {
-                pdebugf("Execution timeout, killing process...\n");
+                debugf("Execution timeout, killing process...\n");
                 if (kill(-1, SIGKILL)) {
                     if (errno != ESRCH) {
-                        PRINTERR("kill timeouted child process");
+                        PFTL("kill timeouted child process");
                         exit(errno);
                     }
                 }
@@ -304,7 +305,7 @@ int child_init(void *arg)
         //deregister alarm
         if (timerisset(&ep.para.lim_time)) {
             if (unset_timer()) {
-                PRINTERR("stop itimer");
+                PWRN("stop itimer");
             }
         }
 
@@ -314,27 +315,27 @@ int child_init(void *arg)
 
         if (ttymode) {
             if (tcsetattr(STDIN_FILENO, TCSANOW, &term))
-                PRINTERR("restore terminal setting");
+                PWRN("restore terminal setting");
         }
 
         //check if lost control of child process
         error_t childerr = 0;
         if (childstatus < 0) {
-            perrf("Lost control of child process\n");
+            fatalf("Lost control of child process\n");
             exit(ECHILD);
         } else if (childstatus) {
             childerr = get_child_error(&result.info, ep.para.cg_rss);
         }
         getrusage(RUSAGE_CHILDREN, &result.rus);
-        pdebugf("Sending result...\n");
+        devf("Sending result...\n");
         write(ep.resultpipe[1], &result, sizeof(result));
 
         exit(childerr);
     } else if(childpid == 0) {
         child_process(ep);
     } else {
-        PRINTERR("fork");
+        PFTL("fork");
         exit(errno);
     }
-    // unreachable
+    // Should be unreachable
 }

@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "filesystem.h"
+#include "logger.h"
 #include "utils.h"
 
 #include <fcntl.h>
@@ -58,8 +59,8 @@ int is_same_inode(const char *patha, const char *pathb)
     if (stat(patha, &sta) || stat(pathb, &stb)) {
         return 0;
     }
-    pdebugf("a: %s ; b: %s\n", patha, pathb);
-    pdebugf("a.inode: %lu ; b.inode: %lu\n", sta.st_ino, stb.st_ino);
+    devf("a: %s ; b: %s\n", patha, pathb);
+    devf("a.inode: %lu ; b.inode: %lu\n", sta.st_ino, stb.st_ino);
     return sta.st_ino == stb.st_ino;
 }
 
@@ -73,7 +74,7 @@ int jail_symlinkat(const char *root, const char *target, int fd, const char *nam
 static int mount_disk(const char *source, const char *target,
                       unsigned int flags, const char *option)
 {
-    pdebugf("%s\n", __func__);
+    devf("%s\n", __func__);
     char fstype[256], *optstr;
     char *p = strchrnul(option, '|');
     strncpy(fstype, option, MIN(sizeof(fstype), p - option));
@@ -96,7 +97,7 @@ static int mount_disk(const char *source, const char *target,
 static int mount_bind(const char *source, const char *target,
                       unsigned int flags, const char *option)
 {
-    pdebugf("%s\n", __func__);
+    devf("%s\n", __func__);
     if (mount(source, target, "", MS_BIND, "")) {
         return -1;
     }
@@ -115,9 +116,9 @@ static int mount_bind(const char *source, const char *target,
 
 static int mount_proc(const char *target, const char *option)
 {
-    pdebugf("%s\n", __func__);
+    devf("%s\n", __func__);
     if (mount("proc", target, "proc", MS_NODEV | MS_NOEXEC | MS_NOSUID, option)) {
-        pdebugf("mount failed!\n");
+        devf("mount failed!\n");
         return -1;
     }
     return 0;
@@ -125,7 +126,7 @@ static int mount_proc(const char *target, const char *option)
 
 static int mount_tmpfs(const char *target, unsigned int flags, const char *option)
 {
-    pdebugf("%s\n", __func__);
+    devf("%s\n", __func__);
     unsigned int mountflags = 0;
     mountflags |= MS_NODEV;
     if (!(flags & FS_RW)) mountflags |= MS_RDONLY;
@@ -139,9 +140,9 @@ static int mount_tmpfs(const char *target, unsigned int flags, const char *optio
 
 static int mount_devfs(const char *target, const char *option)
 {
-    pdebugf("%s\n", __func__);
+    devf("%s\n", __func__);
     if (is_same_inode("/dev", target)) {
-        pdebugf("Unmounting old devfs...\n");
+        debugf("Unmounting old devfs...\n");
         if (umount2(target, MNT_DETACH | UMOUNT_NOFOLLOW)) {
             return -1;
         }
@@ -154,7 +155,7 @@ static int mount_devfs(const char *target, const char *option)
 
 static int mount_sysfs(const char *target, unsigned int flags, const char *option)
 {
-    pdebugf("%s\n", __func__);
+    devf("%s\n", __func__);
     unsigned int mountflags = 0;
     mountflags |= MS_NODEV;
     if (!(flags & FS_RW)) mountflags |= MS_RDONLY;
@@ -168,9 +169,9 @@ static int mount_sysfs(const char *target, unsigned int flags, const char *optio
 
 static int mount_udev(const char *root, const char *target, const char *option)
 {
-    pdebugf("%s\n", __func__);
+    devf("%s\n", __func__);
     if (is_same_inode("/dev", target)) {
-        pdebugf("Unmounting old devfs...\n");
+        debugf("Unmounting old devfs...\n");
         if (umount2(target, MNT_DETACH | UMOUNT_NOFOLLOW)) {
             return -1;
         }
@@ -214,7 +215,7 @@ int jail_mount(const char *source, const char *root, const char *target,
     char path[PATH_MAX];
     combine_path(path, root, target);
     if (!is_valid_source(source, flags & 0xF)) {
-        pdebugf("invalid source!\n");
+        errorf("invalid source!\n");
         errno = EINVAL;
         return -1;
     }
@@ -245,7 +246,7 @@ int jail_mount(const char *source, const char *root, const char *target,
             ret = mount_udev(root, path, option);
             break;
         default:
-            pdebugf("invalid type!\n");
+            devf("invalid type!\n");
             errno = EINVAL;
             return -1;
     }
@@ -256,13 +257,13 @@ int jail_chroot(const char *path, const char *cdpath)
 {
     if (path) {
         if (chroot(path) || chdir("/")) {
-            PRINTERR("chroot");
+            PERR("chroot");
             return -1;
         }
     }
     if (cdpath) {
         if (chdir(cdpath)) {
-            PRINTERR("chdir");
+            PERR("chdir");
             return -1;
         }
     }
@@ -272,7 +273,7 @@ int jail_chroot(const char *path, const char *cdpath)
 int privatize_fs()
 {
     if (mount("", "/", "", MS_REC | MS_PRIVATE, NULL)) {
-        PRINTERR("privatize filesystem");
+        PFTL("privatize filesystem");
         return -1;
     }
     return 0;

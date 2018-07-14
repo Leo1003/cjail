@@ -1,4 +1,5 @@
 #include "cjail.h"
+#include "logger.h"
 #include "taskstats.h"
 
 #include <fcntl.h>
@@ -97,18 +98,18 @@ static int get_family_id(int sd)
     rc = send_cmd(sd, GENL_ID_CTRL, getpid(), CTRL_CMD_GETFAMILY,
               CTRL_ATTR_FAMILY_NAME, (void *)name, strlen(TASKSTATS_GENL_NAME) + 1);
     if (rc < 0) {
-        pdebugf("send_cmd() failed\n");
+        PFTL("send_cmd()\n");
         return 0;
     }   /* sendto() failure? */
 
     rep_len = recv(sd, &ans, sizeof(ans), 0);
     if (ans.n.nlmsg_type == NLMSG_ERROR ||
             (rep_len < 0) || !NLMSG_OK((&ans.n), rep_len)) {
-        pdebugf("recv() failed\n");
-        pdebugf("NLMSG_ERROR: %d\n", ans.n.nlmsg_type == NLMSG_ERROR);
-        pdebugf("rep_len: %d\n", rep_len);
+        devf("recv() failed\n");
+        devf("NLMSG_ERROR: %d\n", ans.n.nlmsg_type == NLMSG_ERROR);
+        devf("rep_len: %d\n", rep_len);
         struct nlmsgerr* err = NLMSG_DATA(&ans);
-        pdebugf("Error: %d\n", err->error);
+        devf("Error: %d\n", err->error);
         errno = err->error;
         return 0;
     }
@@ -125,22 +126,22 @@ int taskstats_create(struct ts_socket *s)
 {
     memset(s, 0, sizeof(*s)); //empty socket object
     if ((s->socketfd = create_nl_socket(NETLINK_GENERIC)) < 0) {
-        PRINTERR("create netlink socket");
+        PFTL("create netlink socket");
         return -1;
     }
     if (setcloexec(s->socketfd)) {
         return -1;
     }
-    pdebugf("Created netlink socket: fd %d\n", s->socketfd);
+    devf("Created netlink socket: fd %d\n", s->socketfd);
     if (!(s->familyid = get_family_id(s->socketfd))) {
-        PRINTERR("get family id");
+        PFTL("get family id");
         return -1;
     }
-    pdebugf("Got family id: %d\n", s->familyid);
+    devf("Got family id: %d\n", s->familyid);
 
     struct timeval timeout = { .tv_sec = 1, .tv_usec = 0 };
     if (setsockopt(s->socketfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout))) {
-        PRINTERR("set socket timeout");
+        PFTL("set socket timeout");
     }
     return 0;
 }
@@ -148,14 +149,14 @@ int taskstats_create(struct ts_socket *s)
 int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
 {
     if (cpuset_tostr(cpuset, s->cpumask, sizeof(s->cpumask)) < 0) {
-        PRINTERR("parse_cpuset");
+        PERR("parse_cpuset");
         return -1;
     }
-    pdebugf("Setting cpumask to: %s\n", s->cpumask);
+    debugf("Setting cpumask to: %s\n", s->cpumask);
     if (send_cmd(s->socketfd, s->familyid, getpid(),
             TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_REGISTER_CPUMASK,
             s->cpumask, strlen(s->cpumask) + 1)) {
-        PRINTERR("taskstats_setcpuset");
+        PFTL("taskstats_setcpuset");
         return -1;
     }
     s->maskset = 1;
@@ -166,7 +167,7 @@ int taskstats_setpid(struct ts_socket* s, pid_t pid)
 {
     if (send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
             TASKSTATS_CMD_ATTR_PID, &pid, sizeof(pid))) {
-        PRINTERR("taskstats_setpid\n");
+        PFTL("taskstats_setpid\n");
         return -1;
     }
     return 0;
@@ -183,7 +184,7 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
             case EBUSY:
                 break;
             default:
-                PRINTERR("getstats (recv error)");
+                PERR("getstats (recv error)");
                 break;
         }
         return -1;
@@ -191,7 +192,7 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
     if (msg.n.nlmsg_type == NLMSG_ERROR || !NLMSG_OK((&msg.n), rep_len)) {
         struct nlmsgerr* err = NLMSG_DATA(&msg);
         errno = -(err->error);
-        PRINTERR("getstats (taskstats error)");
+        PFTL("getstats (taskstats error)");
         return -1;
     }
 
@@ -217,7 +218,7 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
                             return 0;
                             break;
                         default:
-                            perrf("Unknown nested nla_type %d\n", na->nla_type);
+                            errorf("Unknown nested nla_type %d\n", na->nla_type);
                             break;
                     }
                     len2 += NLA_ALIGN(na->nla_len);
@@ -226,7 +227,7 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
             }
             break;
             default:
-                perrf("Unknown nla_type %d\n", na->nla_type);
+                errorf("Unknown nla_type %d\n", na->nla_type);
                 break;
         }
         na = (struct nlattr*) (GENLMSG_DATA(&msg) + len);
@@ -241,11 +242,11 @@ int taskstats_destory(struct ts_socket* s)
         if (send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
                       TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK,
                       s->cpumask, strlen(s->cpumask) + 1)) {
-            PRINTERR("deregister cpumask"); // nonfatal error
+            PWRN("deregister cpumask");
         }
     }
     if (close(s->socketfd)) {
-        PRINTERR("close socket");
+        PFTL("close taskstats socket");
         return -1;
     }
     memset(s, 0, sizeof(*s)); //empty socket object

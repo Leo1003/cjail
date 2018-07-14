@@ -1,4 +1,5 @@
 #include "cjail.h"
+#include "logger.h"
 #include "scmp.h"
 #include "utils.h"
 
@@ -24,7 +25,7 @@ int compile_seccomp(const struct cjail_para para, struct sock_fprog *bpf)
 #ifndef NDEBUG
         char *scname = seccomp_syscall_resolve_num_arch(seccomp_arch_native(),
                                                         para.seccomplist[i]);
-        pdebugf("seccomp_rule_add: %d %s\n", para.seccomplist[i], scname);
+        devf("seccomp_rule_add: %d %s\n", para.seccomplist[i], scname);
         free(scname);
         /* In the case of seccomp_syscall_resolve_num_arch() the associated
          * syscall name is returned and it remains the callers responsibility to
@@ -50,19 +51,19 @@ int compile_seccomp(const struct cjail_para para, struct sock_fprog *bpf)
     size_t bpf_size;
     int memfd = syscall( __NR_memfd_create, "", MFD_CLOEXEC | MFD_ALLOW_SEALING);
     if (memfd < 0) {
-        PRINTERR("create memfd");
+        PFTL("create memfd");
         goto error;
     }
     seccomp_export_bpf(ctx, memfd);
     bpf_size = lseek(memfd, 0, SEEK_END);
     if (bpf_size < 0) {
-        PRINTERR("get memfd size");
+        PFTL("get memory file size");
         goto error_memfd;
     }
     bpf->len = bpf_size / sizeof(struct sock_filter);
     bpf->filter = mmap(NULL, bpf_size, PROT_READ, MAP_PRIVATE, memfd, 0);
     if (bpf->filter == MAP_FAILED) {
-        PRINTERR("mmap memfd");
+        PFTL("mmap memfd");
         goto error_memfd;
     }
 
@@ -73,7 +74,7 @@ int compile_seccomp(const struct cjail_para para, struct sock_fprog *bpf)
 error_memfd:
     close(memfd);
 error:
-    PRINTERR("setup_seccomp");
+    PFTL("setup_seccomp");
     seccomp_release(ctx);
     return -1;
 }

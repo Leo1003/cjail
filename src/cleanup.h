@@ -3,7 +3,6 @@
 
 #include "sigset.h"
 #include "taskstats.h"
-#include "utils.h"
 
 #define MAX_CLNSTACK 64
 

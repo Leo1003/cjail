@@ -1,6 +1,6 @@
 #include "cgroup.h"
 #include "cleanup.h"
-#include "taskstats.h"
+#include "logger.h"
 #include "utils.h"
 
 #include <errno.h>
@@ -40,7 +40,7 @@ static void push_close(struct cleanupstack *stack, int fd)
 static void clean_close(int fd)
 {
     if (close(fd)) {
-        PRINTERR("cleanup fd");
+        PFTL("cleanup fd");
     }
 }
 
@@ -56,7 +56,7 @@ static void push_kill(struct cleanupstack *stack, pid_t pid, int sig)
 static void clean_kill(pid_t pid, int sig)
 {
     if (kill(pid, sig)) {
-        PRINTERR("cleanup process");
+        PFTL("cleanup process");
     }
 }
 
@@ -71,7 +71,7 @@ static void push_cgroup(struct cleanupstack *stack, const char *subsystem)
 static void clean_cgroup(const char *subsystem)
 {
     if (cgroup_destory(subsystem)) {
-        PRINTERR("cleanup cgroup");
+        PFTL("cleanup cgroup");
     }
 }
 static void push_taskstat(struct cleanupstack *stack, struct ts_socket *tssock)
@@ -85,7 +85,7 @@ static void push_taskstat(struct cleanupstack *stack, struct ts_socket *tssock)
 static void clean_taskstat(struct ts_socket *tssock)
 {
     if (taskstats_destory(tssock)) {
-        PRINTERR("cleanup taskstats");
+        PFTL("cleanup taskstats");
     }
 }
 
@@ -184,7 +184,7 @@ void do_cleanup(struct cleanupstack* stack)
                 clean_sigset(task.arg.rules);
                 break;
             default:
-                perrf("Unknown cleanuptask type\n");
+                errorf("Unknown cleanuptask type\n");
                 break;
         }
     }

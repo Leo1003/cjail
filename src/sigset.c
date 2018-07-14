@@ -1,4 +1,5 @@
 #include "cjail.h"
+#include "logger.h"
 #include "sigset.h"
 #include "utils.h"
 

@@ -1,5 +1,6 @@
 #include "cjail.h"
 #include "fds.h"
+#include "logger.h"
 #include "utils.h"
 
 #include <dirent.h>
@@ -32,15 +33,15 @@ int reopen(int fd, const char *path, char type)
         }
         nfd = open(path, flags, 0666);
         if (nfd < 0) {
-            pdebugf("reopen(): %s\n", path);
+            fatalf("Failed to reopen: %s\n", path);
             return -1;
         } else if (nfd != fd) {
             if (dup2(nfd, fd) < 0) {
-                PRINTERR("dup2 target fd");
+                PFTL("dup2 target fd");
                 return -1;
             }
             if (close(nfd)) {
-                PRINTERR("close temporary fd");
+                PFTL("close temporary fd");
                 return -1;
             }
         }
@@ -58,7 +59,7 @@ int tfddup(int fd, int stdfd, int *tfd, int *clo)
         if (fd <= STDERR_FILENO) {
             *tfd = dup(fd);
             if (*tfd < 0) {
-                pdebugf("dup(): %d\n", fd);
+                fatalf("Failed to dup fd %d: %s\n", fd, strerror(errno));
                 return -1;
             }
             *clo = 1;
@@ -73,7 +74,7 @@ int applyfd(int fd, int to, int clos)
 {
     if (fd > -1) {
         if (dup2(fd, to) < 0) {
-            pdebugf("dup2(): %d -> %d\n", fd, to);
+            fatalf("Failed to dup fd %d -> %d: %s\n", fd, to, strerror(errno));
             return -1;
         }
         if (clos && close(fd) < 0) {
@@ -88,16 +89,13 @@ int setup_fd(const struct cjail_para para)
     int tfd[3] = { -1, -1, -1 };
     int clo[3] = { 0, 0, 0 };
     if (reopen(STDIN_FILENO, para.redir_input, 'r')) {
-        pdebugf("reopen(): %s\n", para.redir_input);
-            goto error;
+        goto error;
     }
     if (reopen(STDOUT_FILENO, para.redir_output, 'w')) {
-        pdebugf("reopen(): %s\n", para.redir_output);
-            goto error;
+        goto error;
     }
     if (reopen(STDERR_FILENO, para.redir_err, 'w')) {
-        pdebugf("reopen(): %s\n", para.redir_err);
-            goto error;
+        goto error;
     }
 
     /*
@@ -131,7 +129,7 @@ int setup_fd(const struct cjail_para para)
     return 0;
 
     error:
-    PRINTERR("setup_fd");
+    PFTL("setup_fd");
     return -1;
 }
 
@@ -156,7 +154,7 @@ int closefrom(int minfd)
             continue;
         int fd = strtol(dent->d_name, NULL, 10);
         if (fd >= minfd && fd != dfd) {
-            pdebugf("closing fd: %d\n", fd);
+            devf("closing fd: %d\n", fd);
             if (close(fd) && errno != EBADF) {
                 goto error_dir;
             }
@@ -168,6 +166,6 @@ int closefrom(int minfd)
     error_dir:
     closedir(fddir);
     error:
-    PRINTERR("closefrom");
+    PFTL("closefrom");
     return -1;
 }

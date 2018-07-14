@@ -1,5 +1,6 @@
 #include "cjail.h"
 #include "cgroup.h"
+#include "logger.h"
 #include "utils.h"
 
 #include <fcntl.h>
@@ -64,8 +65,8 @@ int cgroup_create(const char* subsystem)
 err:
     if (errno == EEXIST)
         return 0;
-    pdebugf("Failed at mkdir(): %s\n", cgpath);
-    PRINTERR("create cgroup");
+    errorf("Failed to mkdir at: %s\n", cgpath);
+    PFTL("create cgroup");
     return -1;
 }
 
@@ -90,8 +91,8 @@ int cgroup_read(const char* subsystem, const char* name, const char* fmt, ...)
 
 err:
     if (ret < 0 && !is_eof) {
-        pdebugf("cgroup_read error: %s\n", cgpath);
-        PRINTERR("read cgroup");
+        errorf("Failed to read: %s\n", cgpath);
+        PFTL("read cgroup");
     }
     return ret;
 }
@@ -117,8 +118,8 @@ int cgroup_write(const char* subsystem, const char* name, const char* fmt, ...)
 
 err:
     if (ret < 0) {
-        pdebugf("cgroup_write error: %s\n", cgpath);
-        PRINTERR("write cgroup");
+        errorf("Failed to write: %s\n", cgpath);
+        PFTL("write cgroup");
     }
     return ret;
 }
@@ -140,8 +141,8 @@ int cgroup_open_tasks(const char* subsystem)
     }
 err:
     if (fd < 0) {
-        pdebugf("cgroup_open_tasks error: %s\n", cgpath);
-        PRINTERR("open cgroup tasks");
+        errorf("Failed to open tasks file: %s\n", cgpath);
+        PFTL("open cgroup tasks");
     }
     return fd;
 }
@@ -152,8 +153,8 @@ int cgroup_destory(const char* subsystem)
     get_cgpath(cgpath, subsystem, NULL);
 
     if (rmdir(cgpath)) {
-        pdebugf("cgroup_destory error: %s\n", cgpath);
-        PRINTERR("destroy cgroup");
+        errorf("Failed to destory cgroup: %s\n", cgpath);
+        PFTL("destroy cgroup");
         return -1;
     }
     return 0;

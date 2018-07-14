@@ -1,4 +1,5 @@
 #include "cjail.h"
+#include "logger.h"
 #include "utils.h"
 
 #include <bsd/string.h>
@@ -35,11 +36,11 @@ int cpuset_tostr(const cpu_set_t* cpuset, char* str, size_t len)
         else
             l += snprintf(str + l, len - l, "%d-%d", s, c - 1);
         s = -1;
-        pdebugf("cpumask = %s\n", str);
+        devf("cpumask = %s\n", str);
         if (l < 0 || l >= len)
             RETERR(ERANGE);
     }
-    pdebugf("parse_cpuset %s\n", str);
+    devf("parse_cpuset %s\n", str);
     return l;
 }
 
@@ -50,7 +51,7 @@ static int readcpunum(const char *str, char **end_ptr)
         return -1;
     if (num >= CPU_SETSIZE)
         return -1;
-    pdebugf("readcpunum: %lu\n", num);
+    devf("readcpunum: %lu\n", num);
     return num;
 }
 
@@ -158,7 +159,7 @@ int strrmchr(char* str, int index)
 int setcloexec(int fd)
 {
     if (fcntl(fd, F_SETFD, FD_CLOEXEC)) {
-        PRINTERR("set close on exec flag");
+        PFTL("set close on exec flag");
         return -1;
     }
     return 0;
