@@ -190,7 +190,7 @@ static int mount_udev(const char *root, const char *target, const char *option)
         return -1;
     }
     int ret = 0;
-    //FIXME: umask problem on mknod
+    mode_t orig_umask = umask(0000);
     ret |= combine_path(ptspath, root, "/dev/pts");
     ret |= mkdirat(rfd, "pts", 0755);
     ret |= mount("devpts", ptspath, "devpts", MS_NOEXEC | MS_NOSUID, "mode=620,ptmxmode=000");
@@ -206,6 +206,7 @@ static int mount_udev(const char *root, const char *target, const char *option)
     ret |= symlinkat("/proc/self/fd/1", rfd, "stdout");
     ret |= symlinkat("/proc/self/fd/2", rfd, "stderr");
     ret |= close(rfd);
+    umask(orig_umask);
 
     return ret;
 }
