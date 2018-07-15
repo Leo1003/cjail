@@ -197,6 +197,7 @@ static int mount_udev(const char *root, const char *target, const char *option)
     ret |= mknodat(rfd, "console", S_IFCHR | 0600, makedev(5, 1));
     ret |= mknodat(rfd, "ptmx", S_IFCHR | 0666, makedev(5, 2));
     ret |= mknodat(rfd, "full", S_IFCHR | 0666, makedev(1, 7));
+    ret |= mknodat(rfd, "null", S_IFCHR | 0666, makedev(1, 3));
     ret |= mknodat(rfd, "tty", S_IFCHR | 0666, makedev(5, 0));
     ret |= mknodat(rfd, "random", S_IFCHR | 0666, makedev(1, 8));
     ret |= mknodat(rfd, "urandom", S_IFCHR | 0666, makedev(1, 9));
