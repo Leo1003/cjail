@@ -145,7 +145,7 @@ static pid_t cjail_wait(pid_t initpid, int *wstatus, int *initerrno)
 
 int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
 {
-    char child_stack[STACKSIZE + 1];
+    char child_stack[STACKSIZE + 1] __attribute__((aligned(16)));
     int wstatus, ret = 0, tsgot = 0, initerr = 0;
     pid_t initpid, childpid;
     struct ts_socket tssock = { 0 };
