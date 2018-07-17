@@ -88,6 +88,15 @@ int setup_fd(const struct cjail_para para)
 {
     int tfd[3] = { -1, -1, -1 };
     int clo[3] = { 0, 0, 0 };
+
+    /*
+     * Swap logger output to prevent logs writing into redirected fds
+     */
+    if (swap_log_file()) {
+        PFTL("swap log file");
+        return -1;
+    }
+
     if (reopen(STDIN_FILENO, para.redir_input, 'r')) {
         goto error;
     }
@@ -153,7 +162,7 @@ int closefrom(int minfd)
         if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
             continue;
         int fd = strtol(dent->d_name, NULL, 10);
-        if (fd >= minfd && fd != dfd) {
+        if (fd >= minfd && fd != dfd && is_valid_fd(fd)) {
             devf("closing fd: %d\n", fd);
             if (close(fd) && errno != EBADF) {
                 goto error_dir;

@@ -1,8 +1,11 @@
 #include "cjail.h"
 #include "logger.h"
+#include "utils.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
+#include <unistd.h>
 
 static enum logger_level loglv = LOG_NONE, lastlv = LOG_INFO;
 static FILE *logfile = NULL;
@@ -38,6 +41,31 @@ void set_log_file(FILE* f)
         logfile = f;
     }
 }
+
+int swap_log_file()
+{
+    int nfd;
+    if ((nfd = fcntl(fileno(logfile), F_DUPFD_CLOEXEC, 3)) < 0) {
+        goto error;
+    }
+    FILE *nf = fdopen(nfd, "w");
+    if (!nf) {
+        goto error_fd;
+    }
+    if (fseek(nf, 0, SEEK_END) && errno != ESPIPE) {
+        fclose(nf);
+        goto error;
+    }
+    set_log_file(nf);
+    devf("logger output swapped!\n");
+    return 0;
+
+error_fd:
+    close(nfd);
+error:
+    return -1;
+}
+
 #ifdef NDEBUG
 int loggerf(enum logger_level level, const char* format, ...)
 #else

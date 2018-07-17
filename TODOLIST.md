@@ -9,7 +9,7 @@
  - [x] add rusage in result
  - [x] split up setup.c into different files
  - [x] better log output
- - [ ] cjail log problem after setup_fd()
+ - [x] cjail log problem after setup_fd()
  - [ ] better seccomp rule
  - [ ] seccomp_debug mode
  - [ ] unit tests

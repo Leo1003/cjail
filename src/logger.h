@@ -16,6 +16,7 @@ enum logger_level {
 enum logger_level get_log_level();
 void set_log_level(enum logger_level level);
 void set_log_file(FILE * f);
+int swap_log_file();
 
 #ifdef NDEBUG
 int loggerf(enum logger_level level, const char *format, ...);
