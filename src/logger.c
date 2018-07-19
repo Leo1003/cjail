@@ -20,16 +20,22 @@ static void init_logger()
     logfile = stderr;
 }
 
-enum logger_level get_log_level()
+inline static void chk_logger_init()
 {
-    if (!loglv) {
+    if (!loglv || !logfile) {
         init_logger();
     }
+}
+
+enum logger_level get_log_level()
+{
+    chk_logger_init();
     return loglv;
 }
 
 void set_log_level(enum logger_level level)
 {
+    chk_logger_init();
     if (level) {
         loglv = level;
     }
@@ -37,6 +43,7 @@ void set_log_level(enum logger_level level)
 
 void set_log_file(FILE* f)
 {
+    chk_logger_init();
     if (f) {
         logfile = f;
     }
@@ -44,6 +51,7 @@ void set_log_file(FILE* f)
 
 int swap_log_file()
 {
+    chk_logger_init();
     int nfd;
     if ((nfd = fcntl(fileno(logfile), F_DUPFD_CLOEXEC, 3)) < 0) {
         goto error;
@@ -76,9 +84,7 @@ int loggerf(enum logger_level level, const char *src, int line, const char *form
     int ret = 0;
     enum logger_level l;
     error_t savederr = errno;
-    if (!loglv || !logfile) {
-        init_logger();
-    }
+    chk_logger_init();
     if (level == LOG_SLIENT) {
         return 0;
     }
