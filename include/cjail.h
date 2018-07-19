@@ -1,10 +1,10 @@
-#ifndef CJAIL_H
-#define CJAIL_H
+#ifndef _CJAIL_H
+#define _CJAIL_H
 
-#define _GNU_SOURCE
 #include <linux/filter.h>
 #include <linux/taskstats.h>
 #include <sched.h>
+#include <stdio.h>
 #include <signal.h>
 #include <sys/resource.h>
 #include <sys/time.h>
@@ -15,10 +15,7 @@
 extern "C" {
 #endif
 
-#define UTSNAME "cjail"
-#define INITNAME "/sbin/init"
-#define PROCNAME "init"
-
+//TODO: Add Doxygen in this public header
 struct cjail_para {
     unsigned int preservefd, sharenet;
     int fd_input, fd_output, fd_err;
@@ -41,12 +38,14 @@ struct cjail_result {
     int oomkill;
 };
 
-
-struct exec_para {
-    struct cjail_para para;
-    int resultpipe[2];
-    int cgtasksfd;
-    struct sock_fprog bpf;
+enum logger_level {
+    LOG_NONE,
+    LOG_DEBUG,
+    LOG_INFO,
+    LOG_WARN,
+    LOG_ERROR,
+    LOG_FATAL,
+    LOG_SLIENT = 255
 };
 
 /**
@@ -83,6 +82,10 @@ int cpuset_tostr(const cpu_set_t *cpuset, char *str, size_t len);
 * @return int
 */
 int cpuset_parse(const char *str, cpu_set_t *cpuset);
+
+enum logger_level get_log_level();
+void set_log_level(enum logger_level level);
+void set_log_file(FILE * f);
 
 #ifdef __cplusplus
 }

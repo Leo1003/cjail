@@ -1,13 +1,30 @@
-cmake_minimum_required(VERSION 2.6)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
-set(LIBCJAIL_SOURCE cgroup.c cleanup.c cjail.c fds.c filesystem.c init.c logger.c process.c scmp.c sigset.c taskstats.c utils.c)
-add_library(libcjail SHARED ${LIBCJAIL_SOURCE})
+
+add_library(libcjail SHARED
+                cgroup.c
+                cleanup.c
+                cjail.c
+                fds.c
+                filesystem.c
+                init.c
+                logger.c
+                process.c
+                scmp.c
+                sigset.c
+                taskstats.c
+                utils.c
+)
+target_include_directories(libcjail
+        PRIVATE ${LIBSECCOMP_INCLUDE_DIRS}
+)
 target_link_libraries(libcjail ${LIBSECCOMP_LIBRARIES} "bsd")
-set_target_properties(libcjail PROPERTIES OUTPUT_NAME "cjail" PREFIX "lib" VERSION ${VERSION} SOVERSION ${SOVERSION})
+set_target_properties(libcjail PROPERTIES OUTPUT_NAME "cjail" PREFIX "lib"
+                                VERSION ${VERSION} SOVERSION ${SOVERSION}
+                                PUBLIC_HEADER "${CMAKE_SOURCE_DIR}/cjail.h"
+                                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+)
 
-add_executable(cjail main.c)
-target_link_libraries(cjail libcjail "m")
-
-install(TARGETS libcjail LIBRARY DESTINATION lib)
+install(TARGETS libcjail
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)

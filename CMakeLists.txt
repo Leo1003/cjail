@@ -1,12 +1,14 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 3.0.2)
 project(cjail)
 set(VERSION 0.6.0)
 set(SOVERSION 2)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
+include(GNUInstallDirs)
+
 if(NOT CMAKE_BUILD_TYPE)
-MESSAGE(STATUS "build type not set, default to release")
-set(CMAKE_BUILD_TYPE Release)
+    MESSAGE(STATUS "build type not set, default to release")
+    set(CMAKE_BUILD_TYPE Release)
 endif(NOT CMAKE_BUILD_TYPE)
 
 message("Build Type: ${CMAKE_BUILD_TYPE}")
@@ -14,10 +16,12 @@ message("Build Type: ${CMAKE_BUILD_TYPE}")
 find_package(libseccomp REQUIRED)
 find_package(Check)
 
-include_directories("${CMAKE_SOURCE_DIR}/include")
-include_directories(${LIBSECCOMP_INCLUDE_DIRS})
+# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+# set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
 add_subdirectory(src)
+add_subdirectory(tools)
+
 if(CHECK_FOUND)
     message(STATUS "Found Check library.")
     message(STATUS "Test Enabled.")
