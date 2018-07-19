@@ -11,6 +11,10 @@
 #include <sys/types.h>
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define UTSNAME "cjail"
 #define INITNAME "/sbin/init"
 #define PROCNAME "init"
@@ -79,5 +83,9 @@ int cpuset_tostr(const cpu_set_t *cpuset, char *str, size_t len);
 * @return int
 */
 int cpuset_parse(const char *str, cpu_set_t *cpuset);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
