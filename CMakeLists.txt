@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(cjail)
+project(cjail C)
 set(VERSION 0.6.0)
 set(SOVERSION 2)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")

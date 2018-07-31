@@ -1,6 +1,6 @@
 function(cjailtest testname)
     add_executable(${testname} "${testname}.c")
-    target_link_libraries(${testname} ${CHECK_LIBRARIES} libcjail)
+    target_link_libraries(${testname} check::check libcjail)
     target_include_directories(${testname}
             PRIVATE "${CMAKE_SOURCE_DIR}/src"
             PRIVATE "${CHECK_INCLUDE_DIRS}"

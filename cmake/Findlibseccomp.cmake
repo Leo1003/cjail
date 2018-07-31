@@ -1,4 +1,5 @@
-# Copyright (c) 2013, Intel Corporation
+# Original work Copyright (c) 2013, Intel Corporation
+# Modified work Copyright (c) 2018, Leo Chen
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -26,21 +27,43 @@
 #
 # Try to find libseccomp include and library directories.
 #
-# After successful discovery, this will set for inclusion where needed:
-# LIBSECCOMP_INCLUDE_DIRS - containg the libseccomp headers
-# LIBSECCOMP_LIBRARIES - containg the libseccomp library
+# After successful discovery, these variables will be set:
+#   LIBSECCOMP_FOUND - system has libseccomp with correct version
+#   LIBSECCOMP_INCLUDE_DIRS - containg the libseccomp headers
+#   LIBSECCOMP_LIBRARIES - containg the libseccomp library
+#   LIBSECCOMP_VERSION - the version string of libseccomp
+#
+# and the following imported target:
+#   libseccomp::libseccomp - The libseccomp library
 
-include(FindPkgConfig)
-
+find_package(PkgConfig)
 pkg_check_modules(PC_LIBSECCOMP libseccomp)
 
-find_path(LIBSECCOMP_INCLUDE_DIRS NAMES seccomp.h
-    HINTS ${PC_LIBSECCOMP_INCLUDE_DIRS} ${PC_LIBSECCOMP_INCLUDEDIR}
+find_path(LIBSECCOMP_INCLUDE_DIRS
+    NAMES seccomp.h
+    HINTS ${PC_LIBSECCOMP_INCLUDE_DIRS}
+        ${PC_LIBSECCOMP_INCLUDEDIR}
 )
 
-find_library(LIBSECCOMP_LIBRARIES NAMES seccomp
-    HINTS ${PC_LIBSECCOMP_LIBRARY_DIRS} ${PC_LIBSECCOMP_LIBDIR}
+find_library(LIBSECCOMP_LIBRARIES
+    NAMES seccomp
+    HINTS ${PC_LIBSECCOMP_LIBRARY_DIRS}
+        ${PC_LIBSECCOMP_LIBDIR}
 )
+
+set(LIBSECCOMP_VERSION ${PC_LIBSECCOMP_VERSION})
 
 include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(seccomp DEFAULT_MSG LIBSECCOMP_INCLUDE_DIRS LIBSECCOMP_LIBRARIES)
+find_package_handle_standard_args(libseccomp
+    FOUND_VAR LIBSECCOMP_FOUND
+    REQUIRED_VARS LIBSECCOMP_INCLUDE_DIRS LIBSECCOMP_LIBRARIES
+    VERSION_VAR LIBSECCOMP_VERSION
+)
+
+if(LIBSECCOMP_FOUND AND NOT TARGET libseccomp::libseccomp)
+    add_library(libseccomp::libseccomp INTERFACE IMPORTED)
+    set_target_properties(libseccomp::libseccomp PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES   "${LIBSECCOMP_INCLUDE_DIRS}"
+        INTERFACE_LINK_LIBRARIES        "${LIBSECCOMP_LIBRARIES}"
+    )
+endif()

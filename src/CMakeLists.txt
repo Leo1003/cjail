@@ -1,5 +1,3 @@
-
-
 add_library(libcjail SHARED
                 cgroup.c
                 cleanup.c
@@ -17,7 +15,7 @@ add_library(libcjail SHARED
 target_include_directories(libcjail
         PRIVATE ${LIBSECCOMP_INCLUDE_DIRS}
 )
-target_link_libraries(libcjail ${LIBSECCOMP_LIBRARIES} "bsd")
+target_link_libraries(libcjail PRIVATE libseccomp::libseccomp "bsd")
 set_target_properties(libcjail PROPERTIES OUTPUT_NAME "cjail" PREFIX "lib"
                                 VERSION ${VERSION} SOVERSION ${SOVERSION}
                                 PUBLIC_HEADER "${CMAKE_SOURCE_DIR}/cjail.h"
