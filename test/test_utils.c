@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "cjail.h"
 #include "fds.h"
 #include "utils.h"
