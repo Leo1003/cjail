@@ -1,10 +1,22 @@
+#--------------------------------
+# Setup targets & properties
+#
 add_executable(cjail main.c)
-target_include_directories(cjail
-        PRIVATE "${CMAKE_SOURCE_DIR}/include"
-)
-set_target_properties(cjail PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-target_link_libraries(cjail libcjail "m")
+add_executable(CJail::cjail ALIAS cjail)
 
+set_target_properties(cjail PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+target_link_libraries(cjail
+    PRIVATE
+        CJail::libcjail
+        "m"
+)
+
+#--------------------------------
+# Installation
+#
 install(TARGETS cjail
-        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    EXPORT cjail_targets
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
