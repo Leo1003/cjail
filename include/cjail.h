@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-//TODO: Add Doxygen in this public header
+//TODO: Complete Doxygen comments in this public header
 
 /**
  * @struct cjail_para
@@ -24,16 +24,31 @@ extern "C" {
  * parameters indicating the sandbox settings and process configures
  */
 struct cjail_para {
-    unsigned int preservefd, sharenet;
-    int fd_input, fd_output, fd_err;
-    char **argv, **environ, *chroot, *workingDir, *redir_input, *redir_output, *redir_err, *cgroup_root;
-    cpu_set_t *cpuset;
-    uid_t uid;
-    gid_t gid;
-    long long rlim_as, rlim_core, rlim_nofile, rlim_fsize, rlim_proc, rlim_stack;
-    long long cg_rss;
-    struct timeval lim_time;
-    int *seccomplist;
+    unsigned int preservefd;    /**<  */
+    unsigned int sharenet;      /**<  */
+    int fd_input;               /**<  */
+    int fd_output;              /**<  */
+    int fd_err;                 /**<  */
+    char *redir_input;          /**<  */
+    char *redir_output;         /**<  */
+    char *redir_err;            /**<  */
+    char **argv;                /**<  */
+    char **environ;             /**<  */
+    char *chroot;               /**<  */
+    char *workingDir;           /**<  */
+    char *cgroup_root;          /**<  */
+    cpu_set_t *cpuset;          /**<  */
+    uid_t uid;                  /**<  */
+    gid_t gid;                  /**<  */
+    long long rlim_as;          /**<  */
+    long long rlim_core;        /**<  */
+    long long rlim_nofile;      /**<  */
+    long long rlim_fsize;       /**<  */
+    long long rlim_proc;        /**<  */
+    long long rlim_stack;       /**<  */
+    long long cg_rss;           /**<  */
+    struct timeval lim_time;    /**<  */
+    int *seccomplist;           /**<  */
 };
 
 /**
@@ -43,12 +58,12 @@ struct cjail_para {
  * containing process exit state and resource usage
  */
 struct cjail_result {
-    struct taskstats stats;
-    struct rusage rus;
-    siginfo_t info;
-    struct timeval time;
-    int timekill;
-    int oomkill;
+    struct taskstats stats;     /**<  */
+    struct rusage rus;          /**<  */
+    siginfo_t info;             /**<  */
+    struct timeval time;        /**<  */
+    int timekill;               /**<  */
+    int oomkill;                /**<  */
 };
 
 /**

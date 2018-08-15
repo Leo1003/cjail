@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 
+#ifndef _DOXYGEN
 enum logger_level {
     LOG_NONE,
     LOG_DEBUG,
@@ -12,6 +13,7 @@ enum logger_level {
     LOG_FATAL,
     LOG_SLIENT = 255
 };
+#endif
 
 enum logger_level get_log_level();
 void set_log_level(enum logger_level level);
