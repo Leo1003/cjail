@@ -24,31 +24,31 @@ extern "C" {
  * parameters indicating the sandbox settings and process configures
  */
 struct cjail_para {
-    unsigned int preservefd;    /**<  */
-    unsigned int sharenet;      /**<  */
-    int fd_input;               /**<  */
-    int fd_output;              /**<  */
-    int fd_err;                 /**<  */
-    char *redir_input;          /**<  */
-    char *redir_output;         /**<  */
-    char *redir_err;            /**<  */
-    char **argv;                /**<  */
-    char **environ;             /**<  */
-    char *chroot;               /**<  */
-    char *workingDir;           /**<  */
-    char *cgroup_root;          /**<  */
-    cpu_set_t *cpuset;          /**<  */
-    uid_t uid;                  /**<  */
-    gid_t gid;                  /**<  */
-    long long rlim_as;          /**<  */
-    long long rlim_core;        /**<  */
-    long long rlim_nofile;      /**<  */
-    long long rlim_fsize;       /**<  */
-    long long rlim_proc;        /**<  */
-    long long rlim_stack;       /**<  */
-    long long cg_rss;           /**<  */
-    struct timeval lim_time;    /**<  */
-    int *seccomplist;           /**<  */
+    unsigned int preservefd;    /**< Set this to 1 to keep other file descriptors opening */
+    unsigned int sharenet;      /**< Set this to 1 to share the same network namespace with host */
+    int fd_input;               /**< The file descriptor to be the child's standard input */
+    int fd_output;              /**< The file descriptor to be the child's standard output */
+    int fd_err;                 /**< The file descriptor to be the child's standard error */
+    char *redir_input;          /**< The file path to reopen as standard input (Under chroot environment) */
+    char *redir_output;         /**< The file path to reopen as standard output (Under chroot environment) */
+    char *redir_err;            /**< The file path to reopen as standard error (Under chroot environment) */
+    char **argv;                /**< The command line of the child process (Under chroot environment) */
+    char **environ;             /**< The environment variables of the child process */
+    char *chroot;               /**< Make CJail chroot into this directory */
+    char *workingDir;           /**< The initial working directory of the child process (Under chroot environment) */
+    char *cgroup_root;          /**< The path where cgroup filesystems were mounted (default: /sys/fs/cgroup) */
+    cpu_set_t *cpuset;          /**< The initial CPU affinity of the child process (To prevent process modify CPU affinity by themselves, block the sched_setaffinity() system call) */
+    uid_t uid;                  /**< The UID of the child process (DO NOT SET THIS TO 0 [root]) */
+    gid_t gid;                  /**< The GID of the child process (DO NOT SET THIS TO 0 [root]) */
+    long long rlim_as;          /**< Limit processes' virtual memory(address space) */
+    long long rlim_core;        /**< Limit core dump size */
+    long long rlim_nofile;      /**< Limit file descriptors number can be opened by a process */
+    long long rlim_fsize;       /**< Limit the maximum file size can be created by a process */
+    long long rlim_proc;        /**< Limit the total processes number can be run at the same time (NOTE: Linux kernel determine this by real UID. If you run many CJail instance at the same time, remember to set their UID to different user, or they will interfere mutually. ) */
+    long long rlim_stack;       /**< Limit the stack space of a process, it also including command-line arguments and environment variables */
+    long long cg_rss;           /**< Use cgroup to limit the total memory used by all process in the jail */
+    struct timeval lim_time;    /**< Limit the time of the jail can live */
+    int *seccomplist;           /**< @deprecated this will be replaced by more powerful structure in the next version */
 };
 
 /**
@@ -58,12 +58,12 @@ struct cjail_para {
  * containing process exit state and resource usage
  */
 struct cjail_result {
-    struct taskstats stats;     /**<  */
-    struct rusage rus;          /**<  */
-    siginfo_t info;             /**<  */
-    struct timeval time;        /**<  */
-    int timekill;               /**<  */
-    int oomkill;                /**<  */
+    struct taskstats stats;     /**< The taskstats statistics of the first process */
+    struct rusage rus;          /**< The rusage statistics of the jail */
+    siginfo_t info;             /**< The terminate information of the first process */
+    struct timeval time;        /**< The execution time of the jail */
+    int timekill;               /**< Set to 1 if the jail killed by hitting the time limit */
+    int oomkill;                /**< The processes number killed by oom killer */
 };
 
 /**
