@@ -196,7 +196,7 @@ int main(int argc, char *argv[], char *envp[])
                 para.redir_output = optarg;
                 break;
             case 'r':
-                para.redir_err = optarg;
+                para.redir_error = optarg;
                 break;
             case 'I':
                 para.fd_input = toul(optarg, 1);
@@ -205,7 +205,7 @@ int main(int argc, char *argv[], char *envp[])
                 para.fd_output = toul(optarg, 1);
                 break;
             case 'R':
-                para.fd_err = toul(optarg, 1);
+                para.fd_error = toul(optarg, 1);
                 break;
             case OPT_PFD:
                 para.preservefd = 1;

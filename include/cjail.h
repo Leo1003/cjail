@@ -28,10 +28,10 @@ struct cjail_para {
     unsigned int sharenet;      /**< Set this to 1 to share the same network namespace with host */
     int fd_input;               /**< The file descriptor to be the child's standard input */
     int fd_output;              /**< The file descriptor to be the child's standard output */
-    int fd_err;                 /**< The file descriptor to be the child's standard error */
+    int fd_error;                 /**< The file descriptor to be the child's standard error */
     char *redir_input;          /**< The file path to reopen as standard input (Under chroot environment) */
     char *redir_output;         /**< The file path to reopen as standard output (Under chroot environment) */
-    char *redir_err;            /**< The file path to reopen as standard error (Under chroot environment) */
+    char *redir_error;            /**< The file path to reopen as standard error (Under chroot environment) */
     char **argv;                /**< The command line of the child process (Under chroot environment) */
     char **environ;             /**< The environment variables of the child process */
     char *chroot;               /**< Make CJail chroot into this directory */

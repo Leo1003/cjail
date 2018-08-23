@@ -297,5 +297,5 @@ void cjail_para_init(struct cjail_para* para)
     para->gid = 65534;
     para->fd_input = STDIN_FILENO;
     para->fd_output = STDOUT_FILENO;
-    para->fd_err = STDERR_FILENO;
+    para->fd_error = STDERR_FILENO;
 }

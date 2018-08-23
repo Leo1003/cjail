@@ -19,8 +19,8 @@
 
 struct cjail_para {
     unsigned int preservefd, sharenet;
-    int fd_input, fd_output, fd_err;
-    char **argv, **environ, *chroot, *workingDir, *redir_input, *redir_output, *redir_err, *cgroup_root;
+    int fd_input, fd_output, fd_error;
+    char *redir_input, *redir_output, *redir_error, **argv, **environ, *chroot, *workingDir, *cgroup_root;
     cpu_set_t *cpuset;
     uid_t uid;
     gid_t gid;

@@ -103,7 +103,7 @@ int setup_fd(const struct cjail_para para)
     if (reopen(STDOUT_FILENO, para.redir_output, 'w')) {
         goto error;
     }
-    if (reopen(STDERR_FILENO, para.redir_err, 'w')) {
+    if (reopen(STDERR_FILENO, para.redir_error, 'w')) {
         goto error;
     }
 
@@ -118,7 +118,7 @@ int setup_fd(const struct cjail_para para)
     if (tfddup(para.fd_output, STDOUT_FILENO, &tfd[1], &clo[1])) {
         goto error;
     }
-    if (tfddup(para.fd_err, STDERR_FILENO, &tfd[2], &clo[2])) {
+    if (tfddup(para.fd_error, STDERR_FILENO, &tfd[2], &clo[2])) {
         goto error;
     }
 
