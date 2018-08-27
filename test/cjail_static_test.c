@@ -1,4 +1,5 @@
-#include "cjail.h"
+#define _GNU_SOURCE
+#include <cjail.h>
 
 #include <errno.h>
 #include <stdio.h>

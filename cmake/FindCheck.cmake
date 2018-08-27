@@ -1,57 +1,68 @@
-# - Try to find the CHECK libraries
-#  Once done this will define
+# Copyright (c) 2018, Leo Chen
 #
-#  CHECK_FOUND - system has check
-#  CHECK_INCLUDE_DIR - the check include directory
-#  CHECK_LIBRARIES - check library
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
 #
-#  This configuration file for finding libcheck is originally from
-#  the opensync project. The originally was downloaded from here:
-#  opensync.org/browser/branches/3rd-party-cmake-modules/modules/FindCheck.cmake
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+# * Neither the name of Intel Corporation nor the names of its contributors may
+#   be used to endorse or promote products derived from this software without
+#   specific prior written permission.
 #
-#  Copyright (c) 2007 Daniel Gollub <dgollub@suse.de>
-#  Copyright (c) 2007 Bjoern Ricks  <b.ricks@fh-osnabrueck.de>
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
 #
-#  Redistribution and use is allowed according to the terms of the New
-#  BSD license.
-#  For details see the accompanying COPYING-CMAKE-SCRIPTS file.
+# Try to find check include and library directories.
+#
+# After successful discovery, these variables will be set:
+#   CHECK_FOUND - system has check with correct version
+#   CHECK_INCLUDE_DIRS - containg the check headers
+#   CHECK_LIBRARIES - containg the check library
+#   CHECK_VERSION - the version string of check
+#
+# and the following imported target:
+#   check::check - The check library
 
+find_package(PkgConfig)
+pkg_check_modules(PC_CHECK check)
 
-INCLUDE( FindPkgConfig )
+find_path(CHECK_INCLUDE_DIRS
+    NAMES check.h
+    HINTS ${PC_CHECK_INCLUDE_DIRS}
+        ${PC_CHECK_INCLUDEDIR}
+)
 
-# Take care about check.pc settings
-PKG_SEARCH_MODULE( CHECK check )
+find_library(CHECK_LIBRARIES
+    NAMES check
+    HINTS ${PC_CHECK_LIBRARY_DIRS}
+        ${PC_CHECK_LIBDIR}
+)
 
-# Look for CHECK include dir and libraries
-IF( NOT CHECK_FOUND )
-	IF ( CHECK_INSTALL_DIR )
-		MESSAGE ( STATUS "Using override CHECK_INSTALL_DIR to find check" )
-		SET ( CHECK_INCLUDE_DIR  "${CHECK_INSTALL_DIR}/include" )
-		SET ( CHECK_INCLUDE_DIRS "${CHECK_INCLUDE_DIR}" )
-		FIND_LIBRARY( CHECK_LIBRARY NAMES check PATHS "${CHECK_INSTALL_DIR}/lib" )
-		FIND_LIBRARY( COMPAT_LIBRARY NAMES compat PATHS "${CHECK_INSTALL_DIR}/lib" )
-		SET ( CHECK_LIBRARIES "${CHECK_LIBRARY}" "${COMPAT_LIBRARY}" )
-	ELSE ( CHECK_INSTALL_DIR )
-		FIND_PATH( CHECK_INCLUDE_DIR check.h )
-		FIND_LIBRARY( CHECK_LIBRARIES NAMES check )
-	ENDIF ( CHECK_INSTALL_DIR )
+set(CHECK_VERSION ${PC_CHECK_VERSION})
 
-	IF ( CHECK_INCLUDE_DIR AND CHECK_LIBRARIES )
-		SET( CHECK_FOUND 1 )
-		IF ( NOT Check_FIND_QUIETLY )
-			MESSAGE ( STATUS "Found CHECK: ${CHECK_LIBRARIES}" )
-		ENDIF ( NOT Check_FIND_QUIETLY )
-	ELSE ( CHECK_INCLUDE_DIR AND CHECK_LIBRARIES )
-		IF ( Check_FIND_REQUIRED )
-			MESSAGE( FATAL_ERROR "Could NOT find CHECK" )
-		ELSE ( Check_FIND_REQUIRED )
-			IF ( NOT Check_FIND_QUIETLY )
-				MESSAGE( STATUS "Could NOT find CHECK" )
-			ENDIF ( NOT Check_FIND_QUIETLY )
-		ENDIF ( Check_FIND_REQUIRED )
-	ENDIF ( CHECK_INCLUDE_DIR AND CHECK_LIBRARIES )
-ENDIF( NOT CHECK_FOUND )
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(Check
+    FOUND_VAR CHECK_FOUND
+    REQUIRED_VARS CHECK_INCLUDE_DIRS CHECK_LIBRARIES
+    VERSION_VAR CHECK_VERSION
+)
 
-# Hide advanced variables from CMake GUIs
-MARK_AS_ADVANCED( CHECK_INCLUDE_DIR CHECK_LIBRARIES )
-
+if(CHECK_FOUND AND NOT TARGET check::check)
+    add_library(check::check INTERFACE IMPORTED)
+    set_target_properties(check::check PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES   "${CHECK_INCLUDE_DIRS}"
+        INTERFACE_LINK_LIBRARIES        "${CHECK_LIBRARIES}"
+    )
+endif()

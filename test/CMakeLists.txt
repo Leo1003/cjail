@@ -1,9 +1,33 @@
-include_directories("${CMAKE_SOURCE_DIR}/include")
-include_directories(${CHECK_INCLUDE_DIRS})
-add_executable(test_utils test_utils.c)
-target_link_libraries(test_utils ${CHECK_LIBRARIES} libcjail)
+#--------------------------------
+# Function Defination
+#
+function(cjailtest testname)
+    add_executable(${testname} "${testname}.c")
+    target_link_libraries(${testname}
+        PRIVATE
+            check::check
+            CJail::libcjail
+    )
+    target_include_directories(${testname}
+        PRIVATE
+            "${CMAKE_SOURCE_DIR}/src"
+    )
+    add_test(${testname} "${CMAKE_CURRENT_BINARY_DIR}/${testname}")
+endfunction(cjailtest)
 
-add_test(test_utils "${CMAKE_CURRENT_BINARY_DIR}/test_utils")
+#--------------------------------
+# Setup tests
+#
+cjailtest(test_utils)
+cjailtest(basic_test)
+cjailtest(timing_test)
 
+#--------------------------------
+# Setup static_test
+# (for temporary usage, will be removed in future)
+#
 add_executable(cjail_static_test cjail_static_test.c seccomptest.c)
-target_link_libraries(cjail_static_test libcjail)
+target_link_libraries(cjail_static_test
+    PRIVATE
+        CJail::libcjail
+)

@@ -1,0 +1,11 @@
+get_filename_component(CJail_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+
+list(APPEND CMAKE_MODULE_PATH ${CJail_CMAKE_DIR})
+find_package(libseccomp REQUIRED)
+list(REMOVE_AT CMAKE_MODULE_PATH -1)
+
+if(NOT TARGET CJail::libcjail)
+    include("${CJail_CMAKE_DIR}/CJailTargets.cmake")
+endif()
+
+set(CJail_LIBRARIES CJail::libcjail)

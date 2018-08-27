@@ -1,9 +1,6 @@
 #ifndef CGROUP_H
 #define CGROUP_H
 
-#define CGROUP_DEFAULT_ROOT "/sys/fs/cgroup"
-#define CGROUP_NAME "cjail.%d"
-
 int cgroup_set_root(const char *path);
 int cgroup_create(const char* subsystem);
 int cgroup_read(const char* subsystem, const char *name, const char *fmt, ...)

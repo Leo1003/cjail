@@ -1,28 +1,79 @@
-cmake_minimum_required(VERSION 2.6)
-project(cjail)
-set(VERSION 0.5.6)
-set(SOVERSION 2)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+#--------------------------------
+# Project configuration
+#
+cmake_minimum_required(VERSION 3.0.2)
+project(cjail VERSION 0.6.0 LANGUAGES C)
+set(SOVERSION 3)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 if(NOT CMAKE_BUILD_TYPE)
-MESSAGE(STATUS "build type not set, default to release")
-set(CMAKE_BUILD_TYPE Release)
-endif(NOT CMAKE_BUILD_TYPE)
+    MESSAGE(STATUS "build type not set, default to release")
+    set(CMAKE_BUILD_TYPE Release)
+endif()
 
 message("Build Type: ${CMAKE_BUILD_TYPE}")
 
+#--------------------------------
+# Building targets
+#
 find_package(libseccomp REQUIRED)
-find_package(Check)
 
-include_directories("${CMAKE_SOURCE_DIR}/include")
-include_directories(${LIBSECCOMP_INCLUDE_DIRS})
+include(GNUInstallDirs)
 
 add_subdirectory(src)
+add_subdirectory(tools)
+
+#--------------------------------
+# Tests configuration
+#
+find_package(Check)
+
 if(CHECK_FOUND)
     message(STATUS "Found Check library.")
     message(STATUS "Test Enabled.")
     enable_testing()
     add_subdirectory(test)
-else(CHECK_FOUND)
+else()
     message(WARNING "Check library not found!\nTests disabled.")
-endif(CHECK_FOUND)
+endif()
+
+#--------------------------------
+# Exporting
+#
+set(CMAKE_CONFIG_DIR "share/cmake/Modules")
+
+install(
+    EXPORT cjail_targets
+    FILE CJailTargets.cmake
+    NAMESPACE CJail::
+    DESTINATION ${CMAKE_CONFIG_DIR}
+)
+
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/CJailConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CJailConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/CJailConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_CONFIG_DIR}
+)
+
+install(
+    FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Findlibseccomp.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/CJailConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/CJailConfigVersion.cmake
+    DESTINATION ${CMAKE_CONFIG_DIR}
+)
+
+export(
+    EXPORT cjail_targets
+    FILE ${CMAKE_CURRENT_BINARY_DIR}/CJailTargets.cmake
+    NAMESPACE CJail::
+)
+
+export(PACKAGE CJail)
