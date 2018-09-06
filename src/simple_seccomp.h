@@ -31,6 +31,7 @@ enum compare {
 struct args_rule {
     enum compare cmp;
     unsigned long long value;
+    unsigned long long mask;
 };
 
 struct seccomp_rule {
@@ -40,6 +41,7 @@ struct seccomp_rule {
 };
 
 struct seccomp_config {
+    enum config_type type;
     enum deny_method deny_action;
     unsigned int debugmode;
     unsigned int rules_count;
