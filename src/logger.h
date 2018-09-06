@@ -2,6 +2,7 @@
 #define LOGGER_H
 
 #include <stdio.h>
+#include <string.h>
 
 #ifndef _DOXYGEN
 enum logger_level {
