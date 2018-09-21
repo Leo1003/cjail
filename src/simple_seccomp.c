@@ -1,5 +1,6 @@
 #include "logger.h"
 #include "simple_seccomp.h"
+#include "utils.h"
 
 #include <errno.h>
 #include <linux/filter.h>
@@ -122,4 +123,92 @@ error:
     PFTL("compile seccomp config");
     seccomp_release(ctx);
     return -1;
+}
+
+struct seccomp_config * scconfig_init(enum config_type type)
+{
+    struct seccomp_config *cfg = malloc(sizeof(struct seccomp_config));
+    if (cfg != NULL) {
+        PFTL("malloc memory");
+        return NULL;
+    }
+    cfg->type = type;
+    cfg->deny_action = DENY_KILL;
+    cfg->rules_count = 0;
+    cfg->rules_alloc = SC_ALLOC_BASE;
+    cfg->rules = malloc(SC_ALLOC_BASE * sizeof(struct seccomp_rule));
+    if (cfg->rules == NULL) {
+        PFTL("malloc memory");
+        free(cfg);
+        cfg = NULL; //return NULL
+    }
+    return cfg;
+}
+
+enum deny_method scconfig_get_deny(const struct seccomp_config *cfg)
+{
+    return cfg->deny_action;
+}
+
+void scconfig_set_deny(struct seccomp_config* cfg, enum deny_method deny)
+{
+    cfg->deny_action = deny;
+}
+
+int scconfig_clear(struct seccomp_config* cfg)
+{
+    memset(cfg->rules, 0, sizeof(struct seccomp_rule) * cfg->rules_count);
+    cfg->rules_count = 0;
+    return 0;
+}
+
+int scconfig_add(struct seccomp_config* cfg, const struct seccomp_rule* rules, size_t len)
+{
+    while (cfg->rules_alloc < cfg->rules_count + len) {
+        size_t new_alloc = max(cfg->rules_alloc * 2, cfg->rules_count + len + SC_ALLOC_BASE);
+        struct seccomp_rule * tmp = (struct seccomp_rule *)realloc(cfg->rules, new_alloc * sizeof(struct seccomp_rule));
+        if (tmp == NULL) {
+            PFTL("realloc memory");
+            return -1;
+        }
+        cfg->rules_alloc = new_alloc;
+        cfg->rules = tmp;
+    }
+    memcpy(cfg->rules + cfg->rules_count, rules, len * sizeof(struct seccomp_rule));
+    cfg->rules_count += len;
+    return 0;
+}
+
+int scconfig_remove(struct seccomp_config* cfg, size_t i, size_t len)
+{
+    if (i + len > cfg->rules_count) {
+        errno = EFAULT;
+        return -1;
+    }
+    if (len == 0) {
+        return 0;
+    }
+    memmove(cfg->rules + i, cfg->rules + (i + len), (cfg->rules_count - (i + len)) * sizeof(struct seccomp_rule));
+    cfg->rules_count -= len;
+    return 0;
+}
+
+struct seccomp_rule * scconfig_get_rule(struct seccomp_config * cfg, size_t i)
+{
+    if (i >= cfg->rules_count) {
+        return NULL;
+    }
+    return &cfg->rules[i];
+}
+
+size_t scconfig_len(const struct seccomp_config* cfg)
+{
+    return cfg->rules_count;
+}
+
+void scconfig_free(struct seccomp_config* cfg)
+{
+    free(cfg->rules);
+    cfg->rules = NULL;
+    free(cfg);
 }
