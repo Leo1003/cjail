@@ -193,13 +193,8 @@ int scconfig_add(struct seccomp_config* cfg, const struct seccomp_rule* rules, s
     }
     while (cfg->rules_alloc < cfg->rules_count + len) {
         size_t new_alloc = max(cfg->rules_alloc * 2, cfg->rules_count + len + SC_ALLOC_BASE);
-        struct seccomp_rule * tmp = (struct seccomp_rule *)realloc(cfg->rules, new_alloc * sizeof(struct seccomp_rule));
-        if (tmp == NULL) {
-            PFTL("realloc memory");
+        if (scconfig_allocate(cfg, new_alloc))
             return -1;
-        }
-        cfg->rules_alloc = new_alloc;
-        cfg->rules = tmp;
     }
     memcpy(cfg->rules + cfg->rules_count, rules, len * sizeof(struct seccomp_rule));
     cfg->rules_count += len;
@@ -243,6 +238,25 @@ size_t scconfig_len(const struct seccomp_config* cfg)
         return 0;
     }
     return cfg->rules_count;
+}
+
+int scconfig_allocate(struct seccomp_config* cfg, size_t len)
+{
+    if (!cfg) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (len <= cfg->rules_alloc) {
+        return 0;
+    }
+    struct seccomp_rule *tmp = (struct seccomp_rule *)realloc(cfg->rules, len * sizeof(struct seccomp_rule));
+    if (tmp == NULL) {
+        PFTL("realloc memory");
+        return -1;
+    }
+    cfg->rules_alloc = len;
+    cfg->rules = tmp;
+    return 0;
 }
 
 void scconfig_free(struct seccomp_config* cfg)

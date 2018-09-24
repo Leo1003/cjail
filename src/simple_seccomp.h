@@ -65,6 +65,7 @@ int scconfig_add(struct seccomp_config *cfg, const struct seccomp_rule *rules, s
 int scconfig_remove(struct seccomp_config *cfg, size_t i, size_t len);
 struct seccomp_rule * scconfig_get_rule(struct seccomp_config * cfg, size_t i);
 size_t scconfig_len(const struct seccomp_config *cfg);
+int scconfig_allocate(struct seccomp_config *cfg, size_t len);
 void scconfig_free(struct seccomp_config *cfg);
 
 #endif
