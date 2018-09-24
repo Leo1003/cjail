@@ -66,7 +66,8 @@ static int rule_compile_add(scmp_filter_ctx ctx, uint32_t denycode, const struct
 int scconfig_compile(const struct seccomp_config *cfg, struct sock_fprog *bpf)
 {
     if (!cfg) {
-        return 0;
+        errno = EINVAL;
+        return -1;
     }
     scmp_filter_ctx ctx;
     uint32_t denycode = 0;
@@ -154,16 +155,28 @@ struct seccomp_config * scconfig_init(enum config_type type)
 
 enum deny_method scconfig_get_deny(const struct seccomp_config *cfg)
 {
+    if (!cfg) {
+        errno = EINVAL;
+        return 0;
+    }
     return cfg->deny_action;
 }
 
 void scconfig_set_deny(struct seccomp_config* cfg, enum deny_method deny)
 {
+    if (!cfg) {
+        errno = EINVAL;
+        return;
+    }
     cfg->deny_action = deny;
 }
 
 int scconfig_clear(struct seccomp_config* cfg)
 {
+    if (!cfg) {
+        errno = EINVAL;
+        return -1;
+    }
     memset(cfg->rules, 0, sizeof(struct seccomp_rule) * cfg->rules_count);
     cfg->rules_count = 0;
     return 0;
@@ -171,6 +184,13 @@ int scconfig_clear(struct seccomp_config* cfg)
 
 int scconfig_add(struct seccomp_config* cfg, const struct seccomp_rule* rules, size_t len)
 {
+    if (!cfg) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (len == 0) {
+        return 0;
+    }
     while (cfg->rules_alloc < cfg->rules_count + len) {
         size_t new_alloc = max(cfg->rules_alloc * 2, cfg->rules_count + len + SC_ALLOC_BASE);
         struct seccomp_rule * tmp = (struct seccomp_rule *)realloc(cfg->rules, new_alloc * sizeof(struct seccomp_rule));
@@ -188,6 +208,10 @@ int scconfig_add(struct seccomp_config* cfg, const struct seccomp_rule* rules, s
 
 int scconfig_remove(struct seccomp_config* cfg, size_t i, size_t len)
 {
+    if (!cfg) {
+        errno = EINVAL;
+        return -1;
+    }
     if (i + len > cfg->rules_count) {
         errno = EFAULT;
         return -1;
@@ -202,6 +226,10 @@ int scconfig_remove(struct seccomp_config* cfg, size_t i, size_t len)
 
 struct seccomp_rule * scconfig_get_rule(struct seccomp_config * cfg, size_t i)
 {
+    if (!cfg) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (i >= cfg->rules_count) {
         return NULL;
     }
@@ -210,12 +238,21 @@ struct seccomp_rule * scconfig_get_rule(struct seccomp_config * cfg, size_t i)
 
 size_t scconfig_len(const struct seccomp_config* cfg)
 {
+    if (!cfg) {
+        errno = EINVAL;
+        return 0;
+    }
     return cfg->rules_count;
 }
 
 void scconfig_free(struct seccomp_config* cfg)
 {
-    free(cfg->rules);
-    cfg->rules = NULL;
+    if (!cfg) {
+        return;
+    }
+    if (cfg->rules) {
+        free(cfg->rules);
+        cfg->rules = NULL;
+    }
     free(cfg);
 }
