@@ -11,7 +11,7 @@
 
 #include <seccomp.h>
 
-static int rule_add(scmp_filter_ctx ctx, uint32_t denycode, const struct seccomp_rule rule)
+static int rule_compile_add(scmp_filter_ctx ctx, uint32_t denycode, const struct seccomp_rule rule)
 {
     struct scmp_arg_cmp args[6];
     int args_cnt = 0;
@@ -63,8 +63,11 @@ static int rule_add(scmp_filter_ctx ctx, uint32_t denycode, const struct seccomp
     return seccomp_rule_add_array(ctx, action, rule.syscall, args_cnt, args);
 }
 
-int seccomp_config_compile(const struct seccomp_config *cfg, struct sock_fprog *bpf)
+int scconfig_compile(const struct seccomp_config *cfg, struct sock_fprog *bpf)
 {
+    if (!cfg) {
+        return 0;
+    }
     scmp_filter_ctx ctx;
     uint32_t denycode = 0;
     switch (cfg->deny_action) {
@@ -73,6 +76,10 @@ int seccomp_config_compile(const struct seccomp_config *cfg, struct sock_fprog *
             break;
         case DENY_TRAP:
             denycode = SCMP_ACT_TRAP;
+            break;
+        case DENY_TRACE:
+            warnf("DENY_TRACE is not implemented yet!\n");
+            denycode = SCMP_ACT_TRACE(TRACE_MAGIC);
             break;
         case DENY_ERRNO:
             denycode = SCMP_ACT_ERRNO(ENOSYS);
@@ -88,7 +95,7 @@ int seccomp_config_compile(const struct seccomp_config *cfg, struct sock_fprog *
     }
 
     for (unsigned i = 0; i < cfg->rules_count; i++) {
-        if (rule_add(ctx, denycode, cfg->rules[i])) {
+        if (rule_compile_add(ctx, denycode, cfg->rules[i])) {
             goto error;
         }
     }

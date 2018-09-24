@@ -1,9 +1,11 @@
 #ifndef SIMPLE_SECCOMP_H
 #define SIMPLE_SECCOMP_H
 
+#include <linux/filter.h>
 #include <sys/types.h>
 
 #define SC_ALLOC_BASE 10
+#define TRACE_MAGIC 28962
 
 enum config_type {
     CFG_WHITELIST,
@@ -54,6 +56,7 @@ struct seccomp_config {
     struct seccomp_rule *rules;
 };
 
+int scconfig_compile(const struct seccomp_config *cfg, struct sock_fprog *bpf);
 struct seccomp_config * scconfig_init(enum config_type type);
 enum deny_method scconfig_get_deny(const struct seccomp_config *cfg);
 void scconfig_set_deny(struct seccomp_config *cfg, enum deny_method deny);
