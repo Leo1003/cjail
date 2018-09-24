@@ -7,6 +7,7 @@
 #define SC_ALLOC_BASE 10
 #define TRACE_MAGIC 28962
 
+#ifndef _DOXYGEN
 enum config_type {
     CFG_WHITELIST,
     CFG_BLACKLIST
@@ -34,6 +35,7 @@ enum compare {
     CMP_LE,
     CMP_MASK
 };
+#endif
 
 struct args_rule {
     enum compare cmp;
