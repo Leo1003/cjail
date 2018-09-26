@@ -6,6 +6,7 @@
 
 #define SC_ALLOC_BASE 10
 #define TRACE_MAGIC 28962
+#define TRACE_KILL_MAGIC 3666
 
 #ifndef _DOXYGEN
 enum config_type {
@@ -17,7 +18,8 @@ enum deny_method {
     DENY_KILL,
     DENY_TRAP,
     DENY_ERRNO,
-    DENY_TRACE
+    DENY_TRACE,
+    DENY_TRACE_KILL
 };
 
 enum rule_type {

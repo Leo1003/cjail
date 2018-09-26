@@ -1,6 +1,9 @@
 #ifndef _SCCONFIG_H
 #define _SCCONFIG_H
 
+#define TRACE_MAGIC 28962       /**< @brief ptrace event message of DENY_TRACE */
+#define TRACE_KILL_MAGIC 3666   /**< @brief ptrace event message of DENY_TRACE_KILL */
+
 /**
  * @brief The seccomp configure struct. This object is made opaque.
  * Use scconfig_*() to use this type.
@@ -26,7 +29,8 @@ enum deny_method {
     DENY_KILL,          /**< @brief Send SIGKILL to kill the process */
     DENY_TRAP,          /**< @brief Send SIGSYS to kill the process */
     DENY_ERRNO,         /**< @brief Use ENOSYS to make system call fail */
-    DENY_TRACE          /**< @brief Record triggered system call, and make it fail using DENY_ERRNO */
+    DENY_TRACE,         /**< @brief Print triggered system call, and make it fail using DENY_ERRNO */
+    DENY_TRACE_KILL     /**< @brief Print triggered system call, and make it fail using DENY_KILL */
 };
 
 /**

@@ -78,12 +78,16 @@ int scconfig_compile(const struct seccomp_config *cfg, struct sock_fprog *bpf)
         case DENY_TRAP:
             denycode = SCMP_ACT_TRAP;
             break;
+        case DENY_ERRNO:
+            denycode = SCMP_ACT_ERRNO(ENOSYS);
+            break;
         case DENY_TRACE:
             warnf("DENY_TRACE is not implemented yet!\n");
             denycode = SCMP_ACT_TRACE(TRACE_MAGIC);
             break;
-        case DENY_ERRNO:
-            denycode = SCMP_ACT_ERRNO(ENOSYS);
+        case DENY_TRACE_KILL:
+            warnf("DENY_TRACE_KILL is not implemented yet!\n");
+            denycode = SCMP_ACT_TRACE(TRACE_KILL_MAGIC);
             break;
     }
     if (cfg->type == CFG_WHITELIST) {
