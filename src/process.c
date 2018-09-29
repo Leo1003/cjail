@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file process.c
+ * @brief child process initilizing source
+ */
 #include "cjail.h"
 #include "fds.h"
 #include "logger.h"

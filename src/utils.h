@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file utils.h
+ * @brief useful functions header
+ */
 #ifndef UTILS_H
 #define UTILS_H
 

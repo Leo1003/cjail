@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file filesystem.h
+ * @brief file system mounting functions header
+ */
 #ifndef FILESYSTEM_H
 #define FILESYSTEM_H
 

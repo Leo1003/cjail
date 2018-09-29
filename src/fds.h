@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file fds.h
+ * @brief file descriptor related functions header
+ */
 #ifndef FDS_H
 #define FDS_H
 

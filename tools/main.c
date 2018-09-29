@@ -1,3 +1,12 @@
+/**
+ * @dir tools/
+ * @brief command line tools source directory
+ */
+/**
+ * @internal
+ * @file main.c
+ * @brief cjail command line interface(cli) source
+ */
 #include <cjail.h>
 
 #include <argz.h>

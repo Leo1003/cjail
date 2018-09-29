@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file sigset.h
+ * @brief signal management functions header
+ */
 #ifndef SIGSET_H
 #define SIGSET_H
 

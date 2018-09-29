@@ -1,3 +1,12 @@
+/**
+ * @dir src/
+ * @brief internal sources directory
+ */
+/**
+ * @internal
+ * @file src/cjail.h
+ * @brief cjail main library entry point header
+ */
 #ifndef CJAIL_H
 #define CJAIL_H
 

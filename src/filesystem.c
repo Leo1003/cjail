@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file filesystem.c
+ * @brief file system mounting functions source
+ */
 #define _GNU_SOURCE
 #include "filesystem.h"
 #include "logger.h"

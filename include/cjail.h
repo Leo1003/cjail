@@ -1,3 +1,11 @@
+/**
+ * @dir include/
+ * @brief public headers directory
+ */
+/**
+ * @file include/cjail.h
+ * @brief cjail main public header
+ */
 #ifndef _CJAIL_H
 #define _CJAIL_H
 

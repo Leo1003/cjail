@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file fds.c
+ * @brief file descriptor related functions source
+ */
 #include "cjail.h"
 #include "fds.h"
 #include "logger.h"

@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file cgroup.c
+ * @brief cgroup system operation source
+ */
 #include "cjail.h"
 #include "cgroup.h"
 #include "logger.h"

@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file cjail.c
+ * @brief cjail main library entry point source
+ */
 #include "cjail.h"
 #include "cgroup.h"
 #include "cleanup.h"

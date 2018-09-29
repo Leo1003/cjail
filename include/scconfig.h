@@ -1,3 +1,7 @@
+/**
+ * @file scconfig.h
+ * @brief cjail secconp_config public header
+ */
 #ifndef _SCCONFIG_H
 #define _SCCONFIG_H
 

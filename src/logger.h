@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file logger.h
+ * @brief logger functions header
+ */
 #ifndef LOGGER_H
 #define LOGGER_H
 

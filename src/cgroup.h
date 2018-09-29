@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file cgroup.h
+ * @brief cgroup system operation header
+ */
 #ifndef CGROUP_H
 #define CGROUP_H
 

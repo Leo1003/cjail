@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file utils.c
+ * @brief useful functions source
+ */
 #include "cjail.h"
 #include "logger.h"
 #include "utils.h"

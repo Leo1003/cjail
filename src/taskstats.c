@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file taskstats.c
+ * @brief taskstat resource statistics source
+ */
 #include "cjail.h"
 #include "logger.h"
 #include "taskstats.h"

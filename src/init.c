@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file init.c
+ * @brief init process(PID 1) in the pid namespace daemon source
+ */
 #include "cjail.h"
 #include "init.h"
 #include "fds.h"

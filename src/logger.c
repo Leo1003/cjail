@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file logger.c
+ * @brief logger functions source
+ */
 #include "cjail.h"
 #include "logger.h"
 #include "utils.h"

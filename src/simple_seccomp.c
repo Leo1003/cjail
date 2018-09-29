@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file simple_seccomp.c
+ * @brief basic seccomp rules source
+ */
 #include "logger.h"
 #include "simple_seccomp.h"
 #include "utils.h"

@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file simple_seccomp.h
+ * @brief basic seccomp rules header
+ */
 #ifndef SIMPLE_SECCOMP_H
 #define SIMPLE_SECCOMP_H
 
