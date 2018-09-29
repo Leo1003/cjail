@@ -1,6 +1,9 @@
 #ifndef _SCCONFIG_H
 #define _SCCONFIG_H
 
+#include <linux/filter.h>
+#include <sys/types.h>
+
 #define TRACE_MAGIC 28962       /**< @brief ptrace event message of DENY_TRACE */
 #define TRACE_KILL_MAGIC 3666   /**< @brief ptrace event message of DENY_TRACE_KILL */
 
