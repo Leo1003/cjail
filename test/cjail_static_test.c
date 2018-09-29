@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     para.gid = 10000;
     para.workingDir = "/tmp";
     para.preservefd = 1;
-    para.seccomplist = seccomplist;
+    //para.seccomplist = seccomplist;
 
     signal(SIGHUP, sigint);
     signal(SIGINT, sigint);

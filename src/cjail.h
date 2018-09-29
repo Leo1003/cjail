@@ -2,6 +2,8 @@
 #define CJAIL_H
 
 #define _GNU_SOURCE
+#include "simple_seccomp.h"
+
 #include <linux/filter.h>
 #include <linux/taskstats.h>
 #include <sched.h>
@@ -27,7 +29,7 @@ struct cjail_para {
     long long rlim_as, rlim_core, rlim_nofile, rlim_fsize, rlim_proc, rlim_stack;
     long long cg_rss;
     struct timeval lim_time;
-    int *seccomplist;
+    struct seccomp_config *seccompcfg;
 };
 
 struct cjail_result {

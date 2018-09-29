@@ -9,6 +9,15 @@
 #define UNUSED __attribute__((unused))
 #define RETERR(x) do { errno = x; return -1; } while(0)
 
+#define max(a,b) \
+({ __typeof__ (a) _a = (a); \
+    __typeof__ (b) _b = (b); \
+    _a > _b ? _a : _b; })
+#define min(a,b) \
+({ __typeof__ (a) _a = (a); \
+    __typeof__ (b) _b = (b); \
+    _a < _b ? _a : _b; })
+
 int cpuset_tostr(const cpu_set_t *cpuset, char *str, size_t len);
 int cpuset_parse(const char *str, cpu_set_t *cpuset);
 int mkdir_r(const char *path);

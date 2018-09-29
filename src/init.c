@@ -4,8 +4,8 @@
 #include "filesystem.h"
 #include "logger.h"
 #include "process.h"
-#include "scmp.h"
 #include "sigset.h"
+#include "simple_seccomp.h"
 #include "taskstats.h"
 #include "utils.h"
 
@@ -22,6 +22,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <seccomp.h>
 
 static volatile sig_atomic_t alarmed = 0, interrupted = 0;
 
@@ -180,6 +181,20 @@ static int mount_fs(const struct cjail_para para)
     return -1;
 }
 
+static int allow_execve(struct seccomp_config *cfg, void* argv)
+{
+    struct seccomp_rule exec_rule;
+    struct args_rule arg1 = {
+        .cmp = CMP_EQ,
+        .value = (u_int64_t)argv
+    };
+    memset(&exec_rule, 0, sizeof(exec_rule));
+    exec_rule.type = RULE_ALLOW;
+    exec_rule.syscall = __NR_execve;
+    exec_rule.args[1] = arg1;
+    return scconfig_add(cfg, &exec_rule, 1);
+}
+
 int child_init(void *arg)
 {
     /*
@@ -231,8 +246,14 @@ int child_init(void *arg)
     ttymode = (tcgetattr(STDIN_FILENO, &term) == 0);
 
     //precompile seccomp bpf to reduce the impact on timing
-    if (compile_seccomp(ep.para, &ep.bpf))
-        exit(errno);
+    if (ep.para.seccompcfg) {
+        if (allow_execve(ep.para.seccompcfg, ep.para.argv)) {
+            exit(errno);
+        }
+        if (scconfig_compile(ep.para.seccompcfg, &ep.bpf)) {
+            exit(errno);
+        }
+    }
 
     childpid = fork();
     if (childpid > 0) {

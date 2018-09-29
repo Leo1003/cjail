@@ -11,6 +11,8 @@
 #include <sys/types.h>
 #include <time.h>
 
+#include "scconfig.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -73,7 +75,7 @@ struct cjail_para {
                                      @note Set to zero to disable this limit */
     struct timeval lim_time;    /**< @brief Limit the time of the jail can live
                                      @note set to zero to disable time limit */
-    int *seccomplist;           /**< @deprecated this will be replaced by more powerful structure in the next version */
+    scconfig seccompcfg;        /**< @brief  */
 };
 
 /**
