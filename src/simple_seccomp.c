@@ -142,14 +142,14 @@ error:
     return -1;
 }
 
-struct seccomp_config * scconfig_init(enum config_type type)
+struct seccomp_config * scconfig_init()
 {
     struct seccomp_config *cfg = malloc(sizeof(struct seccomp_config));
     if (cfg != NULL) {
         PFTL("malloc memory");
         return NULL;
     }
-    cfg->type = type;
+    cfg->type = CFG_WHITELIST;
     cfg->deny_action = DENY_KILL;
     cfg->rules_count = 0;
     cfg->rules_alloc = SC_ALLOC_BASE;
@@ -178,6 +178,24 @@ void scconfig_set_deny(struct seccomp_config* cfg, enum deny_method deny)
         return;
     }
     cfg->deny_action = deny;
+}
+
+enum config_type scconfig_get_type(const struct seccomp_config *cfg)
+{
+    if (!cfg) {
+        errno = EINVAL;
+        return 0;
+    }
+    return cfg->type;
+}
+
+void scconfig_set_type(struct seccomp_config* cfg, enum config_type type)
+{
+    if (!cfg) {
+        errno = EINVAL;
+        return;
+    }
+    cfg->type = type;
 }
 
 int scconfig_clear(struct seccomp_config* cfg)

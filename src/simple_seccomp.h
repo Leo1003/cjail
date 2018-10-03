@@ -66,9 +66,11 @@ struct seccomp_config {
 };
 
 int scconfig_compile(const struct seccomp_config *cfg, struct sock_fprog *bpf);
-struct seccomp_config * scconfig_init(enum config_type type);
+struct seccomp_config * scconfig_init();
 enum deny_method scconfig_get_deny(const struct seccomp_config *cfg);
 void scconfig_set_deny(struct seccomp_config *cfg, enum deny_method deny);
+enum config_type scconfig_get_type(const struct seccomp_config *cfg);
+void scconfig_set_type(struct seccomp_config *cfg, enum config_type type);
 int scconfig_clear(struct seccomp_config *cfg);
 int scconfig_add(struct seccomp_config *cfg, const struct seccomp_rule *rules, size_t len);
 int scconfig_remove(struct seccomp_config *cfg, size_t i, size_t len);
