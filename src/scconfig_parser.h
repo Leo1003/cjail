@@ -9,7 +9,13 @@
 #include <stdio.h>
 #include "simple_seccomp.h"
 
-#define SCOPT_IGN_NOSYS 0x00000001
+#define SCOPT_IGN_NOSYS     0x00000001
+#define SCOPT_IGN_NORULE    0x00000002
+
+#define PARSER_CMD_TYPE "TYPE"
+#define PARSER_CMD_ACTION "ACTION"
+#define PARSER_CMD_ALLOW "ALLOW"
+#define PARSER_CMD_DENY "DENY"
 
 enum parser_err_type {
     ErrNone = 0,
@@ -23,6 +29,7 @@ enum parser_err_type {
     ErrDupOption,
     ErrUnknownValue,
     ErrNoSyscall,
+    ErrNoRule,
     ErrArgCount,
 };
 
