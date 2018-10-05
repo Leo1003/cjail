@@ -76,22 +76,15 @@ struct seccomp_config * scconfig_parse_file(FILE *stream, unsigned int options)
 struct seccomp_config * scconfig_parse_string(const char *str, unsigned int options)
 {
     struct seccomp_config *cfg = NULL;
-    FILE *fp = fmemopen(NULL, sizeof(char) * (strlen(str) + 10), "r+");
+    FILE *fp = fmemopen((void *)str, sizeof(char) * (strlen(str) + 1), "r");
     if (!fp) {
         set_par_err(ErrMemory, 0);
         return NULL;
     }
-    if (fprintf(fp, "%s", str) < 0) {
-        set_par_err(ErrIO, 0);
-        goto out;
-    }
-    if (fflush(fp)) {
-        set_par_err(ErrIO, 0);
-        goto out;
-    }
     if(_scconfig_parse(&cfg, fp, options)) {
         errno = EINVAL;
-        return NULL;
+        cfg = NULL;
+        goto out;
     }
 
 out:
