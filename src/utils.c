@@ -16,6 +16,30 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 
+int table_to_int(const table_int32* table, const char* str)
+{
+    int i = 0;
+    while (table[i].name) {
+        if (!strcmp(table[i].name, str)) {
+            return table[i].value;
+        }
+        i++;
+    }
+    return table[i].value;
+}
+
+const char * table_to_str(const table_int32 *table, int value)
+{
+    int i = 0;
+    while (table[i].name) {
+        if (table[i].value == value) {
+            return table[i].name;
+        }
+        i++;
+    }
+    return NULL;
+}
+
 int cpuset_tostr(const cpu_set_t* cpuset, char* str, size_t len)
 {
     snprintf(str, len, "");
