@@ -38,5 +38,7 @@ int combine_path(char *s, const char *root, const char *path);
 int strrmchr(char* str, int index);
 int setcloexec(int fd);
 int pipe_c(int pipedes[2]);
+char * strupr(char * str);
+char * strlwr(char * str);
 
 #endif

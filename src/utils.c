@@ -8,6 +8,7 @@
 #include "utils.h"
 
 #include <bsd/string.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
@@ -199,4 +200,32 @@ int pipe_c(int pipedes[2])
     return (pipe(pipedes) ||
         setcloexec(pipedes[0]) ||
         setcloexec(pipedes[1]));
+}
+
+char * strupr(char * str)
+{
+    if (str) {
+        int i = 0;
+        while (str[i]) {
+            if (islower(str[i])) {
+                str[i] = toupper(str[i]);
+            }
+        }
+        i++;
+    }
+    return str;
+}
+
+char * strlwr(char * str)
+{
+    if (str) {
+        int i = 0;
+        while (str[i]) {
+            if (isupper(str[i])) {
+                str[i] = tolower(str[i]);
+            }
+        }
+        i++;
+    }
+    return str;
 }
