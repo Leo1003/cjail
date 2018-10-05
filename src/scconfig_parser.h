@@ -13,6 +13,9 @@
 #define SCOPT_IGN_NOSYS     0x00000001
 #define SCOPT_IGN_NORULE    0x00000002
 
+#define CMD_MAX_LENGTH  16
+#define VAL_MAX_LENGTH  64
+
 //Default naming defines
 #define PARSER_CMD_TYPE     "TYPE"
 #define PARSER_CMD_ACTION   "ACTION"
@@ -86,7 +89,7 @@ enum parser_err_type {
     ErrPermission,
     ErrIO,
     ErrSyntax,
-    ErrUnknownOption,
+    ErrUnknownCmd,
     ErrDupOption,
     ErrUnknownValue,
     ErrNoSyscall,
@@ -105,5 +108,7 @@ parser_error_t parser_get_err();
 struct seccomp_config * scconfig_parse_path(const char *path, unsigned int options);
 struct seccomp_config * scconfig_parse_file(FILE *stream, unsigned int options);
 struct seccomp_config * scconfig_parse_string(const char *str, unsigned int options);
+
+#define skip_spaces(fp) fscanf(fp, "%*[ \t]s")
 
 #endif

@@ -76,6 +76,7 @@ struct seccomp_config * scconfig_parse_file(FILE *stream, unsigned int options)
 struct seccomp_config * scconfig_parse_string(const char *str, unsigned int options)
 {
     struct seccomp_config *cfg = NULL;
+    //Convert string into C stream
     FILE *fp = fmemopen((void *)str, sizeof(char) * (strlen(str) + 1), "r");
     if (!fp) {
         set_par_err(ErrMemory, 0);
@@ -92,9 +93,178 @@ out:
     return cfg;
 }
 
+static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
+{
+    char buf[VAL_MAX_LENGTH + 1];
+    int sys, argnum = 0;
+    //Zero the rule
+    memset(rule, 0, sizeof(struct seccomp_rule));
+    //Read syscall name
+    if (fscanf(f, "%64[A-Za-z0-9_]s", buf) != 1) {
+        return ErrSyntax;
+    }
+    if ((sys = seccomp_syscall_resolve_name(buf)) < 0) {
+        return ErrNoSyscall;
+    }
+    rule->syscall  = sys;
+    skip_spaces(f);
+    if (feof(f)) {
+        //No parameter given, stop parsing
+        return ErrNone;
+    }
+    //Expecting only one "("
+    if (fscanf(f, "%64[(]s", buf) != 1 || !strcmp(buf, "(")) {
+        return ErrSyntax;
+    }
+    skip_spaces(f);
+    //Parsing parameters
+    while (1) {
+        //Arguments count should not excess 6
+        if (argnum >= 6) {
+            return ErrArgCount;
+        }
+        //Parsing operators
+        int op;
+        if (fscanf(f, "%64[&>=<]s", buf) != 1) {
+            return ErrSyntax;
+        }
+        if ((op = table_to_int(op_table, buf)) < 0) {
+            return ErrUnknownValue;
+        }
+        skip_spaces(f);
+
+        unsigned long long val;
+        unsigned long long mask;
+        if (op == CMP_MASK) {
+            //parsing mask
+            if (fscanf(f, "%lli", &mask) != 1) {
+                return ErrSyntax;
+            }
+            skip_spaces(f);
+            //Expecting "=="
+            if (fscanf(f, "%64[=]s", buf) != 1 || !strcmp(buf, "==")) {
+                return ErrSyntax;
+            }
+            skip_spaces(f);
+            //parsing number
+            if (fscanf(f, "%lli", &val) != 1) {
+                return ErrSyntax;
+            }
+            skip_spaces(f);
+        } else {
+            //parsing number
+            if (fscanf(f, "%lli", &val) != 1) {
+                return ErrSyntax;
+            }
+            skip_spaces(f);
+        }
+
+        rule->args[argnum].cmp = op;
+        rule->args[argnum].value = val;
+        rule->args[argnum].mask = (op == CMP_MASK) ? mask : 0;
+
+        //Expecting "," or ")"
+        if (fscanf(f, "%64[,)]s", buf) != 1) {
+            return ErrSyntax;
+        }
+        if (!strcmp(buf, ",")) {
+            skip_spaces(f);
+        } else if (!strcmp(buf, ")")) {
+            break;
+        } else {
+            return ErrSyntax;
+        }
+        argnum++;
+    }
+    return ErrNone;
+}
+
 static enum parser_err_type _parse_line(const char *str, struct seccomp_config *cfg, unsigned int options)
 {
-    //TODO: Uncomplete
+    enum parser_err_type ret = ErrNone;
+    char cmd[CMD_MAX_LENGTH + 1], strval[VAL_MAX_LENGTH + 1];
+    int val;
+    struct seccomp_rule rule;
+    //Convert string into C stream
+    FILE *mf = fmemopen((void *)str, sizeof(char) * (strlen(str) + 1), "r");
+    if (!mf) {
+        return ErrMemory;
+    }
+    skip_spaces(mf);
+    if (feof(mf)) {
+        //Nothing else except spaces, ignore this line
+        goto out;
+    }
+    if (fscanf(mf, "%16[A-Za-z0-9_]s", cmd) != 1) {
+        ret = ErrSyntax;
+        goto out;
+    }
+    skip_spaces(mf);
+    switch (table_to_int(cmd_table, cmd)) {
+        case 1:      //PARSER_CMD_TYPE
+            if (fscanf(mf, "%64[A-Za-z0-9_]s", strval) != 1) {
+                ret = ErrSyntax;
+                goto out;
+            }
+            //To uppercase
+            strupr(strval);
+            if ((val = table_to_int(type_table, strval)) < 0) {
+                ret = ErrUnknownValue;
+                goto out;
+            }
+            scconfig_set_type(cfg, val);
+            break;
+        case 2:      //PARSER_CMD_ACTION
+            if (fscanf(mf, "%64[A-Za-z0-9_]s", strval) != 1) {
+                ret = ErrSyntax;
+                goto out;
+            }
+            //To uppercase
+            strupr(strval);
+            if ((val = table_to_int(action_table, strval)) < 0) {
+                ret = ErrUnknownValue;
+                goto out;
+            }
+            scconfig_set_deny(cfg, val);
+            break;
+        case 3:      //PARSER_CMD_ALLOW
+            if ((ret = _parse_syscall(mf, &rule))) {
+                if (ret == ErrNoSyscall && options & SCOPT_IGN_NOSYS) {
+                    ret = ErrNone;
+                }
+                goto out;
+            }
+            rule.type = RULE_ALLOW;
+            if (scconfig_add(cfg, &rule, 1)) {
+                ret = ErrMemory;
+            }
+            break;
+        case 4:      //PARSER_CMD_DENY
+            if ((ret = _parse_syscall(mf, &rule))) {
+                if (ret == ErrNoSyscall && options & SCOPT_IGN_NOSYS) {
+                    ret = ErrNone;
+                }
+                goto out;
+            }
+            rule.type = RULE_DENY;
+            if (scconfig_add(cfg, &rule, 1)) {
+                ret = ErrMemory;
+            }
+            break;
+        default:
+            ret = ErrUnknownCmd;
+            goto out;
+    }
+    //Parsing complete, nothing except spaces should appear
+    skip_spaces(mf);
+    if (!feof(mf)) {
+        ret = ErrSyntax;
+        goto out;
+    }
+
+out:
+    fclose(mf);
+    return ret;
 }
 
 static int _scconfig_parse(struct seccomp_config **cfg, FILE *stream, unsigned int options)
