@@ -81,6 +81,7 @@ const table_int32 op_table[] = {
     { NULL,                 -1 }
 };
 
+#ifndef _DOXYGEN
 enum parser_err_type {
     ErrNone = 0,
     ErrFileNotFound,
@@ -96,6 +97,7 @@ enum parser_err_type {
     ErrNoRule,
     ErrArgCount,
 };
+#endif
 
 struct parser_error {
     enum parser_err_type type;

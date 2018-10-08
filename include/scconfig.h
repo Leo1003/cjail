@@ -106,6 +106,8 @@ int scconfig_compile(const scconfig cfg, struct sock_fprog *bpf);
  * @return Pointer to the newly allocate configure
  * @retval pointer Succeed
  * @retval NULL One or more errors encountered
+ *
+ * @see scconfig_free
  */
 scconfig scconfig_init(enum config_type type);
 
@@ -114,6 +116,8 @@ scconfig scconfig_init(enum config_type type);
  *
  * @param cfg seccomp configure
  * @return current deny method
+ *
+ * @see scconfig_set_deny
  */
 enum deny_method scconfig_get_deny(const scconfig cfg);
 
@@ -122,6 +126,8 @@ enum deny_method scconfig_get_deny(const scconfig cfg);
  *
  * @param cfg seccomp configure
  * @param[in] deny deny method to set
+ *
+ * @see scconfig_set_deny
  */
 void scconfig_set_deny(scconfig cfg, enum deny_method deny);
 
@@ -144,6 +150,10 @@ int scconfig_clear(scconfig cfg);
  * @return Execution result
  * @retval 0 Succeed
  * @retval -1 One or more errors encountered
+ *
+ * @see scconfig_remove
+ * @see scconfig_get_rule
+ * @see scconfig_len
  */
 int scconfig_add(scconfig cfg, const struct seccomp_rule *rules, size_t len);
 
@@ -156,6 +166,10 @@ int scconfig_add(scconfig cfg, const struct seccomp_rule *rules, size_t len);
  * @return Execution result
  * @retval 0 Succeed
  * @retval -1 One or more errors encountered
+ *
+ * @see scconfig_add
+ * @see scconfig_get_rule
+ * @see scconfig_len
  */
 int scconfig_remove(scconfig cfg, size_t i, size_t len);
 
@@ -168,6 +182,10 @@ int scconfig_remove(scconfig cfg, size_t i, size_t len);
  * @return Pointer to the rule
  * @retval pointer Succeed
  * @retval NULL One or more errors encountered
+ *
+ * @see scconfig_add
+ * @see scconfig_remove
+ * @see scconfig_len
  */
 struct seccomp_rule * scconfig_get_rule(scconfig cfg, size_t i);
 
@@ -187,6 +205,10 @@ int scconfig_allocate(scconfig cfg, size_t len);
  *
  * @param cfg seccomp configure
  * @return Rules count
+ *
+ * @see scconfig_add
+ * @see scconfig_remove
+ * @see scconfig_get_rule
  */
 size_t scconfig_len(const scconfig cfg);
 
@@ -197,5 +219,105 @@ size_t scconfig_len(const scconfig cfg);
  * @param cfg seccomp configure to be free
  */
 void scconfig_free(scconfig cfg);
+
+/**
+ * @def SCOPT_IGN_NOSYS
+ * @brief Make parser ignore not existing systemcall
+ */
+#define SCOPT_IGN_NOSYS     0x00000001
+/**
+ * @def SCOPT_IGN_NORULE
+ * @brief Make parser not regard a config without any rule as an error
+ */
+#define SCOPT_IGN_NORULE    0x00000002
+
+/**
+ * @enum parser_err_type
+ * @brief Indicating the error reason
+ */
+enum parser_err_type {
+    ErrNone = 0,        /**< No error */
+    ErrFileNotFound,    /**< Can't find the file by giving path */
+    ErrNotFile,         /**< Giving path is not a file */
+    ErrMemory,          /**< Can't allocate memory */
+    ErrPermission,      /**< Can't access the file */
+    ErrIO,              /**< I/O or other error */
+    ErrSyntax,          /**< Invalid syntax */
+    ErrUnknownCmd,      /**< Invalid command */
+    ErrDupOption,       /**< Currently not used */
+    ErrUnknownValue,    /**< Unknown value */
+    ErrNoSyscall,       /**< Given system call not exist in the kernel */
+    ErrNoRule,          /**< The config not containing any rule */
+    ErrArgCount,        /**< Exceed arguments list count */
+};
+
+/**
+ * @struct parser_error
+ * @brief parser error structure
+ */
+struct parser_error {
+    enum parser_err_type type;  /**< This error type */
+    int line;                   /**< Occurred in which line
+                                     @note If set to 0, meaning that the error is occurred on the file itself */
+};
+
+/**
+ * @typedef parser_error_t
+ * @brief parser error type
+ *
+ * @see parser_error
+ */
+typedef struct parser_error parser_error_t;
+
+/**
+ * @brief Get the last parser error
+ *
+ * @return A type containing the error information
+ *
+ * @see parser_error_t
+ */
+parser_error_t parser_get_err();
+
+/**
+ * @brief Parse configure by path
+ *
+ * @param[in] path The path to the configure file
+ * @param[in] options Option flags passing to the parser
+ * @return A config structure
+ * @retval pointer Succeed
+ * @retval NULL One or more errors encountered
+ *
+ * @note Remember to call scconfig_free() after using it
+ * @see seccomp_config
+ */
+struct seccomp_config * scconfig_parse_path(const char *path, unsigned int options);
+
+/**
+ * @brief Parse configure by stream
+ *
+ * @param[in] stream The stdio stream of the configure file
+ * @param[in] options Option flags passing to the parser
+ * @return A config structure
+ * @retval pointer Succeed
+ * @retval NULL One or more errors encountered
+ *
+ * @note Remember to call scconfig_free() after using it
+ * @see seccomp_config
+ */
+struct seccomp_config * scconfig_parse_file(FILE *stream, unsigned int options);
+
+/**
+ * @brief Parse configure by string
+ *
+ * @param[in] str The null-terminated string of the configure file
+ * @param[in] options Option flags passing to the parser
+ * @return A config structure
+ * @retval pointer Succeed
+ * @retval NULL One or more errors encountered
+ *
+ * @note Remember to call scconfig_free() after using it
+ * @see seccomp_config
+ */
+struct seccomp_config * scconfig_parse_string(const char *str, unsigned int options);
 
 #endif
