@@ -93,6 +93,11 @@ out:
     return cfg;
 }
 
+parser_error_t parser_get_err()
+{
+    return _par_err;
+}
+
 static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
 {
     char buf[VAL_MAX_LENGTH + 1];
