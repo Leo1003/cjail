@@ -290,7 +290,7 @@ parser_error_t parser_get_err();
  * @note Remember to call scconfig_free() after using it
  * @see seccomp_config
  */
-struct seccomp_config * scconfig_parse_path(const char *path, unsigned int options);
+scconfig scconfig_parse_path(const char *path, unsigned int options);
 
 /**
  * @brief Parse configure by stream
@@ -304,7 +304,7 @@ struct seccomp_config * scconfig_parse_path(const char *path, unsigned int optio
  * @note Remember to call scconfig_free() after using it
  * @see seccomp_config
  */
-struct seccomp_config * scconfig_parse_file(FILE *stream, unsigned int options);
+scconfig scconfig_parse_file(FILE *stream, unsigned int options);
 
 /**
  * @brief Parse configure by string
@@ -318,6 +318,6 @@ struct seccomp_config * scconfig_parse_file(FILE *stream, unsigned int options);
  * @note Remember to call scconfig_free() after using it
  * @see seccomp_config
  */
-struct seccomp_config * scconfig_parse_string(const char *str, unsigned int options);
+scconfig scconfig_parse_string(const char *str, unsigned int options);
 
 #endif
