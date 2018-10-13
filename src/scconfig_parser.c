@@ -3,6 +3,7 @@
  * @file scconfig_parser.c
  * @brief parsing seccomp config file library source
  */
+#include "logger.h"
 #include "scconfig_parser.h"
 
 #include <errno.h>
@@ -101,24 +102,24 @@ parser_error_t parser_get_err()
 static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
 {
     char buf[VAL_MAX_LENGTH + 1];
-    int sys, argnum = 0;
+    int argnum = 0;
     //Zero the rule
     memset(rule, 0, sizeof(struct seccomp_rule));
     //Read syscall name
     if (fscanf(f, "%64[A-Za-z0-9_]s", buf) != 1) {
+        devf("Syntax Error\n");
         return ErrSyntax;
     }
-    if ((sys = seccomp_syscall_resolve_name(buf)) < 0) {
-        return ErrNoSyscall;
-    }
-    rule->syscall  = sys;
+    rule->syscall  = seccomp_syscall_resolve_name(buf);
     skip_spaces(f);
+    //FIXME: feof() may not work
     if (feof(f)) {
         //No parameter given, stop parsing
         return ErrNone;
     }
     //Expecting only one "("
-    if (fscanf(f, "%64[(]s", buf) != 1 || !strcmp(buf, "(")) {
+    if (fscanf(f, "%64[(]s", buf) != 1 || strcmp(buf, "(")) {
+        devf("Syntax Error\n");
         return ErrSyntax;
     }
     skip_spaces(f);
@@ -130,9 +131,15 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
         }
         //Parsing operators
         int op;
-        if (fscanf(f, "%64[&>=<]s", buf) != 1) {
+        if (fscanf(f, "%64[&>=<)]s", buf) != 1) {
+            devf("Syntax Error\n");
             return ErrSyntax;
         }
+        //Allow only appear "()"
+        if (!strcmp(buf, ")") && argnum == 0) {
+            break;
+        }
+
         if ((op = table_to_int(op_table, buf)) < 0) {
             return ErrUnknownValue;
         }
@@ -143,22 +150,26 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
         if (op == CMP_MASK) {
             //parsing mask
             if (fscanf(f, "%lli", &mask) != 1) {
+                devf("Syntax Error\n");
                 return ErrSyntax;
             }
             skip_spaces(f);
             //Expecting "=="
-            if (fscanf(f, "%64[=]s", buf) != 1 || !strcmp(buf, "==")) {
+            if (fscanf(f, "%64[=]s", buf) != 1 || strcmp(buf, "==")) {
+                devf("Syntax Error\n");
                 return ErrSyntax;
             }
             skip_spaces(f);
             //parsing number
             if (fscanf(f, "%lli", &val) != 1) {
+                devf("Syntax Error\n");
                 return ErrSyntax;
             }
             skip_spaces(f);
         } else {
             //parsing number
             if (fscanf(f, "%lli", &val) != 1) {
+                devf("Syntax Error\n");
                 return ErrSyntax;
             }
             skip_spaces(f);
@@ -170,6 +181,7 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
 
         //Expecting "," or ")"
         if (fscanf(f, "%64[,)]s", buf) != 1) {
+            devf("Syntax Error\n");
             return ErrSyntax;
         }
         if (!strcmp(buf, ",")) {
@@ -177,9 +189,15 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
         } else if (!strcmp(buf, ")")) {
             break;
         } else {
+            devf("Syntax Error\n");
             return ErrSyntax;
         }
         argnum++;
+    }
+
+    //Check nosyscall here to avoid there are data unread
+    if (rule->syscall < 0) {
+        return ErrNoSyscall;
     }
     return ErrNone;
 }
@@ -190,6 +208,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
     char cmd[CMD_MAX_LENGTH + 1], strval[VAL_MAX_LENGTH + 1];
     int val;
     struct seccomp_rule rule;
+
     //Convert string into C stream
     FILE *mf = fmemopen((void *)str, sizeof(char) * (strlen(str) + 1), "r");
     if (!mf) {
@@ -204,9 +223,13 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
         ret = ErrSyntax;
         goto out;
     }
+    //To uppercase
+    strupr(cmd);
+
     skip_spaces(mf);
     switch (table_to_int(cmd_table, cmd)) {
         case 1:      //PARSER_CMD_TYPE
+            devf("PARSER_CMD_TYPE\n");
             if (fscanf(mf, "%64[A-Za-z0-9_]s", strval) != 1) {
                 ret = ErrSyntax;
                 goto out;
@@ -220,6 +243,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
             scconfig_set_type(cfg, val);
             break;
         case 2:      //PARSER_CMD_ACTION
+            devf("PARSER_CMD_ACTION\n");
             if (fscanf(mf, "%64[A-Za-z0-9_]s", strval) != 1) {
                 ret = ErrSyntax;
                 goto out;
@@ -233,6 +257,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
             scconfig_set_deny(cfg, val);
             break;
         case 3:      //PARSER_CMD_ALLOW
+            devf("PARSER_CMD_ALLOW\n");
             if ((ret = _parse_syscall(mf, &rule))) {
                 if (ret == ErrNoSyscall && options & SCOPT_IGN_NOSYS) {
                     ret = ErrNone;
@@ -245,6 +270,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
             }
             break;
         case 4:      //PARSER_CMD_DENY
+            devf("PARSER_CMD_DENY\n");
             if ((ret = _parse_syscall(mf, &rule))) {
                 if (ret == ErrNoSyscall && options & SCOPT_IGN_NOSYS) {
                     ret = ErrNone;
@@ -260,9 +286,11 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
             ret = ErrUnknownCmd;
             goto out;
     }
+
     //Parsing complete, nothing except spaces should appear
     skip_spaces(mf);
-    if (!feof(mf)) {
+    if (fgetc(mf) > 0) {
+        devf("nothing except spaces should appear\n");
         ret = ErrSyntax;
         goto out;
     }
@@ -284,11 +312,23 @@ static int _scconfig_parse(struct seccomp_config **cfg, FILE *stream, unsigned i
         line++;
         enum parser_err_type err = ErrNone;
 
-        //Detect comment, truncate string by '#'
-        char *c = strchr(linestr, '#');
+        //Detect newline charactor
+        char *c = strchr(linestr, '\n');
         if (c) {
             *c = '\0';
         }
+
+        //Debug message
+        devf("getline: %s\n", linestr);
+
+        //Detect comment, truncate string by '#'
+        c = strchr(linestr, '#');
+        if (c) {
+            *c = '\0';
+        }
+
+        //Debug message
+        devf("Parsing Line %d: %s\n", line, linestr);
 
         //ignore empty or comment only line
         if (strlen(linestr) == 0) {
@@ -301,9 +341,12 @@ static int _scconfig_parse(struct seccomp_config **cfg, FILE *stream, unsigned i
         }
     }
 
-    if (!(options & SCOPT_IGN_NORULE) && scconfig_len(*cfg) == 0) {
+    if (_par_err.type == ErrNone && !(options & SCOPT_IGN_NORULE) && scconfig_len(*cfg) == 0) {
         set_par_err(ErrNoRule, 0);
     }
+
+    //Free string allocated by getline
+    free(linestr);
 
     if (_par_err.type) {
         scconfig_free(*cfg);

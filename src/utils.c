@@ -210,8 +210,8 @@ char * strupr(char * str)
             if (islower(str[i])) {
                 str[i] = toupper(str[i]);
             }
+            i++;
         }
-        i++;
     }
     return str;
 }
@@ -224,8 +224,8 @@ char * strlwr(char * str)
             if (isupper(str[i])) {
                 str[i] = tolower(str[i]);
             }
+            i++;
         }
-        i++;
     }
     return str;
 }

@@ -145,7 +145,7 @@ error:
 struct seccomp_config * scconfig_init()
 {
     struct seccomp_config *cfg = malloc(sizeof(struct seccomp_config));
-    if (cfg != NULL) {
+    if (cfg == NULL) {
         PFTL("malloc memory");
         return NULL;
     }

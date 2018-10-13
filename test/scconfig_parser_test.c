@@ -20,10 +20,10 @@ static const char *basic_cfg_data =
 "TYPE WHITELIST\n"
 "ACTION KILL\n"
 "\n"
-"ALLOW read()        # Read from fds\n"
-"ALLOW write()       # Write to fds\n"
-"ALLOW sigreturn()   # Called when signal handler return\n"
-"ALLOW exit()        # Not exit_group()\n";
+"ALLOW read()           # Read from fds\n"
+"ALLOW write()          # Write to fds\n"
+"ALLOW rt_sigreturn()   # Called when signal handler return\n"
+"ALLOW exit()           # Not exit_group()\n";
 
 static int write_file(const char *path, const char *data)
 {
@@ -46,6 +46,8 @@ out:
 
 static void check_basic_config(struct seccomp_config *cfg)
 {
+    fprintf(stderr, "Parser Error Type: %d; Line: %d\n", parser_get_err().type, parser_get_err().line);
+
     ck_assert_ptr_nonnull(cfg);
     ck_assert_int_eq(scconfig_get_type(cfg), CFG_WHITELIST);
     ck_assert_int_eq(scconfig_get_deny(cfg), DENY_KILL);
@@ -58,7 +60,7 @@ static void check_basic_config(struct seccomp_config *cfg)
     rules[1].type = RULE_ALLOW;
     rules[1].syscall = SCMP_SYS(write);
     rules[2].type = RULE_ALLOW;
-    rules[2].syscall = SCMP_SYS(sigreturn);
+    rules[2].syscall = SCMP_SYS(rt_sigreturn);
     rules[3].type = RULE_ALLOW;
     rules[3].syscall = SCMP_SYS(exit);
 
