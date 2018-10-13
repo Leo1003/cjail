@@ -10,6 +10,7 @@ add_library(libcjail SHARED
     init.c
     logger.c
     process.c
+    scconfig_parser.c
     simple_seccomp.c
     sigset.c
     taskstats.c
