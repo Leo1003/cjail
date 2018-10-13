@@ -102,14 +102,33 @@ int scconfig_compile(const scconfig cfg, struct sock_fprog *bpf);
 /**
  * @brief Allocate and initialize a seccomp configure
  *
- * @param[in] type seccomp configure type
  * @return Pointer to the newly allocate configure
  * @retval pointer Succeed
  * @retval NULL One or more errors encountered
  *
  * @see scconfig_free
  */
-scconfig scconfig_init(enum config_type type);
+scconfig scconfig_init();
+
+/**
+ * @brief Get the type of a seccomp configure
+ *
+ * @param cfg seccomp configure
+ * @return Current type of the given configure
+ *
+ * @see scconfig_set_type
+ */
+enum config_type scconfig_get_type(const scconfig cfg);
+
+/**
+ * @brief Set the type of a seccomp configure
+ *
+ * @param cfg seccomp configure
+ * @param type type to set
+ *
+ * @see scconfig_get_type
+ */
+void scconfig_set_type(scconfig cfg, enum config_type type);
 
 /**
  * @brief Get the current deny method of a seccomp configure
