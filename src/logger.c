@@ -88,7 +88,9 @@ int loggerf(enum logger_level level, const char *src, int line, const char *form
     va_list ap;
     int ret = 0;
     enum logger_level l;
+    //Save errno prevent overriding it.
     error_t savederr = errno;
+
     chk_logger_init();
     if (level == LOG_SLIENT) {
         return 0;
@@ -98,36 +100,48 @@ int loggerf(enum logger_level level, const char *src, int line, const char *form
     } else {
         l = lastlv = level;
     }
+    //Lower than setting level, hide this message.
     if (l < loglv) {
         return 0;
     }
+    //Don't print anything when given empty string
+    if (strlen(format) == 0) {
+        return 0;
+    }
+    //Print level
     switch (level) {
         case LOG_DEBUG:
-            ret += fprintf(logfile, "DEBUG: ");
+            ret |= (fprintf(logfile, "DEBUG: ") < 0) ? -1 : 0;
             break;
         case LOG_INFO:
-            ret += fprintf(logfile, "INFO : ");
+            ret |= (fprintf(logfile, "INFO : ") < 0) ? -1 : 0;
             break;
         case LOG_WARN:
-            ret += fprintf(logfile, "WARN : ");
+            ret |= (fprintf(logfile, "WARN : ") < 0) ? -1 : 0;
             break;
         case LOG_ERROR:
-            ret += fprintf(logfile, "ERROR: ");
+            ret |= (fprintf(logfile, "ERROR: ") < 0) ? -1 : 0;
             break;
         case LOG_FATAL:
-            ret += fprintf(logfile, "FATAL: ");
+            ret |= (fprintf(logfile, "FATAL: ") < 0) ? -1 : 0;
             break;
         default:
             break;
     }
+
 #ifndef NDEBUG
+    //Print filename & line number when built in debug mode
     if (level != LOG_NONE) {
-        ret += fprintf(logfile, "[%s:%d]\t", src, line);
+        ret |= (fprintf(logfile, "[%s:%d]\t", src, line) < 0) ? -1 : 0;
     }
 #endif  //NDEBUG
+
+    //Print actual message
     va_start(ap, format);
-    ret += vfprintf(logfile, format, ap);
+    ret |= (vfprintf(logfile, format, ap) < 0) ? -1 : 0;
     va_end(ap);
+
+    //Restore saved errno
     errno = savederr;
     return ret;
 }
