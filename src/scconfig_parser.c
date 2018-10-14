@@ -102,7 +102,7 @@ parser_error_t parser_get_err()
 static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
 {
     char buf[VAL_MAX_LENGTH + 1];
-    int argnum = 0;
+    int c, argnum = 0;
     //Zero the rule
     memset(rule, 0, sizeof(struct seccomp_rule));
     //Read syscall name
@@ -112,10 +112,12 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
     }
     rule->syscall  = seccomp_syscall_resolve_name(buf);
     skip_spaces(f);
-    //FIXME: feof() may not work
-    if (feof(f)) {
+
+    if ((c = fgetc(f)) <= 0) {
         //No parameter given, stop parsing
         return ErrNone;
+    } else {
+        ungetc(c, f);
     }
     //Expecting only one "("
     if (fscanf(f, "%64[(]s", buf) != 1 || strcmp(buf, "(")) {
@@ -131,12 +133,18 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
         }
         //Parsing operators
         int op;
-        if (fscanf(f, "%64[&>=<)]s", buf) != 1) {
+        if (fscanf(f, "%64[&>!=<,)]s", buf) != 1) {
             devf("Syntax Error\n");
             return ErrSyntax;
         }
+        //Allow empty
+        if (!strcmp(buf, ",")) {
+            argnum++;
+            skip_spaces(f);
+            continue;
+        }
         //Allow only appear "()"
-        if (!strcmp(buf, ")") && argnum == 0) {
+        if (!strcmp(buf, ")")) {
             break;
         }
 

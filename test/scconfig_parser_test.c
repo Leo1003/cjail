@@ -39,14 +39,14 @@ static const char *advanced_data =
 "ALLOW write( <= 2 )            # Write to fds\n"
 "ALLOW rt_sigreturn             # Called when signal handler return\n"
 "ALLOW exit ()                  # Not exit_group()\n"
-"ALLOW exit_griup ()\n"
+"ALLOW exit_group ()\n"
 "ALLOW brk\n"
 "ALLOW arch_prctl\n"
 "ALLOW openat\n"
 "ALLOW close\n"
 "ALLOW mmap ( , , , & 0xf == 0x2, , )\n"
 "ALLOW mprotect\n"
-"ALLOW unmap\n"
+"ALLOW munmap\n"
 "ALLOW access\n"
 "ALLOW fstat\n"
 "ALLOW lseek\n"
@@ -148,6 +148,7 @@ static void check_advance_config(struct seccomp_config *cfg)
 
 
     for (int i = 0; i < 16; i++) {
+        fprintf(stderr, "Checking rule %d...\n", i);
         ck_assert_mem_eq(scconfig_get_rule(cfg, i), &rules[i], sizeof(struct seccomp_rule));
     }
 }
