@@ -237,5 +237,8 @@ int main()
     #endif
     number_failed = srunner_ntests_failed(sr);
     srunner_free(sr);
+
+    unlink(SCCONFIG_PATH);
+
     return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
