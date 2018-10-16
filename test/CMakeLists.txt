@@ -21,6 +21,7 @@ endfunction(cjailtest)
 cjailtest(test_utils)
 cjailtest(basic_test)
 cjailtest(timing_test)
+cjailtest(scconfig_parser_test)
 
 #--------------------------------
 # Setup static_test

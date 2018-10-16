@@ -8,6 +8,7 @@
 #include "utils.h"
 
 #include <bsd/string.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
@@ -15,6 +16,30 @@
 #include <unistd.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+
+int table_to_int(const table_int32* table, const char* str)
+{
+    int i = 0;
+    while (table[i].name) {
+        if (!strcmp(table[i].name, str)) {
+            return table[i].value;
+        }
+        i++;
+    }
+    return table[i].value;
+}
+
+const char * table_to_str(const table_int32 *table, int value)
+{
+    int i = 0;
+    while (table[i].name) {
+        if (table[i].value == value) {
+            return table[i].name;
+        }
+        i++;
+    }
+    return NULL;
+}
 
 int cpuset_tostr(const cpu_set_t* cpuset, char* str, size_t len)
 {
@@ -175,4 +200,32 @@ int pipe_c(int pipedes[2])
     return (pipe(pipedes) ||
         setcloexec(pipedes[0]) ||
         setcloexec(pipedes[1]));
+}
+
+char * strupr(char * str)
+{
+    if (str) {
+        int i = 0;
+        while (str[i]) {
+            if (islower(str[i])) {
+                str[i] = toupper(str[i]);
+            }
+            i++;
+        }
+    }
+    return str;
+}
+
+char * strlwr(char * str)
+{
+    if (str) {
+        int i = 0;
+        while (str[i]) {
+            if (isupper(str[i])) {
+                str[i] = tolower(str[i]);
+            }
+            i++;
+        }
+    }
+    return str;
 }
