@@ -1,5 +1,7 @@
- - [ ] better seccomp rule
- - [ ] seccomp_debug mode
+ - [x] better seccomp rule
+ - [ ] seccomp debug mode
+ - [ ] support disk image loopback mount
+ - [ ] update command line interface
  - [ ] unit tests
  - [ ] add user namespace support
- - [ ] detect if required kernel features are supported in cmake
+ - [ ] detect if required kernel features are supported
