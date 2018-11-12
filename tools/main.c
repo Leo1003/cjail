@@ -32,7 +32,8 @@ void print_result(const struct cjail_result *res);
 enum OPTVAL {
     OPT_PFD = 256,
     OPT_NET,
-    OPT_CGR
+    OPT_CGR,
+    OPT_SCC,
 };
 
 const char opts[] = "e:EC:D:u:g:i:o:r:I:O:R:S:f:v:c:z:p:s:t:G:m:h";
@@ -61,6 +62,7 @@ const struct option longopts[] = {
     {"limit-time",  required_argument,  NULL, 't'},
     {"cgroup-root", required_argument,  NULL, OPT_CGR},
     {"limit-rss",   required_argument,  NULL, 'm'},
+    {"seccomp-cfg", required_argument,  NULL, OPT_SCC},
     {"help",        no_argument      ,  NULL, 'h'},
     {NULL,          0,                  NULL,  0 }
 };
@@ -166,6 +168,7 @@ int main(int argc, char *argv[], char *envp[])
     struct timeval time;
     int inherenv = 0;
     char *envstr = NULL, **para_env = NULL;
+    parser_error_t pserr;
 #ifndef NDEBUG
     char cpustr[1024];
 #endif
@@ -261,6 +264,18 @@ int main(int argc, char *argv[], char *envp[])
             case 'm':
                 para.cg_rss = toll(optarg, 1);
                 break;
+            case OPT_SCC:
+                para.seccompcfg = scconfig_parse_path(optarg, 0);
+                if (!para.seccompcfg) {
+                    perrf("Failed to parse seccomp config file: %s\n", optarg);
+                    pserr = parser_get_err();
+                    if (pserr.line) {
+                        perrf("At line %d: ", pserr.line);
+                    }
+                    perrf("%s\n", parser_errstr(pserr.type));
+                    exit(1);
+                }
+                break;
             case 'h':
                 usage(argv[0]);
                 exit(0);
@@ -288,8 +303,9 @@ int main(int argc, char *argv[], char *envp[])
         }
         para.environ = para_env;
     }
-    if (inherenv && !envstr)
+    if (inherenv && !envstr) {
         para.environ = envp;
+    }
 
     int ret = cjail_exec(&para, &res);
 
@@ -302,6 +318,7 @@ int main(int argc, char *argv[], char *envp[])
         exit(1);
     }
     print_result(&res);
+    scconfig_free(para.seccompcfg);
     return 0;
 }
 
@@ -402,4 +419,7 @@ void usage(char *name)
     printf("      \t\t\t\t!<name>       : unset the environment variable inheriting from the parent process\n");
     printf("      \t\t\t\t<name>=<value>: set the environment variable using giving name and value\n");
     printf("  -E, --inherit-env\t\tinherit all environment variables from the parent process\n");
+    printf("\n");
+    printf(" Seccomp Options:\n");
+    printf("      --seccomp-cfg=FILE\tspecify seccomp rules to load\n");
 }
