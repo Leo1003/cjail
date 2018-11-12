@@ -298,6 +298,17 @@ typedef struct parser_error parser_error_t;
 parser_error_t parser_get_err();
 
 /**
+ * @brief Get the description of the error type
+ *
+ * @param[in] type The error type
+ * @return A const string of the description
+ *
+ * @see parser_get_err
+ * @see parser_error_t
+ */
+const char * parser_errstr(enum parser_err_type type);
+
+/**
  * @brief Parse configure by path
  *
  * @param[in] path The path to the configure file
