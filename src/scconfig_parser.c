@@ -106,11 +106,12 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
     //Zero the rule
     memset(rule, 0, sizeof(struct seccomp_rule));
     //Read syscall name
-    if (fscanf(f, "%64[A-Za-z0-9_]s", buf) != 1) {
+    if (fscanf(f, "%64[A-Za-z0-9_]", buf) != 1) {
         devf("Syntax Error\n");
         return ErrSyntax;
     }
     rule->syscall  = seccomp_syscall_resolve_name(buf);
+    devf("syscall: %s -> %d\n", buf, rule->syscall);
     skip_spaces(f);
 
     if ((c = fgetc(f)) <= 0) {
@@ -120,7 +121,7 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
         ungetc(c, f);
     }
     //Expecting only one "("
-    if (fscanf(f, "%64[(]s", buf) != 1 || strcmp(buf, "(")) {
+    if (fscanf(f, "%64[(]", buf) != 1 || strcmp(buf, "(")) {
         devf("Syntax Error\n");
         return ErrSyntax;
     }
@@ -133,7 +134,7 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
         }
         //Parsing operators
         int op;
-        if (fscanf(f, "%64[&>!=<,)]s", buf) != 1) {
+        if (fscanf(f, "%64[&>!=<,)]", buf) != 1) {
             devf("Syntax Error\n");
             return ErrSyntax;
         }
@@ -163,7 +164,7 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
             }
             skip_spaces(f);
             //Expecting "=="
-            if (fscanf(f, "%64[=]s", buf) != 1 || strcmp(buf, "==")) {
+            if (fscanf(f, "%64[=]", buf) != 1 || strcmp(buf, "==")) {
                 devf("Syntax Error\n");
                 return ErrSyntax;
             }
@@ -188,7 +189,7 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
         rule->args[argnum].mask = (op == CMP_MASK) ? mask : 0;
 
         //Expecting "," or ")"
-        if (fscanf(f, "%64[,)]s", buf) != 1) {
+        if (fscanf(f, "%64[,)]", buf) != 1) {
             devf("Syntax Error\n");
             return ErrSyntax;
         }
@@ -227,7 +228,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
         //Nothing else except spaces, ignore this line
         goto out;
     }
-    if (fscanf(mf, "%16[A-Za-z0-9_]s", cmd) != 1) {
+    if (fscanf(mf, "%16[A-Za-z0-9_]", cmd) != 1) {
         ret = ErrSyntax;
         goto out;
     }
@@ -238,7 +239,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
     switch (table_to_int(cmd_table, cmd)) {
         case 1:      //PARSER_CMD_TYPE
             devf("PARSER_CMD_TYPE\n");
-            if (fscanf(mf, "%64[A-Za-z0-9_]s", strval) != 1) {
+            if (fscanf(mf, "%64[A-Za-z0-9_]", strval) != 1) {
                 ret = ErrSyntax;
                 goto out;
             }
@@ -252,7 +253,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
             break;
         case 2:      //PARSER_CMD_ACTION
             devf("PARSER_CMD_ACTION\n");
-            if (fscanf(mf, "%64[A-Za-z0-9_]s", strval) != 1) {
+            if (fscanf(mf, "%64[A-Za-z0-9_]", strval) != 1) {
                 ret = ErrSyntax;
                 goto out;
             }

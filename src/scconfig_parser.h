@@ -111,6 +111,6 @@ struct seccomp_config * scconfig_parse_path(const char *path, unsigned int optio
 struct seccomp_config * scconfig_parse_file(FILE *stream, unsigned int options);
 struct seccomp_config * scconfig_parse_string(const char *str, unsigned int options);
 
-#define skip_spaces(fp) fscanf(fp, "%*[ \t]s")
+#define skip_spaces(fp) fscanf(fp, "%*[ \t]")
 
 #endif

@@ -65,7 +65,15 @@ static int rule_compile_add(scmp_filter_ctx ctx, uint32_t denycode, const struct
         }
         args_cnt++;
     }
-    return seccomp_rule_add_array(ctx, action, rule.syscall, args_cnt, args);
+    devf("action: %x\n", action);
+    devf("syscall: %d\n", rule.syscall);
+    devf("args_cnt: %d\n", args_cnt);
+    int ret = seccomp_rule_add_array(ctx, action, rule.syscall, args_cnt, args);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
 }
 
 int scconfig_compile(const struct seccomp_config *cfg, struct sock_fprog *bpf)
@@ -95,17 +103,23 @@ int scconfig_compile(const struct seccomp_config *cfg, struct sock_fprog *bpf)
             denycode = SCMP_ACT_TRACE(TRACE_KILL_MAGIC);
             break;
     }
-    if (cfg->type == CFG_WHITELIST) {
+    if (cfg->type == CFG_BLACKLIST) {
         ctx = seccomp_init(SCMP_ACT_ALLOW);
     } else {
         ctx = seccomp_init(denycode);
     }
     if (!ctx) {
+        PFTL("init context");
         goto error;
     }
 
     for (unsigned i = 0; i < cfg->rules_count; i++) {
+        if ((cfg->rules[i].type == RULE_DENY && cfg->type == CFG_WHITELIST) ||
+            (cfg->rules[i].type == RULE_ALLOW && cfg->type == CFG_BLACKLIST)) {
+            continue;
+        }
         if (rule_compile_add(ctx, denycode, cfg->rules[i])) {
+            PFTL("add rules");
             goto error;
         }
     }

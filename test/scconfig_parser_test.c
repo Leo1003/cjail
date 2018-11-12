@@ -50,7 +50,8 @@ static const char *advanced_data =
 "ALLOW access\n"
 "ALLOW fstat\n"
 "ALLOW lseek\n"
-"DENY ptrace(!=0)\n";
+"DENY ptrace(!=0)\n"
+"DENY sched_setaffinity\n";
 
 static int write_file(const char *path, const char *data)
 {
@@ -105,9 +106,9 @@ static void check_advance_config(struct seccomp_config *cfg)
     ck_assert_ptr_nonnull(cfg);
     ck_assert_int_eq(scconfig_get_type(cfg), CFG_WHITELIST);
     ck_assert_int_eq(scconfig_get_deny(cfg), DENY_TRAP);
-    ck_assert_int_eq(scconfig_len(cfg), 16);
+    ck_assert_int_eq(scconfig_len(cfg), 17);
 
-    struct seccomp_rule rules[16];
+    struct seccomp_rule rules[17];
     memset(rules, 0, sizeof(rules));
     rules[0].type = RULE_ALLOW;
     rules[0].syscall = SCMP_SYS(read);
@@ -145,9 +146,11 @@ static void check_advance_config(struct seccomp_config *cfg)
     rules[15].type = RULE_DENY;
     rules[15].syscall = SCMP_SYS(ptrace);
     rules[15].args[0] = (struct args_rule){ CMP_NE, 0x0, 0x0 };
+    rules[16].type = RULE_DENY;
+    rules[16].syscall = SCMP_SYS(sched_setaffinity);
 
 
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 17; i++) {
         fprintf(stderr, "Checking rule %d...\n", i);
         ck_assert_mem_eq(scconfig_get_rule(cfg, i), &rules[i], sizeof(struct seccomp_rule));
     }
