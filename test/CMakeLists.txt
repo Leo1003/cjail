@@ -5,11 +5,12 @@ function(cjailtest testname)
     add_executable(${testname} "${testname}.c")
     target_link_libraries(${testname}
         PRIVATE
-            check::check
+            ${CRITERION_LIBRARY}
             CJail::libcjail
     )
     target_include_directories(${testname}
         PRIVATE
+            ${CRITERION_INCLUDE_DIR}
             "${CMAKE_SOURCE_DIR}/src"
     )
     add_test(${testname} "${CMAKE_CURRENT_BINARY_DIR}/${testname}")

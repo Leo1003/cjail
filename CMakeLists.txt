@@ -26,15 +26,15 @@ add_subdirectory(tools)
 #--------------------------------
 # Tests configuration
 #
-find_package(Check)
+find_package(Criterion)
 
-if(CHECK_FOUND)
-    message(STATUS "Found Check library.")
+if(CRITERION_FOUND)
+    message(STATUS "Found Criterion library.")
     message(STATUS "Test Enabled.")
     enable_testing()
     add_subdirectory(test)
 else()
-    message(WARNING "Check library not found!\nTests disabled.")
+    message(WARNING "Criterion library not found!\nTests disabled.")
 endif()
 
 #--------------------------------
