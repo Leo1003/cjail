@@ -18,7 +18,7 @@ endfunction(cjailtest)
 #--------------------------------
 # Setup tests
 #
-cjailtest(test_utils)
+cjailtest(utils_test)
 cjailtest(basic_test)
 cjailtest(timing_test)
 cjailtest(scconfig_parser_test)
