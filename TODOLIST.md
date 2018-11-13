@@ -2,6 +2,7 @@
  - [ ] seccomp debug mode
  - [ ] support disk image loopback mount
  - [ ] update command line interface
+ - [ ] using cmocka as new tesing framework
  - [ ] unit tests
  - [ ] add user namespace support
  - [ ] detect if required kernel features are supported
