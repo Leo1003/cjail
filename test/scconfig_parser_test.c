@@ -1,7 +1,8 @@
 #include "cjail.h"
 #include "scconfig_parser.h"
 
-#include <check.h>
+#include <criterion/criterion.h>
+#include <criterion/assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -72,15 +73,39 @@ out:
     return ret;
 }
 
+int cmp(struct seccomp_rule * a, struct seccomp_rule * b)
+{
+    if (a->type != b->type) {
+        return (a->type < b->type ? -1 : 1);
+    }
+    if (a->syscall != b->syscall) {
+        return (a->syscall < b->syscall ? -1 : 1);
+    }
+    for (int i = 0; i < 6; i++) {
+        if (a->args[i].cmp != b->args[i].cmp) {
+            return (a->args[i].cmp < b->args[i].cmp ? -1 : 1);
+        }
+        if (a->args[i].value != b->args[i].value) {
+            return (a->args[i].value < b->args[i].value ? -1 : 1);
+        }
+        if (a->args[i].mask != b->args[i].mask) {
+            return (a->args[i].mask < b->args[i].mask ? -1 : 1);
+        }
+    }
+    return 0;
+}
+
 static void check_basic_config(struct seccomp_config *cfg)
 {
-    fprintf(stderr, "Parser Error Type: %d; Line: %d\n", parser_get_err().type, parser_get_err().line);
-    ck_assert_int_eq(parser_get_err().type, ErrNone);
+    if (parser_get_err().type) {
+        cr_log_error("Parser Error Type: %d; Line: %d\n", parser_get_err().type, parser_get_err().line);
+    }
+    cr_assert_eq(parser_get_err().type, ErrNone);
 
-    ck_assert_ptr_nonnull(cfg);
-    ck_assert_int_eq(scconfig_get_type(cfg), CFG_WHITELIST);
-    ck_assert_int_eq(scconfig_get_deny(cfg), DENY_KILL);
-    ck_assert_int_eq(scconfig_len(cfg), 4);
+    cr_assert_not_null(cfg);
+    cr_expect_eq(scconfig_get_type(cfg), CFG_WHITELIST);
+    cr_expect_eq(scconfig_get_deny(cfg), DENY_KILL);
+    cr_assert_eq(scconfig_len(cfg), 4);
 
     struct seccomp_rule rules[4];
     memset(rules, 0, sizeof(rules));
@@ -94,19 +119,21 @@ static void check_basic_config(struct seccomp_config *cfg)
     rules[3].syscall = SCMP_SYS(exit);
 
     for (int i = 0; i < 4; i++) {
-        ck_assert_mem_eq(scconfig_get_rule(cfg, i), &rules[i], sizeof(struct seccomp_rule));
+        cr_expect_eq(cmp(scconfig_get_rule(cfg, i), &rules[i]), 0);
     }
 }
 
 static void check_advance_config(struct seccomp_config *cfg)
 {
-    fprintf(stderr, "Parser Error Type: %d; Line: %d\n", parser_get_err().type, parser_get_err().line);
-    ck_assert_int_eq(parser_get_err().type, ErrNone);
+    if (parser_get_err().type) {
+        cr_log_error("Parser Error Type: %d; Line: %d\n", parser_get_err().type, parser_get_err().line);
+    }
+    cr_assert_eq(parser_get_err().type, ErrNone);
 
-    ck_assert_ptr_nonnull(cfg);
-    ck_assert_int_eq(scconfig_get_type(cfg), CFG_WHITELIST);
-    ck_assert_int_eq(scconfig_get_deny(cfg), DENY_TRAP);
-    ck_assert_int_eq(scconfig_len(cfg), 17);
+    cr_assert_not_null(cfg);
+    cr_expect_eq(scconfig_get_type(cfg), CFG_WHITELIST);
+    cr_expect_eq(scconfig_get_deny(cfg), DENY_TRAP);
+    cr_assert_eq(scconfig_len(cfg), 17);
 
     struct seccomp_rule rules[17];
     memset(rules, 0, sizeof(rules));
@@ -151,25 +178,38 @@ static void check_advance_config(struct seccomp_config *cfg)
 
 
     for (int i = 0; i < 17; i++) {
-        fprintf(stderr, "Checking rule %d...\n", i);
-        ck_assert_mem_eq(scconfig_get_rule(cfg, i), &rules[i], sizeof(struct seccomp_rule));
+        cr_log_info("Checking rule %d...\n", i);
+        cr_expect_eq(cmp(scconfig_get_rule(cfg, i), &rules[i]), 0);
     }
 }
 
-START_TEST(path_test_1)
+Test(path_test, test_1)
 {
     struct seccomp_config *cfg = scconfig_parse_path(SCCONFIG_PATH, 0);
     check_basic_config(cfg);
 
     scconfig_free(cfg);
 }
-END_TEST
 
-START_TEST(fp_test_1)
+void file_setup()
+{
+    if (write_file(SCCONFIG_PATH, basic_cfg_data) < 0) {
+        cr_assert_fail("Failed to write to config file");
+    }
+}
+
+void file_teardown()
+{
+    if (unlink(SCCONFIG_PATH)) {
+        cr_assert_fail("Failed to remove the config file");
+    }
+}
+
+Test(fp_test, test_1, .init = file_setup, .fini = file_teardown)
 {
     FILE *fp = fopen(SCCONFIG_PATH, "r");
     if (!fp) {
-        ck_abort_msg("Failed to open config file");
+        cr_assert_fail("Failed to open config file\n");
     }
 
     struct seccomp_config *cfg = scconfig_parse_file(fp, 0);
@@ -178,70 +218,19 @@ START_TEST(fp_test_1)
     scconfig_free(cfg);
     fclose(fp);
 }
-END_TEST
 
-START_TEST(string_test_1)
+Test(string_test, test_1)
 {
     struct seccomp_config *cfg = scconfig_parse_string(basic_cfg_data, 0);
     check_basic_config(cfg);
 
     scconfig_free(cfg);
 }
-END_TEST
 
-START_TEST(adv_test_1)
+Test(adv_test, test_1)
 {
     struct seccomp_config *cfg = scconfig_parse_string(advanced_data, 0);
     check_advance_config(cfg);
 
     scconfig_free(cfg);
-}
-END_TEST
-
-Suite* suite()
-{
-    Suite *s = suite_create("scconfig_parser");
-
-    TCase *t_path = tcase_create("by_path");
-    TCase *t_fp = tcase_create("by_fp");
-    TCase *t_string = tcase_create("by_string");
-    TCase *t_adv = tcase_create("advance testing");
-
-    tcase_add_test(t_path, path_test_1);
-    tcase_add_test(t_fp, fp_test_1);
-    tcase_add_test(t_string, string_test_1);
-    tcase_add_test(t_adv, adv_test_1);
-
-    suite_add_tcase(s, t_path);
-    suite_add_tcase(s, t_fp);
-    suite_add_tcase(s, t_string);
-    suite_add_tcase(s, t_adv);
-    return s;
-}
-
-int main()
-{
-    //Extract file
-    if (write_file(SCCONFIG_PATH, basic_cfg_data) < 0) {
-        ck_abort_msg("Failed to write to config file");
-    }
-
-    int number_failed;
-    Suite *s;
-    SRunner *sr;
-
-    s = suite();
-    sr = srunner_create(s);
-
-    #ifdef NDEBUG
-    srunner_run_all(sr, CK_NORMAL);
-    #else
-    srunner_run_all(sr, CK_VERBOSE);
-    #endif
-    number_failed = srunner_ntests_failed(sr);
-    srunner_free(sr);
-
-    unlink(SCCONFIG_PATH);
-
-    return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
