@@ -11,6 +11,10 @@
 #define TRACE_MAGIC 28962       /**< @brief ptrace event message of DENY_TRACE */
 #define TRACE_KILL_MAGIC 3666   /**< @brief ptrace event message of DENY_TRACE_KILL */
 
+#ifdef __cplusplus
+extern "C" {
+#endif  /* __cplusplus */
+
 /**
  * @brief The seccomp configure struct. This object is made opaque.
  * Use scconfig_*() to use this type.
@@ -338,5 +342,9 @@ scconfig scconfig_parse_file(FILE *stream, unsigned int options);
  * @see seccomp_config
  */
 scconfig scconfig_parse_string(const char *str, unsigned int options);
+
+#ifdef __cplusplus
+}
+#endif  /* __cplusplus */
 
 #endif
