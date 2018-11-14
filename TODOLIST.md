@@ -2,7 +2,7 @@
  - [ ] seccomp debug mode
  - [ ] support disk image loopback mount
  - [ ] update command line interface
- - [ ] using Criterion as new testing framework
+ - [x] using Criterion as new testing framework
  - [ ] unit tests
  - [ ] add user namespace support
  - [ ] detect if required kernel features are supported
