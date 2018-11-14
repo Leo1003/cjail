@@ -4,95 +4,72 @@
 #include "utils.h"
 
 #include <criterion/criterion.h>
+#include <criterion/parameterized.h>
 #include <criterion/assert.h>
 #include <linux/limits.h>
 #include <sched.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/param.h>
 #include <sys/types.h>
 
 #define STR_LEN 1024
+#define CPUSTR_TEST_COUNT 5
 
 /*
  *  Tests for testing cpuset_tostr()
  */
 
-Test(test_cpuset_tostr, test_1)
+struct cpuset_pair {
+    cpu_set_t input;
+    char ans[STR_LEN];
+};
+
+void cpusetset(cpu_set_t *set, int cnt, ...)
 {
-    char str[STR_LEN];
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(0, &cpuset);
-    cpuset_tostr(&cpuset, str, sizeof(str));
-    cr_assert_str_eq("0", str);
+    CPU_ZERO(set);
+    va_list ap;
+    va_start(ap, cnt);
+    for (int i = 0; i < cnt; i++)
+        CPU_SET(va_arg(ap, int), set);
+    va_end(ap);
 }
 
-Test(test_cpuset_tostr, test_2)
-{
-    char str[STR_LEN];
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(0, &cpuset);
-    CPU_SET(1, &cpuset);
-    cpuset_tostr(&cpuset, str, sizeof(str));
-    cr_assert_str_eq("0-1", str);
+ParameterizedTestParameters(test_cpuset_tostr, tests) {
+    static struct cpuset_pair params[CPUSTR_TEST_COUNT];
+
+    cpusetset(&params[0].input, 1, 0);
+    strcpy(params[0].ans, "0");
+    cpusetset(&params[1].input, 2, 0, 1);
+    strcpy(params[1].ans, "0-1");
+    cpusetset(&params[2].input, 7, 0, 1, 2, 4, 5, 9, 11);
+    strcpy(params[2].ans, "0-2,4-5,9,11");
+    cpusetset(&params[3].input, 5, 1, 4, 5, 6, 9);
+    strcpy(params[3].ans, "1,4-6,9");
+    cpusetset(&params[4].input, 5, 1, 3, 5, 7, 9);
+    strcpy(params[4].ans, "1,3,5,7,9");
+    printf("&params[0].ans = %p\n", params[0].ans);
+    printf("params[0].ans = %s\n", params[0].ans);
+
+    return cr_make_param_array(struct cpuset_pair, params, CPUSTR_TEST_COUNT);
 }
 
-Test(test_cpuset_tostr, test_3)
+ParameterizedTest(struct cpuset_pair *param, test_cpuset_tostr, tests)
 {
     char str[STR_LEN];
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(0, &cpuset);
-    CPU_SET(1, &cpuset);
-    CPU_SET(2, &cpuset);
-    CPU_SET(4, &cpuset);
-    CPU_SET(5, &cpuset);
-    CPU_SET(9, &cpuset);
-    CPU_SET(11, &cpuset);
-    cpuset_tostr(&cpuset, str, sizeof(str));
-    cr_assert_str_eq("0-2,4-5,9,11", str);
+    cr_log_info("&ans = %p\n", param->ans);
+    cr_log_info("ans = %s\n", param->ans);
+    int ret = cpuset_tostr(&param->input, str, sizeof(str));
+    cr_assert_eq(strlen(param->ans), ret);
+    cr_assert_str_eq(param->ans, str);
 }
 
-Test(test_cpuset_tostr, test_4)
-{
-    char str[STR_LEN];
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(1, &cpuset);
-    CPU_SET(4, &cpuset);
-    CPU_SET(5, &cpuset);
-    CPU_SET(6, &cpuset);
-    CPU_SET(9, &cpuset);
-    cpuset_tostr(&cpuset, str, sizeof(str));
-    cr_assert_str_eq("1,4-6,9", str);
-}
-
-Test(test_cpuset_tostr, test_5)
-{
-    char str[STR_LEN];
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(1, &cpuset);
-    CPU_SET(3, &cpuset);
-    CPU_SET(5, &cpuset);
-    CPU_SET(7, &cpuset);
-    CPU_SET(9, &cpuset);
-    cpuset_tostr(&cpuset, str, sizeof(str));
-    cr_assert_str_eq("1,3,5,7,9", str);
-}
-
-Test(test_cpuset_tostr, test_6)
+Test(test_cpuset_tostr, trunc_test_1)
 {
     char str[10];
     cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(1, &cpuset);
-    CPU_SET(3, &cpuset);
-    CPU_SET(5, &cpuset);
-    CPU_SET(7, &cpuset);
-    CPU_SET(11, &cpuset);
+    cpusetset(&cpuset, 5, 1, 3, 5, 7, 11);
     int ret = cpuset_tostr(&cpuset, str, sizeof(str));
     cr_assert_eq(-1, ret);
     cr_assert_str_eq("1,3,5,7,1", str);
@@ -105,14 +82,7 @@ Test(test_cpuset_tostr, test_6)
 Test(test_cpuset_parse, test_1)
 {
     cpu_set_t cpu1, cpu2;
-    CPU_ZERO(&cpu1);
-    CPU_SET(0, &cpu1);
-    CPU_SET(1, &cpu1);
-    CPU_SET(3, &cpu1);
-    CPU_SET(4, &cpu1);
-    CPU_SET(5, &cpu1);
-    CPU_SET(7, &cpu1);
-    CPU_SET(11, &cpu1);
+    cpusetset(&cpu1, 7, 0, 1, 3, 4, 5, 7, 11);
     cr_assert_eq(cpuset_parse("0,1,3-5,7,11", &cpu2), 0);
     cr_assert_neq(CPU_EQUAL(&cpu1, &cpu2), 0);
 }
@@ -134,14 +104,7 @@ Test(test_cpuset_parse, test_2)
 Test(test_cpuset_parse, test_3)
 {
     cpu_set_t cpu1, cpu2;
-    CPU_ZERO(&cpu1);
-    CPU_SET(1, &cpu1);
-    CPU_SET(2, &cpu1);
-    CPU_SET(3, &cpu1);
-    CPU_SET(4, &cpu1);
-    CPU_SET(5, &cpu1);
-    CPU_SET(6, &cpu1);
-    CPU_SET(11, &cpu1);
+    cpusetset(&cpu1, 7, 1, 2, 3, 4, 5, 6, 11);
     cr_assert_eq(cpuset_parse("1-6,11", &cpu2), 0);
     cr_assert_neq(CPU_EQUAL(&cpu1, &cpu2), 0);
 }
