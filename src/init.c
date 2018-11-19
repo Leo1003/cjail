@@ -12,6 +12,7 @@
 #include "sigset.h"
 #include "simple_seccomp.h"
 #include "taskstats.h"
+#include "trace.h"
 #include "utils.h"
 
 #include <errno.h>
@@ -48,6 +49,14 @@ void sigact(int sig)
     }
 }
 
+void trace_seccomp(pid_t pid, unsigned long data, struct user_regs_struct *regs)
+{
+    if (data == TRACE_KILL_MAGIC) {
+        kill(pid, SIGKILL);
+    }
+    printf("Process: %d, triggered systemcall: %llu\n", pid, regs->orig_rax);
+}
+
 static struct sig_rule init_sigrules[] = {
     { SIGHUP  , sigact , NULL, 0, {{0}}, 0 },
     { SIGINT  , sigact , NULL, 0, {{0}}, 0 },
@@ -81,6 +90,10 @@ static int ifchildfailed(pid_t pid)
         return 1;
     return 0;
 }
+
+const static struct trace_ctx tctx = {
+    .seccomp_event = trace_seccomp
+};
 
 static int setprocname(const char *argv, const char *procname)
 {
@@ -250,8 +263,13 @@ int child_init(void *arg)
     //save tty setting and restore it back if needed
     ttymode = (tcgetattr(STDIN_FILENO, &term) == 0);
 
+    //detect if we need to trace the child process
+    int traceflag = 0;
     //precompile seccomp bpf to reduce the impact on timing
     if (ep.para.seccompcfg) {
+        if (ep.para.seccompcfg->deny_action == DENY_TRACE || ep.para.seccompcfg->deny_action == DENY_TRACE_KILL) {
+            traceflag = 1;
+        }
         if (allow_execve(ep.para.seccompcfg, ep.para.argv)) {
             exit(errno);
         }
@@ -270,6 +288,10 @@ int child_init(void *arg)
         if (write_tasks(ep.cgtasksfd, childpid)) {
             PFTL("write tasks file");
             exit(errno);
+        }
+
+        if (traceflag) {
+            trace_seize(childpid);
         }
 
         sigwait(&rtset, &rtsig);
@@ -298,7 +320,7 @@ int child_init(void *arg)
         }
 
         while (1) {
-            if (waitid(P_ALL, 0, &sinfo, WEXITED | WNOWAIT) < 0) {
+            if (waitid(P_ALL, 0, &sinfo, WEXITED | (traceflag ? WSTOPPED : 0) | WNOWAIT) < 0) {
                 if(errno == ECHILD)
                     break;
             }
@@ -317,6 +339,15 @@ int child_init(void *arg)
                 result.timekill = 1;
                 alarmed = 0;
                 continue;
+            }
+            switch (trace_handle(&sinfo, &tctx)) {
+                case 1:
+                    break;
+                case 0:
+                    waitpid(sinfo.si_pid, NULL, 0);
+                    continue;
+                default:
+                    exit(errno);
             }
             if (sinfo.si_pid == childpid) {
                 if ((childstatus = ifchildfailed(sinfo.si_pid)) < 0) {
