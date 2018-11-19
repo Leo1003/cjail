@@ -32,15 +32,16 @@ void print_result(const struct cjail_result *res);
 enum OPTVAL {
     OPT_PFD = 256,
     OPT_NET,
-    OPT_CGR
+    OPT_CGR,
+    OPT_SCC,
 };
 
-const char opts[] = "e:EC:D:u:g:i:o:r:I:O:R:S:f:v:c:z:p:s:t:G:m:h";
+const char opts[] = "e:Ec:d:u:g:i:o:r:I:O:R:s:V:C:F:Z:P:S:T:m:qvh";
 const struct option longopts[] = {
     {"environ",     required_argument,  NULL, 'e'},
     {"inherit-env", no_argument,        NULL, 'E'},
-    {"chroot",      required_argument,  NULL, 'C'},
-    {"workingDir",  required_argument,  NULL, 'D'},
+    {"chroot",      required_argument,  NULL, 'c'},
+    {"workingDir",  required_argument,  NULL, 'd'},
     {"uid",         required_argument,  NULL, 'u'},
     {"gid",         required_argument,  NULL, 'g'},
     {"file-input",  required_argument,  NULL, 'i'},
@@ -51,16 +52,19 @@ const struct option longopts[] = {
     {"fd-err",      required_argument,  NULL, 'R'},
     {"preserve-fd", no_argument,        NULL, OPT_PFD},
     {"share-net",   no_argument,        NULL, OPT_NET},
-    {"cpuset",      required_argument,  NULL, 'S'},
-    {"limit-vss",   required_argument,  NULL, 'v'},
-    {"limit-core",  required_argument,  NULL, 'c'},
-    {"limit-nofile",required_argument,  NULL, 'f'},
-    {"limit-fsize", required_argument,  NULL, 'z'},
-    {"limit-proc",  required_argument,  NULL, 'p'},
-    {"limit-stack", required_argument,  NULL, 's'},
-    {"limit-time",  required_argument,  NULL, 't'},
+    {"cpuset",      required_argument,  NULL, 's'},
+    {"limit-vss",   required_argument,  NULL, 'V'},
+    {"limit-core",  required_argument,  NULL, 'C'},
+    {"limit-nofile",required_argument,  NULL, 'F'},
+    {"limit-fsize", required_argument,  NULL, 'Z'},
+    {"limit-proc",  required_argument,  NULL, 'P'},
+    {"limit-stack", required_argument,  NULL, 'S'},
+    {"limit-time",  required_argument,  NULL, 'T'},
     {"cgroup-root", required_argument,  NULL, OPT_CGR},
     {"limit-rss",   required_argument,  NULL, 'm'},
+    {"seccomp-cfg", required_argument,  NULL, OPT_SCC},
+    {"quiet",       no_argument      ,  NULL, 'q'},
+    {"verbose",     no_argument      ,  NULL, 'v'},
     {"help",        no_argument      ,  NULL, 'h'},
     {NULL,          0,                  NULL,  0 }
 };
@@ -166,6 +170,7 @@ int main(int argc, char *argv[], char *envp[])
     struct timeval time;
     int inherenv = 0;
     char *envstr = NULL, **para_env = NULL;
+    parser_error_t pserr;
 #ifndef NDEBUG
     char cpustr[1024];
 #endif
@@ -178,10 +183,10 @@ int main(int argc, char *argv[], char *envp[])
             case 'E':
                 inherenv = 1;
                 break;
-            case 'C':
+            case 'c':
                 para.chroot = optarg;
                 break;
-            case 'D':
+            case 'd':
                 para.workingDir = optarg;
                 break;
             case 'u':
@@ -222,7 +227,7 @@ int main(int argc, char *argv[], char *envp[])
             case OPT_NET:
                 para.sharenet = 1;
                 break;
-            case 'S':
+            case 's':
                 if (cpuset_parse(optarg, &cpuset) < 0) {
                     perrf("Error: Invalid cpuset string: %s\n", optarg);
                     exit(1);
@@ -233,33 +238,53 @@ int main(int argc, char *argv[], char *envp[])
                 devf("cpuset: %s\n", cpustr);
 #endif
                 break;
-            case 'v':
+            case 'V':
                 para.rlim_as = toll(optarg, 1);
                 break;
-            case 'c':
+            case 'C':
                 para.rlim_core = toll(optarg, 1);
                 break;
-            case 'f':
+            case 'F':
                 para.rlim_nofile = toll(optarg, 1);
                 break;
-            case 'z':
+            case 'Z':
                 para.rlim_fsize = toll(optarg, 1);
                 break;
-            case 'p':
+            case 'P':
                 para.rlim_proc = toll(optarg, 1);
                 break;
-            case 's':
+            case 'S':
                 para.rlim_stack = toll(optarg, 1);
                 break;
-            case 't':
+            case 'T':
                 time = totime(optarg, 1);
                 para.lim_time = time;
                 break;
             case OPT_CGR:
                 para.cgroup_root = optarg;
                 break;
-            case 'm':
+            case 'M':
                 para.cg_rss = toll(optarg, 1);
+                break;
+            case OPT_SCC:
+                para.seccompcfg = scconfig_parse_path(optarg, 0);
+                if (!para.seccompcfg) {
+                    perrf("Failed to parse seccomp config file: %s\n", optarg);
+                    pserr = parser_get_err();
+                    if (pserr.line) {
+                        perrf("At line %d: ", pserr.line);
+                    }
+                    perrf("%s\n", parser_errstr(pserr.type));
+                    exit(1);
+                }
+                break;
+            case 'q':
+                set_log_level(LOG_SLIENT);
+                break;
+            case 'v':
+                if (get_log_level() != LOG_SLIENT) {
+                    set_log_level(LOG_DEBUG);
+                }
                 break;
             case 'h':
                 usage(argv[0]);
@@ -288,8 +313,9 @@ int main(int argc, char *argv[], char *envp[])
         }
         para.environ = para_env;
     }
-    if (inherenv && !envstr)
+    if (inherenv && !envstr) {
         para.environ = envp;
+    }
 
     int ret = cjail_exec(&para, &res);
 
@@ -302,6 +328,7 @@ int main(int argc, char *argv[], char *envp[])
         exit(1);
     }
     print_result(&res);
+    scconfig_free(para.seccompcfg);
     return 0;
 }
 
@@ -367,24 +394,26 @@ void usage(char *name)
     printf("Usage: %s [OPTIONS...] [--] PROGRAM... [ARG...]\n", name);
     printf("       %s --help\n", name);
     printf("\n");
-    printf("  -C, --chroot=PATH\t\tset the root path of the jail\n");
-    printf("  -D, --workingDir=PATH\t\tchange the working directory of the program\n");
+    printf("  -c, --chroot=PATH\t\tset the root path of the jail\n");
+    printf("  -d, --workingDir=PATH\t\tchange the working directory of the program\n");
     printf("  -u, --uid=UID\t\t\tset the user of the program\n");
     printf("  -g, --gid=GID\t\t\tset the group of the program\n");
-    printf("  -S, --cpuset=SET\t\tset cpu affinity of the program with a list separated by ','\n");
+    printf("  -s, --cpuset=SET\t\tset cpu affinity of the program with a list separated by ','\n");
     printf("      \t\t\t\teach entry should be <CPU> or <CPU>-<CPU>\n");
     printf("      --share-net\t\tnot to unshare the net namespace while creating the jail\n");
     printf("      --cgroup-root=PATH\tchange cgroup filesystem root path (default: /sys/fs/cgroup)\n");
+    printf("  -q, --quiet\t\t\tnot to print any message\n");
+    printf("  -v  --verbose\t\t\tprint more details\n");
     printf("  -h, --help\t\t\tshow this help\n");
     printf("\n");
     printf(" Resource Limit Options:\n");
-    printf("  -v, --limit-vss=SIZE\t\tlimit the memory space size can be allocated per process (KB)\n");
-    printf("  -c, --limit-core=SIZE\t\tlimit the core file size can be generated (KB)\n");
-    printf("  -z, --limit-fsize=SIZE\tlimit the max file size can be created (KB)\n");
-    printf("  -p, --limit-proc=NUM\t\tlimit the process number in the jail\n");
-    printf("  -s, --limit-stack=SIZE\tlimit the stack size of one process (KB)\n");
-    printf("  -t, --limit-time=SEC\t\tlimit the total running time of the jail (sec)\n");
-    printf("  -m, --limit-rss=SIZE\t\tlimit the memory size can be used of the jail (KB)\n");
+    printf("  -V, --limit-vss=SIZE\t\tlimit the memory space size can be allocated per process (KB)\n");
+    printf("  -C, --limit-core=SIZE\t\tlimit the core file size can be generated (KB)\n");
+    printf("  -Z, --limit-fsize=SIZE\tlimit the max file size can be created (KB)\n");
+    printf("  -P, --limit-proc=NUM\t\tlimit the process number in the jail\n");
+    printf("  -S, --limit-stack=SIZE\tlimit the stack size of one process (KB)\n");
+    printf("  -T, --limit-time=SEC\t\tlimit the total running time of the jail (sec)\n");
+    printf("  -M, --limit-rss=SIZE\t\tlimit the memory size can be used of the jail (KB)\n");
     printf("\n");
     printf(" I/O Options:\n");
     printf("  -i, --file-input=FILE\t\tredirect stdin of the program to the file\n");
@@ -402,4 +431,7 @@ void usage(char *name)
     printf("      \t\t\t\t!<name>       : unset the environment variable inheriting from the parent process\n");
     printf("      \t\t\t\t<name>=<value>: set the environment variable using giving name and value\n");
     printf("  -E, --inherit-env\t\tinherit all environment variables from the parent process\n");
+    printf("\n");
+    printf(" Seccomp Options:\n");
+    printf("      --seccomp-cfg=FILE\tspecify seccomp rules to load\n");
 }

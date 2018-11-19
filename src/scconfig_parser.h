@@ -107,6 +107,7 @@ struct parser_error {
 typedef struct parser_error parser_error_t;
 
 parser_error_t parser_get_err();
+const char * parser_errstr(enum parser_err_type type);
 struct seccomp_config * scconfig_parse_path(const char *path, unsigned int options);
 struct seccomp_config * scconfig_parse_file(FILE *stream, unsigned int options);
 struct seccomp_config * scconfig_parse_string(const char *str, unsigned int options);

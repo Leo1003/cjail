@@ -94,6 +94,40 @@ out:
     return cfg;
 }
 
+const char * parser_errstr(enum parser_err_type type)
+{
+    switch (type) {
+        case ErrNone:
+            return "No error";
+        case ErrFileNotFound:
+            return "File not found";
+        case ErrNotFile:
+            return "Not a file";
+        case ErrMemory:
+            return "Memory allocation failed";
+        case ErrPermission:
+            return "Operation not permitted";
+        case ErrIO:
+            return "IO error";
+        case ErrSyntax:
+            return "Syntax error";
+        case ErrUnknownCmd:
+            return "Unknown command";
+        case ErrDupOption:
+            return "Duplicated options";
+        case ErrUnknownValue:
+            return "Unknown value";
+        case ErrNoSyscall:
+            return "No such system call";
+        case ErrNoRule:
+            return "Empty rule";
+        case ErrArgCount:
+            return "Arguments count exceed";
+        default:
+            return "Unknown error";
+    }
+}
+
 parser_error_t parser_get_err()
 {
     return _par_err;
