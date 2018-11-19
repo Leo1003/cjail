@@ -52,9 +52,10 @@ void sigact(int sig)
 void trace_seccomp(pid_t pid, unsigned long data, struct user_regs_struct *regs)
 {
     if (data == TRACE_KILL_MAGIC) {
+        infof("Killing process %d...\n", pid);
         kill(pid, SIGKILL);
     }
-    printf("Process: %d, triggered systemcall: %llu\n", pid, regs->orig_rax);
+    infof("Process: %d, triggered systemcall: %llu\n", pid, regs->orig_rax);
 }
 
 static struct sig_rule init_sigrules[] = {
@@ -344,9 +345,11 @@ int child_init(void *arg)
                 case 1:
                     break;
                 case 0:
-                    waitpid(sinfo.si_pid, NULL, 0);
                     continue;
                 default:
+                    if (errno == ESRCH) {
+                        continue;
+                    }
                     exit(errno);
             }
             if (sinfo.si_pid == childpid) {

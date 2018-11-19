@@ -1,6 +1,8 @@
+#include "logger.h"
 #include "trace.h"
 
 #include <errno.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <sys/ptrace.h>
 
@@ -47,8 +49,10 @@ int trace_handle(const siginfo_t* sinfo, const struct trace_ctx* ctx)
     pid_t current = sinfo->si_pid;
     int sig = sinfo->si_status & 0x000000ff;
     int event = sinfo->si_status >> 8;
+    devf("Current tracee: %d\n", current);
     if (sig == SIGTRAP && event) {
         // ptrace event stop
+        devf("ptrace event stop\n");
         unsigned long message;
         struct user_regs_struct regs;
         if (ptrace(PTRACE_GETEVENTMSG, current, NULL, &message)) {
@@ -58,21 +62,30 @@ int trace_handle(const siginfo_t* sinfo, const struct trace_ctx* ctx)
             case PTRACE_EVENT_FORK:
             case PTRACE_EVENT_VFORK:
             case PTRACE_EVENT_CLONE:
+                devf("new process event\n");
                 break;
             case PTRACE_EVENT_EXEC:
+                devf("exec event\n");
                 break;
             case PTRACE_EVENT_VFORK_DONE:
+                devf("vfork done event\n");
                 break;
             case PTRACE_EVENT_EXIT:
+                devf("exit event\n");
                 break;
             case PTRACE_EVENT_SECCOMP:
-                ptrace(PTRACE_GETREGSET, current, NULL, &regs);
+                devf("seccomp event\n");
+                ptrace(PTRACE_GETREGS, current, NULL, &regs);
                 if (ctx->seccomp_event) {
                     ctx->seccomp_event(current, message, &regs);
                 }
                 ptrace(PTRACE_POKEUSER, current, sizeof(long) * ORIG_RAX, -1);
                 break;
+            case PTRACE_EVENT_STOP:
+                devf("stop event\n");
+                break;
         }
+        devf("event end!\n");
         return trace_cont(current, 0);
     }
     if (sig == SIGTRAP && !event) {
@@ -83,22 +96,29 @@ int trace_handle(const siginfo_t* sinfo, const struct trace_ctx* ctx)
             real_sig.si_code == (SIGTRAP | 0x80)) {
             //ptrace system call stop
             //but we don't care it
+            devf("ptrace system call stop\n");
             return trace_cont(current, 0);
         }
     }
     if (isstopsig(sig)) {
         if (trace_getsig(current, &real_sig) < 0 && errno == EINVAL) {
             //group stop
-            if (sinfo->si_status >> 16 == PTRACE_EVENT_STOP) {
-                //stop child until someone continue it
-                return ptrace(PTRACE_LISTEN, current, NULL, NULL);
-            }
             //we can't make the tracee stop because it isn't seized
             //only can continue it
+            devf("group stop\n");
+            devf("stop continue...\n");
             return trace_cont(current, 0);
+        }
+        if (event == PTRACE_EVENT_STOP) {
+            //group stop (seized)
+            devf("group stop (seized)\n");
+            //stop child until someone continue it
+            devf("ptrace listen...\n");
+            return ptrace(PTRACE_LISTEN, current, NULL, NULL);
         }
     }
     //signal delivery stop
     //reinject the signal
+    devf("signal delivery stop\n");
     return trace_cont(current, sig);
 }
