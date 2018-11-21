@@ -1,8 +1,11 @@
- - [x] better seccomp rule
- - [ ] seccomp debug mode
- - [ ] support disk image loopback mount
- - [ ] update command line interface
- - [x] using Criterion as new testing framework
- - [ ] unit tests
- - [ ] add user namespace support
- - [ ] detect if required kernel features are supported
+- Version 0.7.0: 
+    - [x] better seccomp rule
+    - [ ] seccomp debug mode
+    - [ ] update command line interface
+    - [x] using Criterion as new testing framework
+
+- Future Version: 
+    - [ ] add user namespace support
+    - [ ] unit tests
+    - [ ] support disk image loopback mount
+    - [ ] detect if required kernel features are supported
