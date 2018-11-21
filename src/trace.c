@@ -37,7 +37,7 @@ inline static int isstopsig(int sig) {
     return 0;
 }
 
-int trace_handle(const siginfo_t* sinfo, const struct trace_ctx* ctx)
+int trace_handle(const siginfo_t* sinfo, const struct trace_ops* ops)
 {
     switch (sinfo->si_code) {
         case CLD_EXITED:
@@ -76,8 +76,8 @@ int trace_handle(const siginfo_t* sinfo, const struct trace_ctx* ctx)
             case PTRACE_EVENT_SECCOMP:
                 devf("seccomp event\n");
                 ptrace(PTRACE_GETREGS, current, NULL, &regs);
-                if (ctx->seccomp_event) {
-                    ctx->seccomp_event(current, message, &regs);
+                if (ops->seccomp_event) {
+                    ops->seccomp_event(current, message, &regs);
                 }
                 ptrace(PTRACE_POKEUSER, current, sizeof(long) * ORIG_RAX, -1);
                 break;

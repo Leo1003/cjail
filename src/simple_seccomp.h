@@ -6,6 +6,8 @@
 #ifndef SIMPLE_SECCOMP_H
 #define SIMPLE_SECCOMP_H
 
+#include "trace.h"
+
 #include <linux/filter.h>
 #include <sys/types.h>
 
@@ -63,6 +65,7 @@ struct seccomp_config {
     size_t rules_alloc;
     size_t rules_count;
     struct seccomp_rule *rules;
+    seccomp_cb callback;
 };
 
 int scconfig_compile(const struct seccomp_config *cfg, struct sock_fprog *bpf);
@@ -70,6 +73,9 @@ struct seccomp_config * scconfig_init();
 enum deny_method scconfig_get_deny(const struct seccomp_config *cfg);
 void scconfig_set_deny(struct seccomp_config *cfg, enum deny_method deny);
 enum config_type scconfig_get_type(const struct seccomp_config *cfg);
+void scconfig_set_callback(struct seccomp_config *cfg, seccomp_cb callback);
+void scconfig_reset_callback(struct seccomp_config *cfg);
+seccomp_cb scconfig_get_callback(const struct seccomp_config *cfg);
 void scconfig_set_type(struct seccomp_config *cfg, enum config_type type);
 int scconfig_clear(struct seccomp_config *cfg);
 int scconfig_add(struct seccomp_config *cfg, const struct seccomp_rule *rules, size_t len);

@@ -16,6 +16,15 @@
 
 #include <seccomp.h>
 
+void default_cb(pid_t pid, unsigned long data, struct user_regs_struct *regs)
+{
+    if (data == TRACE_KILL_MAGIC) {
+        infof("Killing process %d...\n", pid);
+        kill(pid, SIGKILL);
+    }
+    infof("Process: %d, triggered systemcall: %llu\n", pid, regs->orig_rax);
+}
+
 static int rule_compile_add(scmp_filter_ctx ctx, uint32_t denycode, const struct seccomp_rule rule)
 {
     struct scmp_arg_cmp args[6];
@@ -173,6 +182,7 @@ struct seccomp_config * scconfig_init()
         free(cfg);
         cfg = NULL; //return NULL
     }
+    cfg->callback = NULL;
     return cfg;
 }
 
@@ -210,6 +220,33 @@ void scconfig_set_type(struct seccomp_config* cfg, enum config_type type)
         return;
     }
     cfg->type = type;
+}
+
+seccomp_cb scconfig_get_callback(const struct seccomp_config* cfg)
+{
+    if (!cfg) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return (cfg->callback ? cfg->callback : default_cb);
+}
+
+void scconfig_set_callback(struct seccomp_config* cfg, seccomp_cb callback)
+{
+    if (!cfg) {
+        errno = EINVAL;
+        return;
+    }
+    cfg->callback = callback;
+}
+
+void scconfig_reset_callback(struct seccomp_config* cfg)
+{
+    if (!cfg) {
+        errno = EINVAL;
+        return;
+    }
+    cfg->callback = NULL;
 }
 
 int scconfig_clear(struct seccomp_config* cfg)

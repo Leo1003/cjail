@@ -49,15 +49,6 @@ void sigact(int sig)
     }
 }
 
-void trace_seccomp(pid_t pid, unsigned long data, struct user_regs_struct *regs)
-{
-    if (data == TRACE_KILL_MAGIC) {
-        infof("Killing process %d...\n", pid);
-        kill(pid, SIGKILL);
-    }
-    infof("Process: %d, triggered systemcall: %llu\n", pid, regs->orig_rax);
-}
-
 static struct sig_rule init_sigrules[] = {
     { SIGHUP  , sigact , NULL, 0, {{0}}, 0 },
     { SIGINT  , sigact , NULL, 0, {{0}}, 0 },
@@ -91,10 +82,6 @@ static int ifchildfailed(pid_t pid)
         return 1;
     return 0;
 }
-
-const static struct trace_ctx tctx = {
-    .seccomp_event = trace_seccomp
-};
 
 static int setprocname(const char *argv, const char *procname)
 {
@@ -284,6 +271,7 @@ int child_init(void *arg)
         struct cjail_result result;
         siginfo_t sinfo;
         struct timeval stime, etime, timespan;
+        struct trace_ops ops;
         memset(&result, 0, sizeof(result));
 
         if (write_tasks(ep.cgtasksfd, childpid)) {
@@ -293,6 +281,7 @@ int child_init(void *arg)
 
         if (traceflag) {
             trace_seize(childpid);
+            ops.seccomp_event = scconfig_get_callback(ep.para.seccompcfg);
         }
 
         sigwait(&rtset, &rtsig);
@@ -341,7 +330,7 @@ int child_init(void *arg)
                 alarmed = 0;
                 continue;
             }
-            switch (trace_handle(&sinfo, &tctx)) {
+            switch (trace_handle(&sinfo, &ops)) {
                 case 1:
                     break;
                 case 0:

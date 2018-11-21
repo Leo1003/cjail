@@ -6,6 +6,7 @@
 #define _SCCONFIG_H
 
 #include <linux/filter.h>
+#include <sys/user.h>
 #include <sys/types.h>
 
 #define TRACE_MAGIC 28962       /**< @brief ptrace event message of DENY_TRACE */
@@ -20,6 +21,14 @@ extern "C" {
  * Use scconfig_*() to use this type.
  */
 typedef void * scconfig;
+
+/**
+ * @brief The seccomp trace callback.
+ *
+ * This function will be call when the child process triggered a seccomp rule.
+ * @note Currently, this function is called as the sandbox environment init process. Not in the original calling process.
+ */
+typedef void(*seccomp_cb)(pid_t, unsigned long, struct user_regs_struct *);
 
 /**
  * @enum config_type
@@ -133,6 +142,37 @@ enum config_type scconfig_get_type(const scconfig cfg);
  * @see scconfig_get_type
  */
 void scconfig_set_type(scconfig cfg, enum config_type type);
+
+/**
+ * @brief Get the current seccomp trace callback
+ *
+ * @param cfg seccomp configure
+ * @return current trace callback
+ *
+ * @retval NULL One or more errors encountered
+ * @see seccomp_cb
+ */
+seccomp_cb scconfig_get_callback(const scconfig cfg);
+
+/**
+ * @brief Set seccomp trace callback
+ *
+ * @param cfg seccomp configure
+ * @param[in] callback deny method to set
+ *
+ * @see seccomp_cb
+ */
+void scconfig_set_callback(scconfig cfg, seccomp_cb callback);
+
+/**
+ * @brief Reset seccomp trace callback to builtin callback
+ *
+ * @param cfg seccomp configure
+ *
+ * @see seccomp_cb
+ */
+void scconfig_reset_callback(scconfig cfg);
+
 
 /**
  * @brief Get the current deny method of a seccomp configure
