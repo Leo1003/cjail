@@ -26,7 +26,7 @@ typedef void * scconfig;
  * @brief The seccomp trace callback.
  *
  * This function will be call when the child process triggered a seccomp rule.
- * @note Currently, this function is called as the sandbox environment init process. Not in the original calling process.
+ * @note Currently, this function is called in the sandbox environment init process. Not in the original calling process.
  */
 typedef void(*seccomp_cb)(pid_t, unsigned long, struct user_regs_struct *);
 

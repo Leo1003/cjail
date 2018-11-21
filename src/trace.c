@@ -16,7 +16,7 @@ static int trace_getsig(pid_t pid, siginfo_t *info) {
     if (ptrace(PTRACE_GETSIGINFO, pid, NULL, info)) {
         if (errno == ESRCH) {
             // Tracee die
-            return 1;
+            return 0;
         }
         return -1;
     }
@@ -44,7 +44,8 @@ int trace_handle(const siginfo_t* sinfo, const struct trace_ops* ops)
         case CLD_EXITED:
         case CLD_KILLED:
         case CLD_DUMPED:
-            return 1;
+            errno = EINVAL;
+            return -1;
     }
     siginfo_t real_sig;
     pid_t current = sinfo->si_pid;
