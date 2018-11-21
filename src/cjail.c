@@ -156,8 +156,7 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
     struct ts_socket tssock = { 0 };
     struct taskstats ts = { 0 };
     struct cleanupstack cstack = { 0 }, pipestack = { 0 };
-    struct exec_para *ep = (struct exec_para *) malloc(sizeof(struct exec_para));
-    stack_push(&cstack, CLN_FREE, &ep);
+    struct exec_para *ep;
     child = 0;
     interrupted = 0;
 
@@ -165,6 +164,9 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         RETERR(EPERM);
     if (!para)
         RETERR(EINVAL);
+
+    ep = (struct exec_para *) malloc(sizeof(struct exec_para));
+    stack_push(&cstack, CLN_FREE, &ep);
     ep->para = *para;
 
     installsigs(lib_sigrules);
