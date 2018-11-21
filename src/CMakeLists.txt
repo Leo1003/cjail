@@ -14,6 +14,7 @@ add_library(libcjail SHARED
     simple_seccomp.c
     sigset.c
     taskstats.c
+    trace.c
     utils.c
 )
 add_library(CJail::libcjail ALIAS libcjail)
