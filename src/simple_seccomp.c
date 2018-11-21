@@ -18,10 +18,6 @@
 
 void default_cb(pid_t pid, unsigned long data, struct user_regs_struct *regs)
 {
-    if (data == TRACE_KILL_MAGIC) {
-        infof("Killing process %d...\n", pid);
-        kill(pid, SIGKILL);
-    }
     infof("Process: %d, triggered systemcall: %llu\n", pid, regs->orig_rax);
 }
 

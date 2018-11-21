@@ -1,4 +1,5 @@
 #include "logger.h"
+#include "simple_seccomp.h"
 #include "trace.h"
 
 #include <errno.h>
@@ -78,6 +79,10 @@ int trace_handle(const siginfo_t* sinfo, const struct trace_ops* ops)
                 ptrace(PTRACE_GETREGS, current, NULL, &regs);
                 if (ops->seccomp_event) {
                     ops->seccomp_event(current, message, &regs);
+                }
+                if (message == TRACE_KILL_MAGIC) {
+                    kill(current, SIGKILL);
+                    return 0;
                 }
                 ptrace(PTRACE_POKEUSER, current, sizeof(long) * ORIG_RAX, -1);
                 break;
