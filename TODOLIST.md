@@ -7,5 +7,7 @@
 - Future Version: 
     - [ ] add user namespace support
     - [ ] unit tests
+    - [ ] expose mounting api interface
     - [ ] support disk image loopback mount
+    - [ ] collect taskstats in a forked process
     - [ ] detect if required kernel features are supported
