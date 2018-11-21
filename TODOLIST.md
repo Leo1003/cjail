@@ -1,5 +1,5 @@
  - [x] better seccomp rule
- - [ ] seccomp debug mode
+ - [x] seccomp debug mode
  - [ ] support disk image loopback mount
  - [ ] update command line interface
  - [x] using Criterion as new testing framework
