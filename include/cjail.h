@@ -83,7 +83,7 @@ struct cjail_para {
                                      @note Set to zero to disable this limit */
     struct timeval lim_time;    /**< @brief Limit the time of the jail can live
                                      @note set to zero to disable time limit */
-    scconfig seccompcfg;        /**< @brief  */
+    scconfig seccompcfg;        /**< @brief Linux seccomp rules to apply on the sandbox */
 };
 
 /**
