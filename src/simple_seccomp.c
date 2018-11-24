@@ -18,7 +18,13 @@
 
 void default_cb(pid_t pid, unsigned long data, struct user_regs_struct *regs)
 {
-    infof("Process: %d, triggered systemcall: %llu\n", pid, regs->orig_rax);
+    char * str = seccomp_syscall_resolve_num_arch(seccomp_arch_native(), regs->orig_rax);
+    if (str) {
+        infof("Process %d: triggered systemcall: %lld %s\n", pid, regs->orig_rax, str);
+    } else {
+        infof("Process %d: triggered systemcall: %lld\n", pid, regs->orig_rax);
+    }
+    free(str);
 }
 
 static int rule_compile_add(scmp_filter_ctx ctx, uint32_t denycode, const struct seccomp_rule rule)
