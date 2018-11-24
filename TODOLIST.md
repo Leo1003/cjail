@@ -1,13 +1,10 @@
-- Version 0.7.0: 
-    - [x] better seccomp rule
-    - [x] seccomp debug mode
-    - [x] update command line interface
-    - [x] using Criterion as new testing framework
-
 - Future Version: 
+	- [ ] using config.h to hold some defines
+	- [ ] source code using public header too
     - [ ] add user namespace support
     - [ ] unit tests
     - [ ] expose mounting api interface
     - [ ] support disk image loopback mount
     - [ ] collect taskstats in a forked process
+    - [ ] call trace callback in the calling process
     - [ ] detect if required kernel features are supported
