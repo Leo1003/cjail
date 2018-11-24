@@ -34,6 +34,7 @@ enum OPTVAL {
     OPT_NET,
     OPT_CGR,
     OPT_SCC,
+    OPT_ALR,
 };
 
 const char opts[] = "e:Ec:d:u:g:i:o:r:I:O:R:s:V:C:F:Z:P:S:T:m:qvh";
@@ -63,39 +64,40 @@ const struct option longopts[] = {
     {"cgroup-root", required_argument,  NULL, OPT_CGR},
     {"limit-rss",   required_argument,  NULL, 'm'},
     {"seccomp-cfg", required_argument,  NULL, OPT_SCC},
+    {"allow-root",  no_argument      ,  NULL, OPT_ALR},
     {"quiet",       no_argument      ,  NULL, 'q'},
     {"verbose",     no_argument      ,  NULL, 'v'},
     {"help",        no_argument      ,  NULL, 'h'},
     {NULL,          0,                  NULL,  0 }
 };
 
-unsigned long toul(char* str, int abr)
+unsigned long toul(char* str, int abort)
 {
     char *p;
     unsigned long ret;
     ret = strtoul(str, &p, 10);
     if (strlen(p)) {
         perrf("Error: Invalid number: %s\n", str);
-        if (abr)
+        if (abort)
             exit(1);
     }
     return ret;
 }
 
-long long int toll(char* str, int abr)
+long long int toll(char* str, int abort)
 {
     char *p;
     long long int ret;
     ret = strtoll(str, &p, 10);
     if (strlen(p)) {
         perrf("Error: Invalid number: %s\n", str);
-        if (abr)
+        if (abort)
             exit(1);
     }
     return ret;
 }
 
-struct timeval totime(char* str, int abr)
+struct timeval totime(char* str, int abort)
 {
     char *p;
     double sec;
@@ -103,7 +105,7 @@ struct timeval totime(char* str, int abr)
     sec = strtod(str, &p);
     if (strlen(p)) {
         perrf("Error: Invalid number: %s\n", str);
-        if (abr)
+        if (abort)
             exit(1);
     }
     ret.tv_sec = floor(sec);
@@ -168,8 +170,8 @@ int main(int argc, char *argv[], char *envp[])
     struct cjail_para para;
     struct cjail_result res;
     struct timeval time;
-    int inherenv = 0;
-    char *envstr = NULL, **para_env = NULL;
+    int inherenv = 0, allow_root = 0;
+    char *envstr = NULL, **para_env = NULL, *sccfg_path = NULL;
     parser_error_t pserr;
 #ifndef NDEBUG
     char cpustr[1024];
@@ -267,16 +269,10 @@ int main(int argc, char *argv[], char *envp[])
                 para.cg_rss = toll(optarg, 1);
                 break;
             case OPT_SCC:
-                para.seccompcfg = scconfig_parse_path(optarg, 0);
-                if (!para.seccompcfg) {
-                    perrf("Failed to parse seccomp config file: %s\n", optarg);
-                    pserr = parser_get_err();
-                    if (pserr.line) {
-                        perrf("At line %d: ", pserr.line);
-                    }
-                    perrf("%s\n", parser_errstr(pserr.type));
-                    exit(1);
-                }
+                sccfg_path = optarg;
+                break;
+            case OPT_ALR:
+                allow_root = 1;
                 break;
             case 'q':
                 set_log_level(LOG_SLIENT);
@@ -300,11 +296,31 @@ int main(int argc, char *argv[], char *envp[])
         exit(1);
     }
     para.argv = argv + optind;
+
+    if (sccfg_path) {
+        para.seccompcfg = scconfig_parse_path(sccfg_path, 0);
+        if (!para.seccompcfg) {
+            perrf("Failed to parse seccomp config file: %s\n", sccfg_path);
+            pserr = parser_get_err();
+            if (pserr.line) {
+                perrf("At line %d: ", pserr.line);
+            }
+            perrf("%s\n", parser_errstr(pserr.type));
+            exit(1);
+        }
+    }
+
     devf("arguments parsing completed\n");
-    if (!para.uid)
-        perrf("WARN : Running with UID 0!!!\n");
-    if (!para.gid)
-        perrf("WARN : Running with GID 0!!!\n");
+    if (!para.uid && !allow_root) {
+        perrf("ERROR: Running with UID 0!!!\n");
+        perrf("Specify \"--allow-root\" option to allow running as root.\n");
+        exit(1);
+    }
+    if (!para.gid && !allow_root) {
+        perrf("ERROR: Running with GID 0!!!\n");
+        perrf("Specify \"--allow-root\" option to allow running as root.\n");
+        exit(1);
+    }
 
     if (envstr) {
         if (parse_env(envstr, &para_env, (inherenv ? envp : NULL ))) {
@@ -402,6 +418,7 @@ void usage(char *name)
     printf("      \t\t\t\teach entry should be <CPU> or <CPU>-<CPU>\n");
     printf("      --share-net\t\tnot to unshare the net namespace while creating the jail\n");
     printf("      --cgroup-root=PATH\tchange cgroup filesystem root path (default: /sys/fs/cgroup)\n");
+    printf("      --allow-root\t\tallow uid or gid to be 0 (root)\n");
     printf("  -q, --quiet\t\t\tnot to print any message\n");
     printf("  -v  --verbose\t\t\tprint more details\n");
     printf("  -h, --help\t\t\tshow this help\n");

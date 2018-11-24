@@ -1,7 +1,7 @@
 - Version 0.7.0: 
     - [x] better seccomp rule
     - [x] seccomp debug mode
-    - [ ] update command line interface
+    - [x] update command line interface
     - [x] using Criterion as new testing framework
 
 - Future Version: 
