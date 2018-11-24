@@ -123,7 +123,7 @@ static int mount_proc(const char *target, const char *option)
 {
     devf("%s\n", __func__);
     if (mount("proc", target, "proc", MS_NODEV | MS_NOEXEC | MS_NOSUID, option)) {
-        devf("mount failed!\n");
+        fatalf("mount proc filesystem failed!\n");
         return -1;
     }
     return 0;
@@ -254,7 +254,7 @@ int jail_mount(const char *source, const char *root, const char *target,
             ret = mount_udev(root, path, option);
             break;
         default:
-            devf("invalid type!\n");
+            errorf("invalid mount type!\n");
             errno = EINVAL;
             return -1;
     }

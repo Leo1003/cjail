@@ -9,7 +9,6 @@
 #include "init.h"
 #include "logger.h"
 #include "sigset.h"
-//#include "utils.h"
 
 #include <errno.h>
 #include <fcntl.h>

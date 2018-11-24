@@ -41,32 +41,32 @@ static int set_rlimit(const struct cjail_para para)
     if (para.rlim_as > 0) {
         if (setrl(RLIMIT_AS, para.rlim_as * 1024))
             goto error;
-        devf("setup_rlimit: RLIMIT_AS set to %lld KB\n", para.rlim_as);
+        devf("set_rlimit: RLIMIT_AS set to %lld KB\n", para.rlim_as);
     }
     if (para.rlim_core >= 0) {
         if (setrl(RLIMIT_CORE, para.rlim_core * 1024))
             goto error;
-        devf("setup_rlimit: RLIMIT_CORE set to %lld KB\n", para.rlim_core);
+        devf("set_rlimit: RLIMIT_CORE set to %lld KB\n", para.rlim_core);
     }
     if (para.rlim_nofile > 0) {
         if (setrl(RLIMIT_NOFILE, para.rlim_nofile))
             goto error;
-        devf("setup_rlimit: RLIMIT_NOFILE set to %lld\n", para.rlim_nofile);
+        devf("set_rlimit: RLIMIT_NOFILE set to %lld\n", para.rlim_nofile);
     }
     if (para.rlim_fsize > 0) {
         if (setrl(RLIMIT_FSIZE, para.rlim_fsize * 1024))
             goto error;
-        devf("setup_rlimit: RLIMIT_FSIZE set to %lld KB\n", para.rlim_fsize);
+        devf("set_rlimit: RLIMIT_FSIZE set to %lld KB\n", para.rlim_fsize);
     }
     if (para.rlim_proc > 0) {
         if (setrl(RLIMIT_NPROC, para.rlim_proc))
             goto error;
-        devf("setup_rlimit: RLIMIT_NPROC set to %lld\n", para.rlim_proc);
+        devf("set_rlimit: RLIMIT_NPROC set to %lld\n", para.rlim_proc);
     }
     if (para.rlim_stack > 0) {
         if (setrl(RLIMIT_STACK, para.rlim_stack * 1024))
             goto error;
-        devf("setup_rlimit: RLIMIT_STACK set to %lld KB\n", para.rlim_stack);
+        devf("set_rlimit: RLIMIT_STACK set to %lld KB\n", para.rlim_stack);
     }
     return 0;
 
@@ -140,7 +140,6 @@ void child_process(struct exec_para ep)
     sigsetset(&rtset, 1, SIGREADY);
     sigwait(&rtset, &rtsig);
     devf("child continued from rt_signal\n");
-    //sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
     if (load_seccomp(ep.para, &ep.bpf))
         child_exit();

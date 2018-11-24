@@ -272,7 +272,6 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
     skip_spaces(mf);
     switch (table_to_int(cmd_table, cmd)) {
         case 1:      //PARSER_CMD_TYPE
-            devf("PARSER_CMD_TYPE\n");
             if (fscanf(mf, "%64[A-Za-z0-9_]", strval) != 1) {
                 ret = ErrSyntax;
                 goto out;
@@ -286,7 +285,6 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
             scconfig_set_type(cfg, val);
             break;
         case 2:      //PARSER_CMD_ACTION
-            devf("PARSER_CMD_ACTION\n");
             if (fscanf(mf, "%64[A-Za-z0-9_]", strval) != 1) {
                 ret = ErrSyntax;
                 goto out;
@@ -300,7 +298,6 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
             scconfig_set_deny(cfg, val);
             break;
         case 3:      //PARSER_CMD_ALLOW
-            devf("PARSER_CMD_ALLOW\n");
             if ((ret = _parse_syscall(mf, &rule))) {
                 if (ret == ErrNoSyscall && options & SCOPT_IGN_NOSYS) {
                     ret = ErrNone;
@@ -313,7 +310,6 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
             }
             break;
         case 4:      //PARSER_CMD_DENY
-            devf("PARSER_CMD_DENY\n");
             if ((ret = _parse_syscall(mf, &rule))) {
                 if (ret == ErrNoSyscall && options & SCOPT_IGN_NOSYS) {
                     ret = ErrNone;
@@ -361,9 +357,6 @@ static int _scconfig_parse(struct seccomp_config **cfg, FILE *stream, unsigned i
             *c = '\0';
         }
 
-        //Debug message
-        devf("getline: %s\n", linestr);
-
         //Detect comment, truncate string by '#'
         c = strchr(linestr, '#');
         if (c) {
@@ -371,7 +364,7 @@ static int _scconfig_parse(struct seccomp_config **cfg, FILE *stream, unsigned i
         }
 
         //Debug message
-        devf("Parsing Line %d: %s\n", line, linestr);
+        devf("Parsing Line %d: \"%s\"\n", line, linestr);
 
         //ignore empty or comment only line
         if (strlen(linestr) == 0) {

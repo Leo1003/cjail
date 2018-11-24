@@ -310,7 +310,6 @@ int main(int argc, char *argv[], char *envp[])
         }
     }
 
-    devf("arguments parsing completed\n");
     if (!para.uid && !allow_root) {
         perrf("ERROR: Running with UID 0!!!\n");
         perrf("Specify \"--allow-root\" option to allow running as root.\n");
