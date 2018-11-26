@@ -59,8 +59,9 @@ struct seccomp_config * scconfig_parse_path(const char* path, unsigned int optio
     }
     if(_scconfig_parse(&cfg, fp, options)) {
         errno = EINVAL;
-        return NULL;
+        cfg = NULL;
     }
+    fclose(fp);
     return cfg;
 }
 
@@ -386,6 +387,7 @@ static int _scconfig_parse(struct seccomp_config **cfg, FILE *stream, unsigned i
 
     if (_par_err.type) {
         scconfig_free(*cfg);
+        *cfg = NULL;
         return -1;
     }
     return 0;
