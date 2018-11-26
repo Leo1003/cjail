@@ -76,9 +76,7 @@ static int rule_compile_add(scmp_filter_ctx ctx, uint32_t denycode, const struct
         }
         args_cnt++;
     }
-    devf("action: %x\n", action);
-    devf("syscall: %d\n", rule.syscall);
-    devf("args_cnt: %d\n", args_cnt);
+    devf("action: 0x%08x; syscall: %3d; args_cnt: %2d\n", action, rule.syscall, args_cnt);
     int ret = seccomp_rule_add_array(ctx, action, rule.syscall, args_cnt, args);
     if (ret < 0) {
         errno = -ret;

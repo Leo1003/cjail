@@ -26,6 +26,8 @@
 #define devf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 #endif
 
+#define STR_BUF 256
+
 void usage(char *name);
 void print_result(const struct cjail_result *res);
 
@@ -113,7 +115,7 @@ struct timeval totime(char* str, int abort)
     return ret;
 }
 
-int parse_env(const char *str, char **dest[], char *envp[])
+int parse_env(const char *str, char *envp[], char **dest[], char **data)
 {
     char *argz = NULL, *envz = NULL, *i = NULL;
     size_t argz_len = 0, envz_len = 0;
@@ -122,11 +124,12 @@ int parse_env(const char *str, char **dest[], char *envp[])
         goto error;
     }
 
-    if (envp)
+    if (envp) {
         if (argz_create(envp, &envz, &envz_len)) {
             perror("create envz");
             goto error;
         }
+    }
     envz_strip(&envz, &envz_len);
 
     while ((i = argz_next(argz, argz_len, i))) {
@@ -155,11 +158,16 @@ int parse_env(const char *str, char **dest[], char *envp[])
 
     *dest = malloc((argz_count(envz, envz_len) + 1) * sizeof(char *));
     argz_extract(envz, envz_len, *dest);
+    *data = envz;
     return 0;
 
     error:
-    if (argz)
+    if (argz) {
         free(argz);
+    }
+    if (envz) {
+        free(envz);
+    }
     return -1;
 }
 
@@ -171,7 +179,7 @@ int main(int argc, char *argv[], char *envp[])
     struct cjail_result res;
     struct timeval time;
     int inherenv = 0, allow_root = 0;
-    char *envstr = NULL, **para_env = NULL, *sccfg_path = NULL;
+    char *envstr = NULL, **para_env = NULL, *envdata = NULL, *sccfg_path = NULL;
     parser_error_t pserr;
 #ifndef NDEBUG
     char cpustr[1024];
@@ -310,7 +318,6 @@ int main(int argc, char *argv[], char *envp[])
         }
     }
 
-    devf("arguments parsing completed\n");
     if (!para.uid && !allow_root) {
         perrf("ERROR: Running with UID 0!!!\n");
         perrf("Specify \"--allow-root\" option to allow running as root.\n");
@@ -323,7 +330,7 @@ int main(int argc, char *argv[], char *envp[])
     }
 
     if (envstr) {
-        if (parse_env(envstr, &para_env, (inherenv ? envp : NULL ))) {
+        if (parse_env(envstr, (inherenv ? envp : NULL ), &para_env, &envdata)) {
             perrf("ERROR: Parsing environment variables\n");
             exit(1);
         }
@@ -339,6 +346,10 @@ int main(int argc, char *argv[], char *envp[])
         free(para_env);
         para_env = NULL;
     }
+    if (envdata) {
+        free(envdata);
+        envdata = NULL;
+    }
     if (ret) {
         perrf("cjail failure. %s\n", strerror(errno));
         exit(1);
@@ -350,10 +361,18 @@ int main(int argc, char *argv[], char *envp[])
 
 void print_result(const struct cjail_result *res)
 {
+    char timestr[STR_BUF + 1];
+    struct tm time;
+    if (!localtime_r((time_t *)&res->stats.ac_btime, &time)) {
+        snprintf(timestr, sizeof(timestr), "%u", res->stats.ac_btime);
+    }
+    strftime(timestr, sizeof(timestr), "%F %T", &time);
+
+    printf("++++++++ Execution Result ++++++++\n");
     printf("Time: %ld.%06ld sec\n", res->time.tv_sec, res->time.tv_usec);
-    printf("Timeout: %d\n", res->timekill);
+    printf("Timeout: %s\n", (res->timekill ? "Y" : "N"));
     printf("Oomkill: %d\n", res->oomkill);
-    printf("----------TASKSTAT----------\n");
+    printf("-------- TASKSTAT --------\n");
     printf("PID: %u\n", res->stats.ac_pid);
     printf("UID: %u\n", res->stats.ac_uid);
     printf("GID: %u\n", res->stats.ac_gid);
@@ -361,7 +380,7 @@ void print_result(const struct cjail_result *res)
     printf("exit status: %u\n", res->stats.ac_exitcode);
     printf("NICE: %u\n", res->stats.ac_nice);
     printf("time:\n");
-    printf("    start: %u\n", res->stats.ac_btime);
+    printf("    start: %s\n", timestr);
     printf("        elapsed: %llu\n", res->stats.ac_etime);
     printf("        user: %llu\n", res->stats.ac_utime);
     printf("        system: %llu\n", res->stats.ac_stime);
@@ -376,14 +395,14 @@ void print_result(const struct cjail_result *res)
     printf("    peak:\n");
     printf("        rss: %llu\n", res->stats.hiwater_rss);
     printf("        vsz: %llu\n", res->stats.hiwater_vm);
-    printf("io:\n");
+    printf("I/O:\n");
     printf("    bytes:\n");
     printf("        read: %llu\n", res->stats.read_char);
     printf("        write: %llu\n", res->stats.write_char);
     printf("    syscalls:\n");
     printf("        read: %llu\n", res->stats.read_syscalls);
     printf("        write: %llu\n", res->stats.write_syscalls);
-    printf("-----------RUSAGE-----------\n");
+    printf("--------  RUSAGE  --------\n");
     printf("user time: %ld.%06ld\n", res->rus.ru_utime.tv_sec, res->rus.ru_utime.tv_usec);
     printf("system time: %ld.%06ld\n", res->rus.ru_stime.tv_sec, res->rus.ru_stime.tv_usec);
     printf("max_rss: %ld\n", res->rus.ru_maxrss);
@@ -393,7 +412,7 @@ void print_result(const struct cjail_result *res)
     printf("minor fault: %ld\n", res->rus.ru_minflt);
     printf("content switch: %ld\n", res->rus.ru_nvcsw);
     printf("icontent switch: %ld\n", res->rus.ru_nivcsw);
-    printf("----------------------------\n");
+    printf("--------------------------\n");
     switch (res->info.si_code) {
         case CLD_EXITED:
             printf("Exitcode: %d\n", res->info.si_status);

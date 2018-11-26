@@ -110,11 +110,10 @@ static int get_family_id(int sd)
     rep_len = recv(sd, &ans, sizeof(ans), 0);
     if (ans.n.nlmsg_type == NLMSG_ERROR ||
             (rep_len < 0) || !NLMSG_OK((&ans.n), rep_len)) {
-        devf("recv() failed\n");
-        devf("NLMSG_ERROR: %d\n", ans.n.nlmsg_type == NLMSG_ERROR);
-        devf("rep_len: %d\n", rep_len);
+        errorf("NLMSG_ERROR: %d\n", ans.n.nlmsg_type == NLMSG_ERROR);
+        debugf("rep_len: %d\n", rep_len);
         struct nlmsgerr* err = NLMSG_DATA(&ans);
-        devf("Error: %d\n", err->error);
+        errorf("Error: %d\n", err->error);
         errno = err->error;
         return 0;
     }
