@@ -1,12 +1,18 @@
+/**
+ * @internal
+ * @file init.c
+ * @brief init process(PID 1) in the pid namespace daemon source
+ */
 #include "cjail.h"
 #include "init.h"
 #include "fds.h"
 #include "filesystem.h"
 #include "logger.h"
 #include "process.h"
-#include "scmp.h"
 #include "sigset.h"
+#include "simple_seccomp.h"
 #include "taskstats.h"
+#include "trace.h"
 #include "utils.h"
 
 #include <errno.h>
@@ -22,6 +28,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <seccomp.h>
 
 static volatile sig_atomic_t alarmed = 0, interrupted = 0;
 
@@ -35,6 +42,10 @@ void sigact(int sig)
         interrupted = 1;
         break;
     case SIGALRM:
+        if (kill(-1, SIGKILL) && errno != ESRCH) {
+            alarmed = -errno;
+            return;
+        }
         alarmed = 1;
         break;
     case SIGCHLD:
@@ -180,6 +191,20 @@ static int mount_fs(const struct cjail_para para)
     return -1;
 }
 
+static int allow_execve(struct seccomp_config *cfg, void* argv)
+{
+    struct seccomp_rule exec_rule;
+    struct args_rule arg1 = {
+        .cmp = CMP_EQ,
+        .value = (u_int64_t)argv
+    };
+    memset(&exec_rule, 0, sizeof(exec_rule));
+    exec_rule.type = RULE_ALLOW;
+    exec_rule.syscall = __NR_execve;
+    exec_rule.args[1] = arg1;
+    return scconfig_add(cfg, &exec_rule, 1);
+}
+
 int child_init(void *arg)
 {
     /*
@@ -230,20 +255,37 @@ int child_init(void *arg)
     //save tty setting and restore it back if needed
     ttymode = (tcgetattr(STDIN_FILENO, &term) == 0);
 
+    //detect if we need to trace the child process
+    int traceflag = 0;
     //precompile seccomp bpf to reduce the impact on timing
-    if (compile_seccomp(ep.para, &ep.bpf))
-        exit(errno);
+    if (ep.para.seccompcfg) {
+        if (ep.para.seccompcfg->deny_action == DENY_TRACE || ep.para.seccompcfg->deny_action == DENY_TRACE_KILL) {
+            traceflag = 1;
+        }
+        if (allow_execve(ep.para.seccompcfg, ep.para.argv)) {
+            exit(errno);
+        }
+        if (scconfig_compile(ep.para.seccompcfg, &ep.bpf)) {
+            exit(errno);
+        }
+    }
 
     childpid = fork();
     if (childpid > 0) {
         struct cjail_result result;
         siginfo_t sinfo;
         struct timeval stime, etime, timespan;
+        struct trace_ops ops;
         memset(&result, 0, sizeof(result));
 
         if (write_tasks(ep.cgtasksfd, childpid)) {
             PFTL("write tasks file");
             exit(errno);
+        }
+
+        if (traceflag) {
+            trace_seize(childpid);
+            ops.seccomp_event = scconfig_get_callback(ep.para.seccompcfg);
         }
 
         sigwait(&rtset, &rtsig);
@@ -272,34 +314,46 @@ int child_init(void *arg)
         }
 
         while (1) {
-            if (waitid(P_ALL, 0, &sinfo, WEXITED | WNOWAIT) < 0) {
-                if(errno == ECHILD)
-                    break;
-            }
+            // Check signals
             if (interrupted) {
                 errorf("Received signal, aborting...\n");
                 exit(EINTR);
             }
             if (alarmed) {
-                debugf("Execution timeout, killing process...\n");
-                if (kill(-1, SIGKILL)) {
-                    if (errno != ESRCH) {
-                        PFTL("kill timeouted child process");
-                        exit(errno);
-                    }
+                if (alarmed < 0) {
+                    PFTL("kill timeouted child process");
+                    exit(-alarmed);
                 }
+                debugf("Execution timeout, killed process.\n");
                 result.timekill = 1;
                 alarmed = 0;
-                continue;
             }
-            if (sinfo.si_pid == childpid) {
-                if ((childstatus = ifchildfailed(sinfo.si_pid)) < 0) {
+            // Wait child process
+            if (waitid(P_ALL, 0, &sinfo, WEXITED | (traceflag ? WSTOPPED : 0) | WNOWAIT) < 0) {
+                if (errno == ECHILD)
+                    break;
+                if (errno == EINTR) {
+                    continue;
+                }
+            }
+            // Handle wait
+            if (sinfo.si_code == CLD_EXITED || sinfo.si_code == CLD_KILLED || sinfo.si_code == CLD_DUMPED) {
+                if (sinfo.si_pid == childpid) {
+                    if ((childstatus = ifchildfailed(sinfo.si_pid)) < 0) {
+                        exit(errno);
+                    }
+                    result.info = sinfo;
+                }
+                // Cleanup the zombie process here
+                waitpid(sinfo.si_pid, NULL, 0);
+            } else {
+                if (trace_handle(&sinfo, &ops)) {
+                    if (errno == ESRCH) {
+                        continue;
+                    }
                     exit(errno);
                 }
-                result.info = sinfo;
             }
-            // Cleanup the zombie process here
-            waitpid(sinfo.si_pid, NULL, 0);
         }
 
         //deregister alarm

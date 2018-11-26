@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file cleanup.h
+ * @brief cleanup stack header
+ */
 #ifndef CLEANUP_H
 #define CLEANUP_H
 

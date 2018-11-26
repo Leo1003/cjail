@@ -2,8 +2,8 @@
 # Project configuration
 #
 cmake_minimum_required(VERSION 3.0.2)
-project(cjail VERSION 0.6.0 LANGUAGES C)
-set(SOVERSION 3)
+project(cjail VERSION 0.7.0 LANGUAGES C)
+set(SOVERSION 0)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -26,15 +26,15 @@ add_subdirectory(tools)
 #--------------------------------
 # Tests configuration
 #
-find_package(Check)
+find_package(Criterion)
 
-if(CHECK_FOUND)
-    message(STATUS "Found Check library.")
+if(CRITERION_FOUND)
+    message(STATUS "Found Criterion library.")
     message(STATUS "Test Enabled.")
     enable_testing()
     add_subdirectory(test)
 else()
-    message(WARNING "Check library not found!\nTests disabled.")
+    message(WARNING "Criterion library not found!\nTests disabled.")
 endif()
 
 #--------------------------------

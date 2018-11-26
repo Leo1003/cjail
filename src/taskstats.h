@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file taskstats.h
+ * @brief taskstat resource statistics header
+ */
 #ifndef TASKSTATS_H
 #define TASKSTATS_H
 

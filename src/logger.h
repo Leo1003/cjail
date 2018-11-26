@@ -1,7 +1,13 @@
+/**
+ * @internal
+ * @file logger.h
+ * @brief logger functions header
+ */
 #ifndef LOGGER_H
 #define LOGGER_H
 
 #include <stdio.h>
+#include <string.h>
 
 #ifndef _DOXYGEN
 enum logger_level {
@@ -22,7 +28,7 @@ int swap_log_file();
 
 #ifdef NDEBUG
 int loggerf(enum logger_level level, const char *format, ...);
-#define devf(fmt, ...)
+#define devf(fmt, ...) loggerf(LOG_DEBUG, "")
 #define debugf(fmt, ...) loggerf(LOG_DEBUG, fmt, ##__VA_ARGS__)
 #define infof(fmt, ...) loggerf(LOG_INFO, fmt, ##__VA_ARGS__)
 #define warnf(fmt, ...) loggerf(LOG_WARN, fmt, ##__VA_ARGS__)

@@ -10,9 +10,11 @@ add_library(libcjail SHARED
     init.c
     logger.c
     process.c
-    scmp.c
+    scconfig_parser.c
+    simple_seccomp.c
     sigset.c
     taskstats.c
+    trace.c
     utils.c
 )
 add_library(CJail::libcjail ALIAS libcjail)
@@ -34,7 +36,9 @@ set_target_properties(libcjail PROPERTIES
     OUTPUT_NAME "cjail"
     PREFIX "lib"
     VERSION ${PROJECT_VERSION} SOVERSION ${SOVERSION}
-    PUBLIC_HEADER "${CMAKE_SOURCE_DIR}/include/cjail.h"
+    PUBLIC_HEADER
+        "${CMAKE_SOURCE_DIR}/include/cjail.h;
+        ${CMAKE_SOURCE_DIR}/include/scconfig.h"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 

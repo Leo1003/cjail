@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file cleanup.c
+ * @brief cleanup stack source
+ */
 #include "cgroup.h"
 #include "cleanup.h"
 #include "logger.h"

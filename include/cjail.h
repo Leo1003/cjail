@@ -1,3 +1,11 @@
+/**
+ * @dir include/
+ * @brief public headers directory
+ */
+/**
+ * @file include/cjail.h
+ * @brief cjail main public header
+ */
 #ifndef _CJAIL_H
 #define _CJAIL_H
 
@@ -11,9 +19,11 @@
 #include <sys/types.h>
 #include <time.h>
 
+#include "scconfig.h"
+
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif  /* __cplusplus */
 
 /**
  * @struct cjail_para
@@ -73,7 +83,7 @@ struct cjail_para {
                                      @note Set to zero to disable this limit */
     struct timeval lim_time;    /**< @brief Limit the time of the jail can live
                                      @note set to zero to disable time limit */
-    int *seccomplist;           /**< @deprecated this will be replaced by more powerful structure in the next version */
+    scconfig seccompcfg;        /**< @brief Linux seccomp rules to apply on the sandbox */
 };
 
 /**
@@ -140,6 +150,10 @@ int cpuset_tostr(const cpu_set_t *cpuset, char *str, size_t len);
 
 /**
  * @brief Convert human readable format to cpu_set_t
+ * @note A legal string should only contain numbers, ',', and '-'.
+ * @n It must not have any space in it; otherwise, the convertion would error.
+ * @n Each cpu number should be separated by ','.
+ * @n You can also use '-' to represent continous cpu numbers, like "0,1-3,5,9-10".
  *
  * @param[in] str string to be converted
  * @param[out] cpuset Output
@@ -151,11 +165,6 @@ int cpuset_parse(const char *str, cpu_set_t *cpuset);
 
 /**
 * @brief Get current log level
-*
-* @note A legal string should only contain numbers, ',', and '-'.
-* @n It must not have any space in it; otherwise, the convertion would error.
-* @n Each cpu number should be separated by ','.
-* @n You can also use '-' to represent continous cpu numbers, like "0,1-3,5,9-10".
 *
 * @return current log level
 */
@@ -177,6 +186,6 @@ void set_log_file(FILE * f);
 
 #ifdef __cplusplus
 }
-#endif
+#endif  /* __cplusplus */
 
 #endif

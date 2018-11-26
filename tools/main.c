@@ -1,3 +1,12 @@
+/**
+ * @dir tools/
+ * @brief command line tools source directory
+ */
+/**
+ * @internal
+ * @file main.c
+ * @brief cjail command line interface(cli) source
+ */
 #include <cjail.h>
 
 #include <argz.h>
@@ -17,21 +26,25 @@
 #define devf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 #endif
 
+#define STR_BUF 256
+
 void usage(char *name);
 void print_result(const struct cjail_result *res);
 
 enum OPTVAL {
     OPT_PFD = 256,
     OPT_NET,
-    OPT_CGR
+    OPT_CGR,
+    OPT_SCC,
+    OPT_ALR,
 };
 
-const char opts[] = "e:EC:D:u:g:i:o:r:I:O:R:S:f:v:c:z:p:s:t:G:m:h";
+const char opts[] = "e:Ec:d:u:g:i:o:r:I:O:R:s:V:C:F:Z:P:S:T:m:qvh";
 const struct option longopts[] = {
     {"environ",     required_argument,  NULL, 'e'},
     {"inherit-env", no_argument,        NULL, 'E'},
-    {"chroot",      required_argument,  NULL, 'C'},
-    {"workingDir",  required_argument,  NULL, 'D'},
+    {"chroot",      required_argument,  NULL, 'c'},
+    {"workingDir",  required_argument,  NULL, 'd'},
     {"uid",         required_argument,  NULL, 'u'},
     {"gid",         required_argument,  NULL, 'g'},
     {"file-input",  required_argument,  NULL, 'i'},
@@ -42,47 +55,51 @@ const struct option longopts[] = {
     {"fd-err",      required_argument,  NULL, 'R'},
     {"preserve-fd", no_argument,        NULL, OPT_PFD},
     {"share-net",   no_argument,        NULL, OPT_NET},
-    {"cpuset",      required_argument,  NULL, 'S'},
-    {"limit-vss",   required_argument,  NULL, 'v'},
-    {"limit-core",  required_argument,  NULL, 'c'},
-    {"limit-nofile",required_argument,  NULL, 'f'},
-    {"limit-fsize", required_argument,  NULL, 'z'},
-    {"limit-proc",  required_argument,  NULL, 'p'},
-    {"limit-stack", required_argument,  NULL, 's'},
-    {"limit-time",  required_argument,  NULL, 't'},
+    {"cpuset",      required_argument,  NULL, 's'},
+    {"limit-vss",   required_argument,  NULL, 'V'},
+    {"limit-core",  required_argument,  NULL, 'C'},
+    {"limit-nofile",required_argument,  NULL, 'F'},
+    {"limit-fsize", required_argument,  NULL, 'Z'},
+    {"limit-proc",  required_argument,  NULL, 'P'},
+    {"limit-stack", required_argument,  NULL, 'S'},
+    {"limit-time",  required_argument,  NULL, 'T'},
     {"cgroup-root", required_argument,  NULL, OPT_CGR},
     {"limit-rss",   required_argument,  NULL, 'm'},
+    {"seccomp-cfg", required_argument,  NULL, OPT_SCC},
+    {"allow-root",  no_argument      ,  NULL, OPT_ALR},
+    {"quiet",       no_argument      ,  NULL, 'q'},
+    {"verbose",     no_argument      ,  NULL, 'v'},
     {"help",        no_argument      ,  NULL, 'h'},
     {NULL,          0,                  NULL,  0 }
 };
 
-unsigned long toul(char* str, int abr)
+unsigned long toul(char* str, int abort)
 {
     char *p;
     unsigned long ret;
     ret = strtoul(str, &p, 10);
     if (strlen(p)) {
         perrf("Error: Invalid number: %s\n", str);
-        if (abr)
+        if (abort)
             exit(1);
     }
     return ret;
 }
 
-long long int toll(char* str, int abr)
+long long int toll(char* str, int abort)
 {
     char *p;
     long long int ret;
     ret = strtoll(str, &p, 10);
     if (strlen(p)) {
         perrf("Error: Invalid number: %s\n", str);
-        if (abr)
+        if (abort)
             exit(1);
     }
     return ret;
 }
 
-struct timeval totime(char* str, int abr)
+struct timeval totime(char* str, int abort)
 {
     char *p;
     double sec;
@@ -90,7 +107,7 @@ struct timeval totime(char* str, int abr)
     sec = strtod(str, &p);
     if (strlen(p)) {
         perrf("Error: Invalid number: %s\n", str);
-        if (abr)
+        if (abort)
             exit(1);
     }
     ret.tv_sec = floor(sec);
@@ -98,7 +115,7 @@ struct timeval totime(char* str, int abr)
     return ret;
 }
 
-int parse_env(const char *str, char **dest[], char *envp[])
+int parse_env(const char *str, char *envp[], char **dest[], char **data)
 {
     char *argz = NULL, *envz = NULL, *i = NULL;
     size_t argz_len = 0, envz_len = 0;
@@ -107,11 +124,12 @@ int parse_env(const char *str, char **dest[], char *envp[])
         goto error;
     }
 
-    if (envp)
+    if (envp) {
         if (argz_create(envp, &envz, &envz_len)) {
             perror("create envz");
             goto error;
         }
+    }
     envz_strip(&envz, &envz_len);
 
     while ((i = argz_next(argz, argz_len, i))) {
@@ -140,11 +158,16 @@ int parse_env(const char *str, char **dest[], char *envp[])
 
     *dest = malloc((argz_count(envz, envz_len) + 1) * sizeof(char *));
     argz_extract(envz, envz_len, *dest);
+    *data = envz;
     return 0;
 
     error:
-    if (argz)
+    if (argz) {
         free(argz);
+    }
+    if (envz) {
+        free(envz);
+    }
     return -1;
 }
 
@@ -155,8 +178,9 @@ int main(int argc, char *argv[], char *envp[])
     struct cjail_para para;
     struct cjail_result res;
     struct timeval time;
-    int inherenv = 0;
-    char *envstr = NULL, **para_env = NULL;
+    int inherenv = 0, allow_root = 0;
+    char *envstr = NULL, **para_env = NULL, *envdata = NULL, *sccfg_path = NULL;
+    parser_error_t pserr;
 #ifndef NDEBUG
     char cpustr[1024];
 #endif
@@ -169,10 +193,10 @@ int main(int argc, char *argv[], char *envp[])
             case 'E':
                 inherenv = 1;
                 break;
-            case 'C':
+            case 'c':
                 para.chroot = optarg;
                 break;
-            case 'D':
+            case 'd':
                 para.workingDir = optarg;
                 break;
             case 'u':
@@ -213,7 +237,7 @@ int main(int argc, char *argv[], char *envp[])
             case OPT_NET:
                 para.sharenet = 1;
                 break;
-            case 'S':
+            case 's':
                 if (cpuset_parse(optarg, &cpuset) < 0) {
                     perrf("Error: Invalid cpuset string: %s\n", optarg);
                     exit(1);
@@ -224,33 +248,47 @@ int main(int argc, char *argv[], char *envp[])
                 devf("cpuset: %s\n", cpustr);
 #endif
                 break;
-            case 'v':
+            case 'V':
                 para.rlim_as = toll(optarg, 1);
                 break;
-            case 'c':
+            case 'C':
                 para.rlim_core = toll(optarg, 1);
                 break;
-            case 'f':
+            case 'F':
                 para.rlim_nofile = toll(optarg, 1);
                 break;
-            case 'z':
+            case 'Z':
                 para.rlim_fsize = toll(optarg, 1);
                 break;
-            case 'p':
+            case 'P':
                 para.rlim_proc = toll(optarg, 1);
                 break;
-            case 's':
+            case 'S':
                 para.rlim_stack = toll(optarg, 1);
                 break;
-            case 't':
+            case 'T':
                 time = totime(optarg, 1);
                 para.lim_time = time;
                 break;
             case OPT_CGR:
                 para.cgroup_root = optarg;
                 break;
-            case 'm':
+            case 'M':
                 para.cg_rss = toll(optarg, 1);
+                break;
+            case OPT_SCC:
+                sccfg_path = optarg;
+                break;
+            case OPT_ALR:
+                allow_root = 1;
+                break;
+            case 'q':
+                set_log_level(LOG_SLIENT);
+                break;
+            case 'v':
+                if (get_log_level() != LOG_SLIENT) {
+                    set_log_level(LOG_DEBUG);
+                }
                 break;
             case 'h':
                 usage(argv[0]);
@@ -266,21 +304,41 @@ int main(int argc, char *argv[], char *envp[])
         exit(1);
     }
     para.argv = argv + optind;
-    devf("arguments parsing completed\n");
-    if (!para.uid)
-        perrf("WARN : Running with UID 0!!!\n");
-    if (!para.gid)
-        perrf("WARN : Running with GID 0!!!\n");
+
+    if (sccfg_path) {
+        para.seccompcfg = scconfig_parse_path(sccfg_path, 0);
+        if (!para.seccompcfg) {
+            perrf("Failed to parse seccomp config file: %s\n", sccfg_path);
+            pserr = parser_get_err();
+            if (pserr.line) {
+                perrf("At line %d: ", pserr.line);
+            }
+            perrf("%s\n", parser_errstr(pserr.type));
+            exit(1);
+        }
+    }
+
+    if (!para.uid && !allow_root) {
+        perrf("ERROR: Running with UID 0!!!\n");
+        perrf("Specify \"--allow-root\" option to allow running as root.\n");
+        exit(1);
+    }
+    if (!para.gid && !allow_root) {
+        perrf("ERROR: Running with GID 0!!!\n");
+        perrf("Specify \"--allow-root\" option to allow running as root.\n");
+        exit(1);
+    }
 
     if (envstr) {
-        if (parse_env(envstr, &para_env, (inherenv ? envp : NULL ))) {
+        if (parse_env(envstr, (inherenv ? envp : NULL ), &para_env, &envdata)) {
             perrf("ERROR: Parsing environment variables\n");
             exit(1);
         }
         para.environ = para_env;
     }
-    if (inherenv && !envstr)
+    if (inherenv && !envstr) {
         para.environ = envp;
+    }
 
     int ret = cjail_exec(&para, &res);
 
@@ -288,20 +346,33 @@ int main(int argc, char *argv[], char *envp[])
         free(para_env);
         para_env = NULL;
     }
+    if (envdata) {
+        free(envdata);
+        envdata = NULL;
+    }
     if (ret) {
         perrf("cjail failure. %s\n", strerror(errno));
         exit(1);
     }
     print_result(&res);
+    scconfig_free(para.seccompcfg);
     return 0;
 }
 
 void print_result(const struct cjail_result *res)
 {
+    char timestr[STR_BUF + 1];
+    struct tm time;
+    if (!localtime_r((time_t *)&res->stats.ac_btime, &time)) {
+        snprintf(timestr, sizeof(timestr), "%u", res->stats.ac_btime);
+    }
+    strftime(timestr, sizeof(timestr), "%F %T", &time);
+
+    printf("++++++++ Execution Result ++++++++\n");
     printf("Time: %ld.%06ld sec\n", res->time.tv_sec, res->time.tv_usec);
-    printf("Timeout: %d\n", res->timekill);
+    printf("Timeout: %s\n", (res->timekill ? "Y" : "N"));
     printf("Oomkill: %d\n", res->oomkill);
-    printf("----------TASKSTAT----------\n");
+    printf("-------- TASKSTAT --------\n");
     printf("PID: %u\n", res->stats.ac_pid);
     printf("UID: %u\n", res->stats.ac_uid);
     printf("GID: %u\n", res->stats.ac_gid);
@@ -309,7 +380,7 @@ void print_result(const struct cjail_result *res)
     printf("exit status: %u\n", res->stats.ac_exitcode);
     printf("NICE: %u\n", res->stats.ac_nice);
     printf("time:\n");
-    printf("    start: %u\n", res->stats.ac_btime);
+    printf("    start: %s\n", timestr);
     printf("        elapsed: %llu\n", res->stats.ac_etime);
     printf("        user: %llu\n", res->stats.ac_utime);
     printf("        system: %llu\n", res->stats.ac_stime);
@@ -324,14 +395,14 @@ void print_result(const struct cjail_result *res)
     printf("    peak:\n");
     printf("        rss: %llu\n", res->stats.hiwater_rss);
     printf("        vsz: %llu\n", res->stats.hiwater_vm);
-    printf("io:\n");
+    printf("I/O:\n");
     printf("    bytes:\n");
     printf("        read: %llu\n", res->stats.read_char);
     printf("        write: %llu\n", res->stats.write_char);
     printf("    syscalls:\n");
     printf("        read: %llu\n", res->stats.read_syscalls);
     printf("        write: %llu\n", res->stats.write_syscalls);
-    printf("-----------RUSAGE-----------\n");
+    printf("--------  RUSAGE  --------\n");
     printf("user time: %ld.%06ld\n", res->rus.ru_utime.tv_sec, res->rus.ru_utime.tv_usec);
     printf("system time: %ld.%06ld\n", res->rus.ru_stime.tv_sec, res->rus.ru_stime.tv_usec);
     printf("max_rss: %ld\n", res->rus.ru_maxrss);
@@ -341,7 +412,7 @@ void print_result(const struct cjail_result *res)
     printf("minor fault: %ld\n", res->rus.ru_minflt);
     printf("content switch: %ld\n", res->rus.ru_nvcsw);
     printf("icontent switch: %ld\n", res->rus.ru_nivcsw);
-    printf("----------------------------\n");
+    printf("--------------------------\n");
     switch (res->info.si_code) {
         case CLD_EXITED:
             printf("Exitcode: %d\n", res->info.si_status);
@@ -358,24 +429,27 @@ void usage(char *name)
     printf("Usage: %s [OPTIONS...] [--] PROGRAM... [ARG...]\n", name);
     printf("       %s --help\n", name);
     printf("\n");
-    printf("  -C, --chroot=PATH\t\tset the root path of the jail\n");
-    printf("  -D, --workingDir=PATH\t\tchange the working directory of the program\n");
+    printf("  -c, --chroot=PATH\t\tset the root path of the jail\n");
+    printf("  -d, --workingDir=PATH\t\tchange the working directory of the program\n");
     printf("  -u, --uid=UID\t\t\tset the user of the program\n");
     printf("  -g, --gid=GID\t\t\tset the group of the program\n");
-    printf("  -S, --cpuset=SET\t\tset cpu affinity of the program with a list separated by ','\n");
+    printf("  -s, --cpuset=SET\t\tset cpu affinity of the program with a list separated by ','\n");
     printf("      \t\t\t\teach entry should be <CPU> or <CPU>-<CPU>\n");
     printf("      --share-net\t\tnot to unshare the net namespace while creating the jail\n");
     printf("      --cgroup-root=PATH\tchange cgroup filesystem root path (default: /sys/fs/cgroup)\n");
+    printf("      --allow-root\t\tallow uid or gid to be 0 (root)\n");
+    printf("  -q, --quiet\t\t\tnot to print any message\n");
+    printf("  -v  --verbose\t\t\tprint more details\n");
     printf("  -h, --help\t\t\tshow this help\n");
     printf("\n");
     printf(" Resource Limit Options:\n");
-    printf("  -v, --limit-vss=SIZE\t\tlimit the memory space size can be allocated per process (KB)\n");
-    printf("  -c, --limit-core=SIZE\t\tlimit the core file size can be generated (KB)\n");
-    printf("  -z, --limit-fsize=SIZE\tlimit the max file size can be created (KB)\n");
-    printf("  -p, --limit-proc=NUM\t\tlimit the process number in the jail\n");
-    printf("  -s, --limit-stack=SIZE\tlimit the stack size of one process (KB)\n");
-    printf("  -t, --limit-time=SEC\t\tlimit the total running time of the jail (sec)\n");
-    printf("  -m, --limit-rss=SIZE\t\tlimit the memory size can be used of the jail (KB)\n");
+    printf("  -V, --limit-vss=SIZE\t\tlimit the memory space size can be allocated per process (KB)\n");
+    printf("  -C, --limit-core=SIZE\t\tlimit the core file size can be generated (KB)\n");
+    printf("  -Z, --limit-fsize=SIZE\tlimit the max file size can be created (KB)\n");
+    printf("  -P, --limit-proc=NUM\t\tlimit the process number in the jail\n");
+    printf("  -S, --limit-stack=SIZE\tlimit the stack size of one process (KB)\n");
+    printf("  -T, --limit-time=SEC\t\tlimit the total running time of the jail (sec)\n");
+    printf("  -M, --limit-rss=SIZE\t\tlimit the memory size can be used of the jail (KB)\n");
     printf("\n");
     printf(" I/O Options:\n");
     printf("  -i, --file-input=FILE\t\tredirect stdin of the program to the file\n");
@@ -393,4 +467,7 @@ void usage(char *name)
     printf("      \t\t\t\t!<name>       : unset the environment variable inheriting from the parent process\n");
     printf("      \t\t\t\t<name>=<value>: set the environment variable using giving name and value\n");
     printf("  -E, --inherit-env\t\tinherit all environment variables from the parent process\n");
+    printf("\n");
+    printf(" Seccomp Options:\n");
+    printf("      --seccomp-cfg=FILE\tspecify seccomp rules to load\n");
 }

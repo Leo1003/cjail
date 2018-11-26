@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file process.h
+ * @brief child process initilizing header
+ */
 #ifndef PROCESS_H
 #define PROCESS_H
 

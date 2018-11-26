@@ -1,5 +1,10 @@
- - [ ] better seccomp rule
- - [ ] seccomp_debug mode
- - [ ] unit tests
- - [ ] add user namespace support
- - [ ] detect if required kernel features are supported in cmake
+- Future Version: 
+	- [ ] using config.h to hold some defines
+	- [ ] source code using public header too
+    - [ ] add user namespace support
+    - [ ] unit tests
+    - [ ] expose mounting api interface
+    - [ ] support disk image loopback mount
+    - [ ] collect taskstats in a forked process
+    - [ ] call trace callback in the calling process
+    - [ ] detect if required kernel features are supported

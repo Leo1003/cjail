@@ -1,3 +1,8 @@
+/**
+ * @internal
+ * @file sigset.c
+ * @brief signal management functions source
+ */
 #include "cjail.h"
 #include "logger.h"
 #include "sigset.h"
