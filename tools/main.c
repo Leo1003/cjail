@@ -26,6 +26,8 @@
 #define devf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 #endif
 
+#define STR_BUF 256
+
 void usage(char *name);
 void print_result(const struct cjail_result *res);
 
@@ -349,10 +351,18 @@ int main(int argc, char *argv[], char *envp[])
 
 void print_result(const struct cjail_result *res)
 {
+    char timestr[STR_BUF + 1];
+    struct tm time;
+    if (!localtime_r((time_t *)&res->stats.ac_btime, &time)) {
+        snprintf(timestr, sizeof(timestr), "%u", res->stats.ac_btime);
+    }
+    strftime(timestr, sizeof(timestr), "%F %T", &time);
+
+    printf("++++++++ Execution Result ++++++++\n");
     printf("Time: %ld.%06ld sec\n", res->time.tv_sec, res->time.tv_usec);
-    printf("Timeout: %d\n", res->timekill);
+    printf("Timeout: %s\n", (res->timekill ? "Y" : "N"));
     printf("Oomkill: %d\n", res->oomkill);
-    printf("----------TASKSTAT----------\n");
+    printf("-------- TASKSTAT --------\n");
     printf("PID: %u\n", res->stats.ac_pid);
     printf("UID: %u\n", res->stats.ac_uid);
     printf("GID: %u\n", res->stats.ac_gid);
@@ -360,7 +370,7 @@ void print_result(const struct cjail_result *res)
     printf("exit status: %u\n", res->stats.ac_exitcode);
     printf("NICE: %u\n", res->stats.ac_nice);
     printf("time:\n");
-    printf("    start: %u\n", res->stats.ac_btime);
+    printf("    start: %s\n", timestr);
     printf("        elapsed: %llu\n", res->stats.ac_etime);
     printf("        user: %llu\n", res->stats.ac_utime);
     printf("        system: %llu\n", res->stats.ac_stime);
@@ -375,14 +385,14 @@ void print_result(const struct cjail_result *res)
     printf("    peak:\n");
     printf("        rss: %llu\n", res->stats.hiwater_rss);
     printf("        vsz: %llu\n", res->stats.hiwater_vm);
-    printf("io:\n");
+    printf("I/O:\n");
     printf("    bytes:\n");
     printf("        read: %llu\n", res->stats.read_char);
     printf("        write: %llu\n", res->stats.write_char);
     printf("    syscalls:\n");
     printf("        read: %llu\n", res->stats.read_syscalls);
     printf("        write: %llu\n", res->stats.write_syscalls);
-    printf("-----------RUSAGE-----------\n");
+    printf("--------  RUSAGE  --------\n");
     printf("user time: %ld.%06ld\n", res->rus.ru_utime.tv_sec, res->rus.ru_utime.tv_usec);
     printf("system time: %ld.%06ld\n", res->rus.ru_stime.tv_sec, res->rus.ru_stime.tv_usec);
     printf("max_rss: %ld\n", res->rus.ru_maxrss);
@@ -392,7 +402,7 @@ void print_result(const struct cjail_result *res)
     printf("minor fault: %ld\n", res->rus.ru_minflt);
     printf("content switch: %ld\n", res->rus.ru_nvcsw);
     printf("icontent switch: %ld\n", res->rus.ru_nivcsw);
-    printf("----------------------------\n");
+    printf("--------------------------\n");
     switch (res->info.si_code) {
         case CLD_EXITED:
             printf("Exitcode: %d\n", res->info.si_status);
