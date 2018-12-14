@@ -1,10 +1,11 @@
-- Future Version: 
-	- [ ] using config.h to hold some defines
-	- [ ] source code using public header too
-    - [ ] add user namespace support
-    - [ ] unit tests
+- Version 0.8:
+    - [ ] using config.h to hold some defines
     - [ ] expose mounting api interface
     - [ ] support disk image loopback mount
     - [ ] collect taskstats in a forked process
     - [ ] call trace callback in the calling process
-    - [ ] detect if required kernel features are supported
+- Future Version: 
+    - [ ] source code using public header too
+    - [ ] add user namespace support
+    - [ ] unit tests & integration tests
+    - [ ] detect if required kernel features are supported before compiling
