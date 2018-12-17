@@ -6,8 +6,8 @@ cjail is a application jail for competitive programming and online judge
 ## Dependencies
 You should check your system meets the dependencies before building it.
 
-- Linux kernel 3.8+ (4.8+ is recommended)
-- glibc 2.19+
+- Linux kernel 3.17+ (4.8+ is recommended)
+- glibc 2.27+
 - libseccomp 1.0.1+ (2.0+ is recommended)
 - CMake 3.0.2+
 - Criterion 2.3.3 (For running tests only)
