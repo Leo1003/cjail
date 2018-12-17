@@ -5,10 +5,10 @@
  */
 #ifndef SIMPLE_SECCOMP_H
 #define SIMPLE_SECCOMP_H
-
 #include "trace.h"
 
 #include <linux/filter.h>
+#include <stddef.h>
 #include <sys/types.h>
 
 #define SC_ALLOC_BASE 10

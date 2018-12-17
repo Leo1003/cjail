@@ -12,6 +12,7 @@ function(cjailtest testname)
         PRIVATE
             ${CRITERION_INCLUDE_DIR}
             "${CMAKE_SOURCE_DIR}/src"
+            ${CMAKE_BINARY_DIR}/include
     )
     add_test(${testname} "${CMAKE_CURRENT_BINARY_DIR}/${testname}")
 endfunction(cjailtest)

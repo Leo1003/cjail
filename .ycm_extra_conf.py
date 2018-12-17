@@ -42,6 +42,7 @@ flags = [
 '/usr/include',
 '-isystem',
 '/usr/local/include',
+'-I./build/include',
 ]
 
 

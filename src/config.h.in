@@ -1,0 +1,29 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#cmakedefine CFG_CGROOT "@CFG_CGROOT@"
+#ifndef CFG_CGROOT
+# define CFG_CGROOT "/sys/fs/cgroup"
+#endif
+
+#cmakedefine CFG_CGNAME "@CFG_CGNAME@"
+#ifndef CFG_CGNAME
+# define CFG_CGNAME "cjail.%d"
+#endif
+
+#cmakedefine CFG_UTSNAME "@CFG_UTSNAME@"
+#ifndef CFG_UTSNAME
+# define CFG_UTSNAME "cjail"
+#endif
+
+#cmakedefine CFG_INITNAME "@CFG_INITNAME@"
+#ifndef CFG_INITNAME
+# define CFG_INITNAME "/sbin/init"
+#endif
+
+#cmakedefine CFG_PROCNAME "@CFG_PROCNAME@"
+#ifndef CFG_PROCNAME
+# define CFG_PROCNAME "init"
+#endif
+
+#endif

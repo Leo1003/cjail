@@ -22,6 +22,14 @@ include(GNUInstallDirs)
 
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -Wall")
 
+set(CFG_CGROOT CACHE PATH "Path to your system's cgroup mounting directory")
+set(CFG_CGNAME CACHE STRING "Format string for creating cgroup's name. This should contain a %d entry to indicate the pid of the sandbox")
+set(CFG_UTSNAME CACHE STRING "The host name in the UTS namespace")
+set(CFG_INITNAME CACHE STRING "The string to replace the argv of the in-box init process")
+set(CFG_PROCNAME CACHE STRING "The process name of the in-box init process")
+
+configure_file(${CMAKE_SOURCE_DIR}/src/config.h.in ${CMAKE_BINARY_DIR}/include/config.h @ONLY)
+
 add_subdirectory(src)
 add_subdirectory(tools)
 

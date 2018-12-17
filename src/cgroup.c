@@ -5,6 +5,7 @@
  */
 #include "cjail.h"
 #include "cgroup.h"
+#include "config.h"
 #include "logger.h"
 #include "utils.h"
 
@@ -16,7 +17,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-static char cgroup_root[PATH_MAX] = CGROUP_DEFAULT_ROOT;
+static char cgroup_root[PATH_MAX] = CFG_CGROOT;
 
 static int get_cgpath(char *cgpath, const char* subsystem, const char *entry)
 {
@@ -27,10 +28,10 @@ static int get_cgpath(char *cgpath, const char* subsystem, const char *entry)
 
     int ret = 0;
     if (entry) {
-        ret = snprintf(cgpath, sizeof(char) * PATH_MAX, "%s/"CGROUP_NAME"/%s",
+        ret = snprintf(cgpath, sizeof(char) * PATH_MAX, "%s/"CFG_CGNAME"/%s",
                        subpath, getpid(), entry);
     } else {
-        ret = snprintf(cgpath, sizeof(char) * PATH_MAX, "%s/"CGROUP_NAME,
+        ret = snprintf(cgpath, sizeof(char) * PATH_MAX, "%s/"CFG_CGNAME,
                        subpath, getpid());
     }
     if (ret >= PATH_MAX) {

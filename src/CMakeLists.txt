@@ -25,6 +25,7 @@ target_include_directories(libcjail
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     PRIVATE
         ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_BINARY_DIR}/include
         ${LIBSECCOMP_INCLUDE_DIRS}
 )
 target_link_libraries(libcjail

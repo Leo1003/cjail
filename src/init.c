@@ -4,6 +4,7 @@
  * @brief init process(PID 1) in the pid namespace daemon source
  */
 #include "cjail.h"
+#include "config.h"
 #include "init.h"
 #include "fds.h"
 #include "filesystem.h"
@@ -211,7 +212,7 @@ int child_init(void *arg)
      * The address passed with PR_SET_MM_ARG_START, PR_SET_MM_ARG_END should
      * belong to a process stack area.
      */
-    char new_argv[4096] = INITNAME;
+    char new_argv[4096] = CFG_INITNAME;
     int ttymode, childstatus = -1;
     pid_t childpid;
     struct termios term;
@@ -239,11 +240,11 @@ int child_init(void *arg)
         exit(errno);
     }
     //set new hostname in UTS namespace
-    if (sethostname(UTSNAME, sizeof(UTSNAME))) {
+    if (sethostname(CFG_UTSNAME, sizeof(CFG_UTSNAME))) {
         PWRN("set hostname");
     }
     //replace cmdline
-    if (setprocname(new_argv, PROCNAME)) {
+    if (setprocname(new_argv, CFG_PROCNAME)) {
         PWRN("set process name");
     }
 

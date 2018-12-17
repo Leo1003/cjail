@@ -22,12 +22,6 @@
 #include <sys/types.h>
 #include <time.h>
 
-#define CGROUP_DEFAULT_ROOT "/sys/fs/cgroup"
-#define CGROUP_NAME "cjail.%d"
-#define UTSNAME "cjail"
-#define INITNAME "/sbin/init"
-#define PROCNAME "init"
-
 struct cjail_para {
     unsigned int preservefd, sharenet;
     int fd_input, fd_output, fd_error;
