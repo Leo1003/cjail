@@ -3,9 +3,10 @@
  * @file sigset.c
  * @brief signal management functions source
  */
+#define _GNU_SOURCE
+#include "sigset.h"
 #include "cjail.h"
 #include "logger.h"
-#include "sigset.h"
 #include "utils.h"
 
 #include <stdarg.h>

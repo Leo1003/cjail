@@ -6,15 +6,17 @@
 #ifndef SCCONFIG_PARSER_H
 #define SCCONFIG_PARSER_H
 
-#include <stdio.h>
 #include "simple_seccomp.h"
 #include "utils.h"
 
+#include <stdio.h>
+
+// clang-format off
 #define SCOPT_IGN_NOSYS     0x00000001
 #define SCOPT_IGN_NORULE    0x00000002
 
-#define CMD_MAX_LENGTH  16
-#define VAL_MAX_LENGTH  64
+#define CMD_MAX_LENGTH      16
+#define VAL_MAX_LENGTH      64
 
 //Default naming defines
 #define PARSER_CMD_TYPE     "TYPE"
@@ -80,6 +82,7 @@ const table_int32 op_table[] = {
     { PARSER_OP_MASK,       CMP_MASK },
     { NULL,                 -1 }
 };
+// clang-format on
 
 #ifndef _DOXYGEN
 enum parser_err_type {
@@ -107,10 +110,10 @@ struct parser_error {
 typedef struct parser_error parser_error_t;
 
 parser_error_t parser_get_err();
-const char * parser_errstr(enum parser_err_type type);
-struct seccomp_config * scconfig_parse_path(const char *path, unsigned int options);
-struct seccomp_config * scconfig_parse_file(FILE *stream, unsigned int options);
-struct seccomp_config * scconfig_parse_string(const char *str, unsigned int options);
+const char *parser_errstr(enum parser_err_type type);
+struct seccomp_config *scconfig_parse_path(const char *path, unsigned int options);
+struct seccomp_config *scconfig_parse_file(FILE *stream, unsigned int options);
+struct seccomp_config *scconfig_parse_string(const char *str, unsigned int options);
 
 #define skip_spaces(fp) fscanf(fp, "%*[ \t]")
 

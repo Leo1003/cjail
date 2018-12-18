@@ -7,6 +7,7 @@
  * @file main.c
  * @brief cjail command line interface(cli) source
  */
+#define _GNU_SOURCE
 #include <cjail.h>
 
 #include <argz.h>
@@ -39,6 +40,7 @@ enum OPTVAL {
     OPT_ALR,
 };
 
+// clang-format off
 const char opts[] = "e:Ec:d:u:g:i:o:r:I:O:R:s:V:C:F:Z:P:S:T:m:qvh";
 const struct option longopts[] = {
     {"environ",     required_argument,  NULL, 'e'},
@@ -72,8 +74,9 @@ const struct option longopts[] = {
     {"help",        no_argument      ,  NULL, 'h'},
     {NULL,          0,                  NULL,  0 }
 };
+// clang-format on
 
-unsigned long toul(char* str, int abort)
+unsigned long toul(char *str, int abort)
 {
     char *p;
     unsigned long ret;
@@ -86,7 +89,7 @@ unsigned long toul(char* str, int abort)
     return ret;
 }
 
-long long int toll(char* str, int abort)
+long long int toll(char *str, int abort)
 {
     char *p;
     long long int ret;
@@ -99,7 +102,7 @@ long long int toll(char* str, int abort)
     return ret;
 }
 
-struct timeval totime(char* str, int abort)
+struct timeval totime(char *str, int abort)
 {
     char *p;
     double sec;
@@ -161,7 +164,7 @@ int parse_env(const char *str, char *envp[], char **dest[], char **data)
     *data = envz;
     return 0;
 
-    error:
+error:
     if (argz) {
         free(argz);
     }
@@ -186,7 +189,7 @@ int main(int argc, char *argv[], char *envp[])
 #endif
     cjail_para_init(&para);
     while ((o = getopt_long(argc, argv, opts, longopts, NULL)) >= 0) {
-        switch(o) {
+        switch (o) {
             case 'e':
                 envstr = optarg;
                 break;
@@ -330,7 +333,7 @@ int main(int argc, char *argv[], char *envp[])
     }
 
     if (envstr) {
-        if (parse_env(envstr, (inherenv ? envp : NULL ), &para_env, &envdata)) {
+        if (parse_env(envstr, (inherenv ? envp : NULL), &para_env, &envdata)) {
             perrf("ERROR: Parsing environment variables\n");
             exit(1);
         }

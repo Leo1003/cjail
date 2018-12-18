@@ -23,7 +23,7 @@ enum logger_level {
 
 enum logger_level get_log_level();
 void set_log_level(enum logger_level level);
-void set_log_file(FILE * f);
+void set_log_file(FILE *f);
 int swap_log_file();
 
 #ifdef NDEBUG
@@ -44,10 +44,10 @@ int loggerf(enum logger_level level, const char *src, int line, const char *form
 #define errorf(fmt, ...) loggerf(LOG_ERROR, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define fatalf(fmt, ...) loggerf(LOG_FATAL, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define lprintf(fmt, ...) loggerf(LOG_NONE, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#endif  //NDEBUG
+#endif //NDEBUG
 
 #define PWRN(name) warnf("Failed to %s: %s\n", name, strerror(errno))
 #define PERR(name) errorf("Failed to %s: %s\n", name, strerror(errno))
 #define PFTL(name) fatalf("Failed to %s: %s\n", name, strerror(errno))
 
-#endif  //LOGGER_H
+#endif //LOGGER_H

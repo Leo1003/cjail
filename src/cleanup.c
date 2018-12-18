@@ -3,8 +3,8 @@
  * @file cleanup.c
  * @brief cleanup stack source
  */
-#include "cgroup.h"
 #include "cleanup.h"
+#include "cgroup.h"
 #include "logger.h"
 #include "utils.h"
 
@@ -14,9 +14,9 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/signal.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 static void push_free(struct cleanupstack *stack, void **ptr)
 {
@@ -137,7 +137,7 @@ void stack_push(struct cleanupstack *stack, int type, ...)
     va_end(args);
 }
 
-void push_task(struct cleanupstack* stack, struct cleanuptask* task)
+void push_task(struct cleanupstack *stack, struct cleanuptask *task)
 {
     if (stack->count >= MAX_CLNSTACK) {
         return;
@@ -147,7 +147,7 @@ void push_task(struct cleanupstack* stack, struct cleanuptask* task)
     return;
 }
 
-struct cleanuptask * stack_top(struct cleanupstack *stack)
+struct cleanuptask *stack_top(struct cleanupstack *stack)
 {
     if (stack->count) {
         return &stack->stack[stack->count - 1];
@@ -165,7 +165,7 @@ int stack_pop(struct cleanupstack *stack, struct cleanuptask *task)
     return 0;
 }
 
-void do_cleanup(struct cleanupstack* stack)
+void do_cleanup(struct cleanupstack *stack)
 {
     struct cleanuptask task;
     while (stack_pop(stack, &task)) {

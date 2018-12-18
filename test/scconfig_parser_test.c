@@ -1,8 +1,8 @@
 #include "cjail.h"
 #include "scconfig_parser.h"
 
-#include <criterion/criterion.h>
 #include <criterion/assert.h>
+#include <criterion/criterion.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,47 +12,47 @@
 #define SCCONFIG_PATH "/tmp/scconfig_test.conf"
 
 static const char *basic_cfg_data =
-"###########################################\n"
-"###   seccomp config parser test file   ###\n"
-"###########################################\n"
-"\n"
-"# A basic example act like SECCOMP_SET_MODE_STRICT\n"
-"\n"
-"TYPE WHITELIST\n"
-"ACTION KILL\n"
-"\n"
-"ALLOW read()           # Read from fds\n"
-"ALLOW write()          # Write to fds\n"
-"ALLOW rt_sigreturn()   # Called when signal handler return\n"
-"ALLOW exit()           # Not exit_group()\n";
+    "###########################################\n"
+    "###   seccomp config parser test file   ###\n"
+    "###########################################\n"
+    "\n"
+    "# A basic example act like SECCOMP_SET_MODE_STRICT\n"
+    "\n"
+    "TYPE WHITELIST\n"
+    "ACTION KILL\n"
+    "\n"
+    "ALLOW read()           # Read from fds\n"
+    "ALLOW write()          # Write to fds\n"
+    "ALLOW rt_sigreturn()   # Called when signal handler return\n"
+    "ALLOW exit()           # Not exit_group()\n";
 
 static const char *advanced_data =
-"###########################################\n"
-"###   seccomp config parser test file   ###\n"
-"###########################################\n"
-"\n"
-"# A advanced example for simple c program\n"
-"\n"
-"TYPE WHITELIST\n"
-"ACTION SIGNAL\n"
-"\n"
-"ALLOW read( <= 2 )             # Read from fds\n"
-"ALLOW write( <= 2 )            # Write to fds\n"
-"ALLOW rt_sigreturn             # Called when signal handler return\n"
-"ALLOW exit ()                  # Not exit_group()\n"
-"ALLOW exit_group ()\n"
-"ALLOW brk\n"
-"ALLOW arch_prctl\n"
-"ALLOW openat\n"
-"ALLOW close\n"
-"ALLOW mmap ( , , , & 0xf == 0x2, , )\n"
-"ALLOW mprotect\n"
-"ALLOW munmap\n"
-"ALLOW access\n"
-"ALLOW fstat\n"
-"ALLOW lseek\n"
-"DENY ptrace(!=0)\n"
-"DENY sched_setaffinity\n";
+    "###########################################\n"
+    "###   seccomp config parser test file   ###\n"
+    "###########################################\n"
+    "\n"
+    "# A advanced example for simple c program\n"
+    "\n"
+    "TYPE WHITELIST\n"
+    "ACTION SIGNAL\n"
+    "\n"
+    "ALLOW read( <= 2 )             # Read from fds\n"
+    "ALLOW write( <= 2 )            # Write to fds\n"
+    "ALLOW rt_sigreturn             # Called when signal handler return\n"
+    "ALLOW exit ()                  # Not exit_group()\n"
+    "ALLOW exit_group ()\n"
+    "ALLOW brk\n"
+    "ALLOW arch_prctl\n"
+    "ALLOW openat\n"
+    "ALLOW close\n"
+    "ALLOW mmap ( , , , & 0xf == 0x2, , )\n"
+    "ALLOW mprotect\n"
+    "ALLOW munmap\n"
+    "ALLOW access\n"
+    "ALLOW fstat\n"
+    "ALLOW lseek\n"
+    "DENY ptrace(!=0)\n"
+    "DENY sched_setaffinity\n";
 
 static int write_file(const char *path, const char *data)
 {
@@ -73,7 +73,7 @@ out:
     return ret;
 }
 
-int cmp(struct seccomp_rule * a, struct seccomp_rule * b)
+int cmp(struct seccomp_rule *a, struct seccomp_rule *b)
 {
     if (a->type != b->type) {
         return (a->type < b->type ? -1 : 1);
@@ -139,10 +139,10 @@ static void check_advance_config(struct seccomp_config *cfg)
     memset(rules, 0, sizeof(rules));
     rules[0].type = RULE_ALLOW;
     rules[0].syscall = SCMP_SYS(read);
-    rules[0].args[0] = (struct args_rule){ CMP_LE, 2, 0 };
+    rules[0].args[0] = (struct args_rule) { CMP_LE, 2, 0 };
     rules[1].type = RULE_ALLOW;
     rules[1].syscall = SCMP_SYS(write);
-    rules[1].args[0] = (struct args_rule){ CMP_LE, 2, 0 };
+    rules[1].args[0] = (struct args_rule) { CMP_LE, 2, 0 };
     rules[2].type = RULE_ALLOW;
     rules[2].syscall = SCMP_SYS(rt_sigreturn);
     rules[3].type = RULE_ALLOW;
@@ -159,7 +159,7 @@ static void check_advance_config(struct seccomp_config *cfg)
     rules[8].syscall = SCMP_SYS(close);
     rules[9].type = RULE_ALLOW;
     rules[9].syscall = SCMP_SYS(mmap);
-    rules[9].args[3] = (struct args_rule){ CMP_MASK, 0x2, 0xf };
+    rules[9].args[3] = (struct args_rule) { CMP_MASK, 0x2, 0xf };
     rules[10].type = RULE_ALLOW;
     rules[10].syscall = SCMP_SYS(mprotect);
     rules[11].type = RULE_ALLOW;
@@ -172,7 +172,7 @@ static void check_advance_config(struct seccomp_config *cfg)
     rules[14].syscall = SCMP_SYS(lseek);
     rules[15].type = RULE_DENY;
     rules[15].syscall = SCMP_SYS(ptrace);
-    rules[15].args[0] = (struct args_rule){ CMP_NE, 0x0, 0x0 };
+    rules[15].args[0] = (struct args_rule) { CMP_NE, 0x0, 0x0 };
     rules[16].type = RULE_DENY;
     rules[16].syscall = SCMP_SYS(sched_setaffinity);
 

@@ -3,8 +3,8 @@
  * @file cgroup.c
  * @brief cgroup system operation source
  */
-#include "cjail.h"
 #include "cgroup.h"
+#include "cjail.h"
 #include "config.h"
 #include "logger.h"
 #include "utils.h"
@@ -14,12 +14,12 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 static char cgroup_root[PATH_MAX] = CFG_CGROOT;
 
-static int get_cgpath(char *cgpath, const char* subsystem, const char *entry)
+static int get_cgpath(char *cgpath, const char *subsystem, const char *entry)
 {
     char subpath[PATH_MAX];
     if (combine_path(subpath, cgroup_root, subsystem)) {
@@ -28,10 +28,10 @@ static int get_cgpath(char *cgpath, const char* subsystem, const char *entry)
 
     int ret = 0;
     if (entry) {
-        ret = snprintf(cgpath, sizeof(char) * PATH_MAX, "%s/"CFG_CGNAME"/%s",
+        ret = snprintf(cgpath, sizeof(char) * PATH_MAX, "%s/" CFG_CGNAME "/%s",
                        subpath, getpid(), entry);
     } else {
-        ret = snprintf(cgpath, sizeof(char) * PATH_MAX, "%s/"CFG_CGNAME,
+        ret = snprintf(cgpath, sizeof(char) * PATH_MAX, "%s/" CFG_CGNAME,
                        subpath, getpid());
     }
     if (ret >= PATH_MAX) {
@@ -59,12 +59,12 @@ int cgroup_set_root(const char *path)
     return (ret < 0) ? -1 : 0;
 }
 
-int cgroup_create(const char* subsystem)
+int cgroup_create(const char *subsystem)
 {
     char cgpath[PATH_MAX];
     if (get_cgpath(cgpath, subsystem, NULL) < 0 ||
         mkdir(cgpath, 0755)) {
-            goto err;
+        goto err;
     }
     return 0;
 
@@ -76,7 +76,7 @@ err:
     return -1;
 }
 
-int cgroup_read(const char* subsystem, const char* name, const char* fmt, ...)
+int cgroup_read(const char *subsystem, const char *name, const char *fmt, ...)
 {
     int ret = -1, is_eof = 0;
     va_list ap;
@@ -103,7 +103,7 @@ err:
     return ret;
 }
 
-int cgroup_write(const char* subsystem, const char* name, const char* fmt, ...)
+int cgroup_write(const char *subsystem, const char *name, const char *fmt, ...)
 {
     int ret = -1;
     va_list ap;
@@ -130,7 +130,7 @@ err:
     return ret;
 }
 
-int cgroup_open_tasks(const char* subsystem)
+int cgroup_open_tasks(const char *subsystem)
 {
     char cgpath[PATH_MAX];
     int fd = -1;
@@ -153,7 +153,7 @@ err:
     return fd;
 }
 
-int cgroup_destory(const char* subsystem)
+int cgroup_destory(const char *subsystem)
 {
     char cgpath[PATH_MAX];
     get_cgpath(cgpath, subsystem, NULL);

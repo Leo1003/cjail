@@ -3,9 +3,9 @@
 #include "fds.h"
 #include "utils.h"
 
+#include <criterion/assert.h>
 #include <criterion/criterion.h>
 #include <criterion/parameterized.h>
-#include <criterion/assert.h>
 #include <linux/limits.h>
 #include <sched.h>
 #include <stdarg.h>
@@ -36,7 +36,8 @@ void cpusetset(cpu_set_t *set, int cnt, ...)
     va_end(ap);
 }
 
-ParameterizedTestParameters(test_cpuset_tostr, tests) {
+ParameterizedTestParameters(test_cpuset_tostr, tests)
+{
     static struct cpuset_pair params[CPUSTR_TEST_COUNT];
 
     cpusetset(&params[0].input, 1, 0);
@@ -153,17 +154,16 @@ Test(test_combine_path, test_6)
     char str[PATH_MAX];
     char root[PATH_MAX], path[PATH_MAX], ans[PATH_MAX];
     const int rc = 3072, pc = 2048;
-    for(int i = 0; i < rc; i++)
+    for (int i = 0; i < rc; i++)
         root[i] = 'r';
     root[rc] = '\0';
-    for(int i = 0; i < pc; i++)
+    for (int i = 0; i < pc; i++)
         path[i] = 'p';
     path[pc] = '\0';
-    for(int i = 0; i < PATH_MAX; i++)
-    {
-        if(i < rc)
+    for (int i = 0; i < PATH_MAX; i++) {
+        if (i < rc)
             ans[i] = 'r';
-        else if(i == rc)
+        else if (i == rc)
             ans[i] = '/';
         else
             ans[i] = 'p';

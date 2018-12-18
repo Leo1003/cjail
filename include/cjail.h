@@ -182,7 +182,7 @@ void set_log_level(enum logger_level level);
 *
 * @param[in] f the new file stream
 */
-void set_log_file(FILE * f);
+void set_log_file(FILE *f);
 
 #ifdef __cplusplus
 }

@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <sys/user.h>
 
-typedef void(*seccomp_cb)(pid_t, unsigned long, struct user_regs_struct *);
+typedef void (*seccomp_cb)(pid_t, unsigned long, struct user_regs_struct *);
 
 struct trace_ops {
     seccomp_cb seccomp_event;

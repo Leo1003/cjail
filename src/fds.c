@@ -3,8 +3,8 @@
  * @file fds.c
  * @brief file descriptor related functions source
  */
-#include "cjail.h"
 #include "fds.h"
+#include "cjail.h"
 #include "logger.h"
 #include "utils.h"
 
@@ -142,7 +142,7 @@ int setup_fd(const struct cjail_para para)
             return -1;
     return 0;
 
-    error:
+error:
     PFTL("setup_fd");
     return -1;
 }
@@ -177,9 +177,9 @@ int closefrom(int minfd)
     closedir(fddir);
     return 0;
 
-    error_dir:
+error_dir:
     closedir(fddir);
-    error:
+error:
     PFTL("closefrom");
     return -1;
 }

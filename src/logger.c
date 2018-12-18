@@ -3,8 +3,9 @@
  * @file logger.c
  * @brief logger functions source
  */
-#include "cjail.h"
+#define _GNU_SOURCE
 #include "logger.h"
+#include "cjail.h"
 #include "utils.h"
 
 #include <errno.h>
@@ -21,7 +22,7 @@ static void init_logger()
     loglv = LOG_INFO;
 #else
     loglv = LOG_DEBUG;
-#endif  //NDEBUG
+#endif //NDEBUG
     logfile = stderr;
 }
 
@@ -46,7 +47,7 @@ void set_log_level(enum logger_level level)
     }
 }
 
-void set_log_file(FILE* f)
+void set_log_file(FILE *f)
 {
     chk_logger_init();
     if (f) {
@@ -80,16 +81,16 @@ error:
 }
 
 #ifdef NDEBUG
-int loggerf(enum logger_level level, const char* format, ...)
+int loggerf(enum logger_level level, const char *format, ...)
 #else
 int loggerf(enum logger_level level, const char *src, int line, const char *format, ...)
-#endif  //NDEBUG
+#endif //NDEBUG
 {
     va_list ap;
     int ret = 0;
     enum logger_level l;
     //Save errno prevent overriding it.
-    error_t savederr = errno;
+    int savederr = errno;
 
     chk_logger_init();
     if (level == LOG_SLIENT) {
@@ -134,7 +135,7 @@ int loggerf(enum logger_level level, const char *src, int line, const char *form
     if (level != LOG_NONE) {
         ret |= (fprintf(logfile, "[%s:%d]\t", src, line) < 0) ? -1 : 0;
     }
-#endif  //NDEBUG
+#endif //NDEBUG
 
     //Print actual message
     va_start(ap, format);

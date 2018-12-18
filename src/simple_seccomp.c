@@ -3,8 +3,8 @@
  * @file simple_seccomp.c
  * @brief basic seccomp rules source
  */
-#include "logger.h"
 #include "simple_seccomp.h"
+#include "logger.h"
 #include "utils.h"
 
 #include <errno.h>
@@ -18,7 +18,7 @@
 
 void default_cb(pid_t pid, unsigned long data, struct user_regs_struct *regs)
 {
-    char * str = seccomp_syscall_resolve_num_arch(seccomp_arch_native(), regs->orig_rax);
+    char *str = seccomp_syscall_resolve_num_arch(seccomp_arch_native(), regs->orig_rax);
     if (str) {
         infof("Process %d: triggered systemcall: %lld %s\n", pid, regs->orig_rax, str);
     } else {
@@ -163,7 +163,7 @@ error:
     return -1;
 }
 
-struct seccomp_config * scconfig_init()
+struct seccomp_config *scconfig_init()
 {
     struct seccomp_config *cfg = malloc(sizeof(struct seccomp_config));
     if (cfg == NULL) {
@@ -193,7 +193,7 @@ enum deny_method scconfig_get_deny(const struct seccomp_config *cfg)
     return cfg->deny_action;
 }
 
-void scconfig_set_deny(struct seccomp_config* cfg, enum deny_method deny)
+void scconfig_set_deny(struct seccomp_config *cfg, enum deny_method deny)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -211,7 +211,7 @@ enum config_type scconfig_get_type(const struct seccomp_config *cfg)
     return cfg->type;
 }
 
-void scconfig_set_type(struct seccomp_config* cfg, enum config_type type)
+void scconfig_set_type(struct seccomp_config *cfg, enum config_type type)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -220,7 +220,7 @@ void scconfig_set_type(struct seccomp_config* cfg, enum config_type type)
     cfg->type = type;
 }
 
-seccomp_cb scconfig_get_callback(const struct seccomp_config* cfg)
+seccomp_cb scconfig_get_callback(const struct seccomp_config *cfg)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -229,7 +229,7 @@ seccomp_cb scconfig_get_callback(const struct seccomp_config* cfg)
     return (cfg->callback ? cfg->callback : default_cb);
 }
 
-void scconfig_set_callback(struct seccomp_config* cfg, seccomp_cb callback)
+void scconfig_set_callback(struct seccomp_config *cfg, seccomp_cb callback)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -238,7 +238,7 @@ void scconfig_set_callback(struct seccomp_config* cfg, seccomp_cb callback)
     cfg->callback = callback;
 }
 
-void scconfig_reset_callback(struct seccomp_config* cfg)
+void scconfig_reset_callback(struct seccomp_config *cfg)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -247,7 +247,7 @@ void scconfig_reset_callback(struct seccomp_config* cfg)
     cfg->callback = NULL;
 }
 
-int scconfig_clear(struct seccomp_config* cfg)
+int scconfig_clear(struct seccomp_config *cfg)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -258,7 +258,7 @@ int scconfig_clear(struct seccomp_config* cfg)
     return 0;
 }
 
-int scconfig_add(struct seccomp_config* cfg, const struct seccomp_rule* rules, size_t len)
+int scconfig_add(struct seccomp_config *cfg, const struct seccomp_rule *rules, size_t len)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -277,7 +277,7 @@ int scconfig_add(struct seccomp_config* cfg, const struct seccomp_rule* rules, s
     return 0;
 }
 
-int scconfig_remove(struct seccomp_config* cfg, size_t i, size_t len)
+int scconfig_remove(struct seccomp_config *cfg, size_t i, size_t len)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -295,7 +295,7 @@ int scconfig_remove(struct seccomp_config* cfg, size_t i, size_t len)
     return 0;
 }
 
-struct seccomp_rule * scconfig_get_rule(struct seccomp_config * cfg, size_t i)
+struct seccomp_rule *scconfig_get_rule(struct seccomp_config *cfg, size_t i)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -307,7 +307,7 @@ struct seccomp_rule * scconfig_get_rule(struct seccomp_config * cfg, size_t i)
     return &cfg->rules[i];
 }
 
-size_t scconfig_len(const struct seccomp_config* cfg)
+size_t scconfig_len(const struct seccomp_config *cfg)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -316,7 +316,7 @@ size_t scconfig_len(const struct seccomp_config* cfg)
     return cfg->rules_count;
 }
 
-int scconfig_allocate(struct seccomp_config* cfg, size_t len)
+int scconfig_allocate(struct seccomp_config *cfg, size_t len)
 {
     if (!cfg) {
         errno = EINVAL;
@@ -335,7 +335,7 @@ int scconfig_allocate(struct seccomp_config* cfg, size_t len)
     return 0;
 }
 
-void scconfig_free(struct seccomp_config* cfg)
+void scconfig_free(struct seccomp_config *cfg)
 {
     if (!cfg) {
         return;

@@ -40,6 +40,7 @@ static void sighandler(int sig)
     }
 }
 
+// clang-format off
 static struct sig_rule lib_sigrules[] = {
     { SIGHUP  , sighandler, NULL, 0, {{0}}, 0 },
     { SIGINT  , sighandler, NULL, 0, {{0}}, 0 },
@@ -50,6 +51,7 @@ static struct sig_rule lib_sigrules[] = {
     { SIGTTOU , SIG_IGN   , NULL, 0, {{0}}, 0 },
     { 0       , NULL      , NULL, 0, {{0}}, 0 },
 };
+// clang-format on
 
 static int init_taskstats(struct ts_socket *s)
 {
@@ -91,7 +93,7 @@ static int init_cgroup(const struct cjail_para para, int *pidfd)
             return -1;
         }
         if (cgroup_write("memory", "memory.limit_in_bytes", "%lld",
-                para.cg_rss * 1024) < 0) {
+                         para.cg_rss * 1024) < 0) {
             return -1;
         }
         if (cgroup_write("memory", "memory.swappiness", "%u", 0) < 0) {
@@ -114,13 +116,13 @@ static int cjail_kill(pid_t pid)
 static pid_t cjail_wait(pid_t initpid, int *wstatus, int *initerrno)
 {
     pid_t retp;
-    retry:
+retry:
     retp = waitpid(initpid, wstatus, 0);
     if (retp < 0) {
         if (errno == ECHILD) {
             fatalf("Lost control of child namespace init process\n");
             goto error;
-        } else if(errno == EINTR) {
+        } else if (errno == EINTR) {
             if (interrupted && !child)
                 cjail_kill(initpid);
             goto retry;
@@ -130,8 +132,7 @@ static pid_t cjail_wait(pid_t initpid, int *wstatus, int *initerrno)
         }
     }
 
-    if ((WIFEXITED(*wstatus) && WEXITSTATUS(*wstatus) != 0)
-        || WIFSIGNALED(*wstatus)) {
+    if ((WIFEXITED(*wstatus) && WEXITSTATUS(*wstatus) != 0) || WIFSIGNALED(*wstatus)) {
         errorf("child namespace init process abnormal terminated\n");
         *initerrno = WIFEXITED(*wstatus) ? WEXITSTATUS(*wstatus) : (interrupted ? EINTR : EFAULT);
         errorf("Failed to setup child: %s\n", strerror(*initerrno));
@@ -143,11 +144,11 @@ static pid_t cjail_wait(pid_t initpid, int *wstatus, int *initerrno)
 
     return retp;
 
-    error:
+error:
     return -1;
 }
 
-int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
+int cjail_exec(const struct cjail_para *para, struct cjail_result *result)
 {
     char child_stack[STACKSIZE + 1] __attribute__((aligned(16)));
     int wstatus, ret = 0, tsgot = 0, initerr = 0;
@@ -164,7 +165,7 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
     if (!para)
         RETERR(EINVAL);
 
-    ep = (struct exec_para *) malloc(sizeof(struct exec_para));
+    ep = (struct exec_para *)malloc(sizeof(struct exec_para));
     stack_push(&cstack, CLN_FREE, &ep);
     ep->para = *para;
 
@@ -201,8 +202,9 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
     int optionflag = 0;
     optionflag |= ep->para.sharenet ? 0 : CLONE_NEWNET;
     initpid = clone(child_init, child_stack + STACKSIZE,
-                      SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS |
-                      CLONE_NEWPID | optionflag, (void *) ep);
+                    SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS |
+                        CLONE_NEWPID | optionflag,
+                    (void *)ep);
     if (initpid < 0) {
         PFTL("clone child namespace init process");
         ret = -1;
@@ -266,9 +268,10 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         result->stats = ts;
         if (ep->para.cg_rss) {
             if (cgroup_read("memory", "memory.oom_control",
-                              "oom_kill_disable %*d\n"
-                              "under_oom %*d\n"
-                              "oom_kill %d", &result->oomkill) < 0) {
+                            "oom_kill_disable %*d\n"
+                            "under_oom %*d\n"
+                            "oom_kill %d",
+                            &result->oomkill) < 0) {
                 errorf("Can't read memory.oom_control\n");
                 warnf("oomkill value invalid!\n");
                 result->oomkill = -1;
@@ -276,7 +279,7 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         }
     }
 
-    out_kill:
+out_kill:
     if ((interrupted && !child) || tsgot != 1)
         if (cjail_kill(initpid))
             ret = -1;
@@ -287,7 +290,7 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
         if (tcsetpgrp(STDIN_FILENO, getpgrp()))
             PWRN("set back control terminal");
 
-    out_cleanup:
+out_cleanup:
     do_cleanup(&pipestack);
     do_cleanup(&cstack);
 
@@ -295,7 +298,7 @@ int cjail_exec(const struct cjail_para* para, struct cjail_result* result)
     return ret;
 }
 
-void cjail_para_init(struct cjail_para* para)
+void cjail_para_init(struct cjail_para *para)
 {
     memset(para, 0, sizeof(struct cjail_para));
     para->rlim_core = -1;

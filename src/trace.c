@@ -1,6 +1,7 @@
+#define _GNU_SOURCE
+#include "trace.h"
 #include "logger.h"
 #include "simple_seccomp.h"
-#include "trace.h"
 
 #include <errno.h>
 #include <signal.h>
@@ -12,7 +13,8 @@ int trace_seize(pid_t pid)
     return ptrace(PTRACE_SEIZE, pid, NULL, PTRACE_O_EXITKILL | PTRACE_O_TRACEEXEC | PTRACE_O_TRACECLONE | PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK | PTRACE_O_TRACESECCOMP);
 }
 
-static int trace_getsig(pid_t pid, siginfo_t *info) {
+static int trace_getsig(pid_t pid, siginfo_t *info)
+{
     if (ptrace(PTRACE_GETSIGINFO, pid, NULL, info)) {
         if (errno == ESRCH) {
             // Tracee die
@@ -23,11 +25,13 @@ static int trace_getsig(pid_t pid, siginfo_t *info) {
     return 0;
 }
 
-static int trace_cont(pid_t pid, int sig) {
+static int trace_cont(pid_t pid, int sig)
+{
     return ptrace(PTRACE_CONT, pid, NULL, sig);
 }
 
-inline static int isstopsig(int sig) {
+inline static int isstopsig(int sig)
+{
     switch (sig) {
         case SIGSTOP:
         case SIGTSTP:
@@ -38,7 +42,7 @@ inline static int isstopsig(int sig) {
     return 0;
 }
 
-int trace_handle(const siginfo_t* sinfo, const struct trace_ops* ops)
+int trace_handle(const siginfo_t *sinfo, const struct trace_ops *ops)
 {
     switch (sinfo->si_code) {
         case CLD_EXITED:

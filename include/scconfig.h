@@ -20,7 +20,7 @@ extern "C" {
  * @brief The seccomp configure struct. This object is made opaque.
  * Use scconfig_*() to use this type.
  */
-typedef void * scconfig;
+typedef void *scconfig;
 
 /**
  * @brief The seccomp trace callback.
@@ -28,7 +28,7 @@ typedef void * scconfig;
  * This function will be call when the child process triggered a seccomp rule.
  * @note Currently, this function is called in the sandbox environment init process. Not in the original calling process.
  */
-typedef void(*seccomp_cb)(pid_t, unsigned long, struct user_regs_struct *);
+typedef void (*seccomp_cb)(pid_t, unsigned long, struct user_regs_struct *);
 
 /**
  * @enum config_type
@@ -250,7 +250,7 @@ int scconfig_remove(scconfig cfg, size_t i, size_t len);
  * @see scconfig_remove
  * @see scconfig_len
  */
-struct seccomp_rule * scconfig_get_rule(scconfig cfg, size_t i);
+struct seccomp_rule *scconfig_get_rule(scconfig cfg, size_t i);
 
 /**
  * @brief Preallocate memory for rules
@@ -350,7 +350,7 @@ parser_error_t parser_get_err();
  * @see parser_get_err
  * @see parser_error_t
  */
-const char * parser_errstr(enum parser_err_type type);
+const char *parser_errstr(enum parser_err_type type);
 
 /**
  * @brief Parse configure by path

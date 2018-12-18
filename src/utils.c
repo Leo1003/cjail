@@ -3,21 +3,23 @@
  * @file utils.c
  * @brief useful functions source
  */
+#define _GNU_SOURCE
+#include "utils.h"
 #include "cjail.h"
 #include "logger.h"
-#include "utils.h"
 
 #include <bsd/string.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
+#include <sched.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
-int table_to_int(const table_int32* table, const char* str)
+int table_to_int(const table_int32 *table, const char *str)
 {
     int i = 0;
     while (table[i].name) {
@@ -29,7 +31,7 @@ int table_to_int(const table_int32* table, const char* str)
     return table[i].value;
 }
 
-const char * table_to_str(const table_int32 *table, int value)
+const char *table_to_str(const table_int32 *table, int value)
 {
     int i = 0;
     while (table[i].name) {
@@ -41,7 +43,7 @@ const char * table_to_str(const table_int32 *table, int value)
     return NULL;
 }
 
-int cpuset_tostr(const cpu_set_t* cpuset, char* str, size_t len)
+int cpuset_tostr(const cpu_set_t *cpuset, char *str, size_t len)
 {
     snprintf(str, len, "");
     int s = -1, w = 0, l = 0;
@@ -107,9 +109,9 @@ int cpuset_parse(const char *str, cpu_set_t *cpuset)
                 n++;
                 p = n;
                 e = readcpunum(p, &n);
-                if(e < 0)
+                if (e < 0)
                     RETERR(EINVAL);
-                if(*n != ',' && *n != '\0')
+                if (*n != ',' && *n != '\0')
                     RETERR(EINVAL);
                 n++;
                 break;
@@ -126,7 +128,7 @@ int cpuset_parse(const char *str, cpu_set_t *cpuset)
     return 0;
 }
 
-int mkdir_r(const char* path)
+int mkdir_r(const char *path)
 {
     int l;
     if (!path || (l = strlen(path)) == 0) {
@@ -175,7 +177,7 @@ int combine_path(char *s, const char *root, const char *path)
     return 0;
 }
 
-int strrmchr(char* str, int index)
+int strrmchr(char *str, int index)
 {
     int l = strlen(str);
     if (index >= l || -index > l)
@@ -198,11 +200,11 @@ int setcloexec(int fd)
 int pipe_c(int pipedes[2])
 {
     return (pipe(pipedes) ||
-        setcloexec(pipedes[0]) ||
-        setcloexec(pipedes[1]));
+            setcloexec(pipedes[0]) ||
+            setcloexec(pipedes[1]));
 }
 
-char * strupr(char * str)
+char *strupr(char *str)
 {
     if (str) {
         int i = 0;
@@ -216,7 +218,7 @@ char * strupr(char * str)
     return str;
 }
 
-char * strlwr(char * str)
+char *strlwr(char *str)
 {
     if (str) {
         int i = 0;

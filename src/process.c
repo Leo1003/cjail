@@ -3,10 +3,10 @@
  * @file process.c
  * @brief child process initilizing source
  */
+#include "process.h"
 #include "cjail.h"
 #include "fds.h"
 #include "logger.h"
-#include "process.h"
 #include "sigset.h"
 #include "utils.h"
 
@@ -14,16 +14,18 @@
 #include <grp.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
-#include <unistd.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/prctl.h>
+#include <unistd.h>
 
+// clang-format off
 static struct sig_rule child_sigrules[] = {
     { SIGTTIN , SIG_IGN, NULL, 0, {{0}}, 0 },
     { SIGTTOU , SIG_IGN, NULL, 0, {{0}}, 0 },
     { 0       , NULL   , NULL, 0, {{0}}, 0 },
 };
+// clang-format on
 
 _Noreturn inline static void child_exit()
 {
@@ -70,12 +72,12 @@ static int set_rlimit(const struct cjail_para para)
     }
     return 0;
 
-    error:
+error:
     PFTL("setup_rlimit");
     return -1;
 }
 
-static int load_seccomp(const struct cjail_para para, struct sock_fprog* bpf)
+static int load_seccomp(const struct cjail_para para, struct sock_fprog *bpf)
 {
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
         PFTL("set no new privs");

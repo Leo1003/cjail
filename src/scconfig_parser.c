@@ -3,8 +3,8 @@
  * @file scconfig_parser.c
  * @brief parsing seccomp config file library source
  */
-#include "logger.h"
 #include "scconfig_parser.h"
+#include "logger.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -25,7 +25,7 @@ inline static void set_par_err(enum parser_err_type type, int line)
     _par_err.line = line;
 }
 
-struct seccomp_config * scconfig_parse_path(const char* path, unsigned int options)
+struct seccomp_config *scconfig_parse_path(const char *path, unsigned int options)
 {
     struct seccomp_config *cfg = NULL;
     struct stat st;
@@ -57,7 +57,7 @@ struct seccomp_config * scconfig_parse_path(const char* path, unsigned int optio
         set_par_err(ErrIO, 0);
         return NULL;
     }
-    if(_scconfig_parse(&cfg, fp, options)) {
+    if (_scconfig_parse(&cfg, fp, options)) {
         errno = EINVAL;
         cfg = NULL;
     }
@@ -65,17 +65,17 @@ struct seccomp_config * scconfig_parse_path(const char* path, unsigned int optio
     return cfg;
 }
 
-struct seccomp_config * scconfig_parse_file(FILE *stream, unsigned int options)
+struct seccomp_config *scconfig_parse_file(FILE *stream, unsigned int options)
 {
     struct seccomp_config *cfg = NULL;
-    if(_scconfig_parse(&cfg, stream, options)) {
+    if (_scconfig_parse(&cfg, stream, options)) {
         errno = EINVAL;
         return NULL;
     }
     return cfg;
 }
 
-struct seccomp_config * scconfig_parse_string(const char *str, unsigned int options)
+struct seccomp_config *scconfig_parse_string(const char *str, unsigned int options)
 {
     struct seccomp_config *cfg = NULL;
     //Convert string into C stream
@@ -84,7 +84,7 @@ struct seccomp_config * scconfig_parse_string(const char *str, unsigned int opti
         set_par_err(ErrMemory, 0);
         return NULL;
     }
-    if(_scconfig_parse(&cfg, fp, options)) {
+    if (_scconfig_parse(&cfg, fp, options)) {
         errno = EINVAL;
         cfg = NULL;
         goto out;
@@ -95,7 +95,7 @@ out:
     return cfg;
 }
 
-const char * parser_errstr(enum parser_err_type type)
+const char *parser_errstr(enum parser_err_type type)
 {
     switch (type) {
         case ErrNone:
@@ -145,7 +145,7 @@ static enum parser_err_type _parse_syscall(FILE *f, struct seccomp_rule *rule)
         devf("Syntax Error\n");
         return ErrSyntax;
     }
-    rule->syscall  = seccomp_syscall_resolve_name(buf);
+    rule->syscall = seccomp_syscall_resolve_name(buf);
     devf("syscall: %s -> %d\n", buf, rule->syscall);
     skip_spaces(f);
 
@@ -272,7 +272,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
 
     skip_spaces(mf);
     switch (table_to_int(cmd_table, cmd)) {
-        case 1:      //PARSER_CMD_TYPE
+        case 1: //PARSER_CMD_TYPE
             if (fscanf(mf, "%64[A-Za-z0-9_]", strval) != 1) {
                 ret = ErrSyntax;
                 goto out;
@@ -285,7 +285,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
             }
             scconfig_set_type(cfg, val);
             break;
-        case 2:      //PARSER_CMD_ACTION
+        case 2: //PARSER_CMD_ACTION
             if (fscanf(mf, "%64[A-Za-z0-9_]", strval) != 1) {
                 ret = ErrSyntax;
                 goto out;
@@ -298,7 +298,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
             }
             scconfig_set_deny(cfg, val);
             break;
-        case 3:      //PARSER_CMD_ALLOW
+        case 3: //PARSER_CMD_ALLOW
             if ((ret = _parse_syscall(mf, &rule))) {
                 if (ret == ErrNoSyscall && options & SCOPT_IGN_NOSYS) {
                     ret = ErrNone;
@@ -310,7 +310,7 @@ static enum parser_err_type _parse_line(const char *str, struct seccomp_config *
                 ret = ErrMemory;
             }
             break;
-        case 4:      //PARSER_CMD_DENY
+        case 4: //PARSER_CMD_DENY
             if ((ret = _parse_syscall(mf, &rule))) {
                 if (ret == ErrNoSyscall && options & SCOPT_IGN_NOSYS) {
                     ret = ErrNone;

@@ -3,9 +3,9 @@
  * @file init.c
  * @brief init process(PID 1) in the pid namespace daemon source
  */
+#include "init.h"
 #include "cjail.h"
 #include "config.h"
-#include "init.h"
 #include "fds.h"
 #include "filesystem.h"
 #include "logger.h"
@@ -18,42 +18,43 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <seccomp.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <termios.h>
-#include <unistd.h>
 #include <sys/param.h>
 #include <sys/prctl.h>
 #include <sys/signal.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <seccomp.h>
+#include <termios.h>
+#include <unistd.h>
 
 static volatile sig_atomic_t alarmed = 0, interrupted = 0;
 
 void sigact(int sig)
 {
     switch (sig) {
-    case SIGHUP:
-    case SIGINT:
-    case SIGQUIT:
-    case SIGTERM:
-        interrupted = 1;
-        break;
-    case SIGALRM:
-        if (kill(-1, SIGKILL) && errno != ESRCH) {
-            alarmed = -errno;
-            return;
-        }
-        alarmed = 1;
-        break;
-    case SIGCHLD:
-        break;
+        case SIGHUP:
+        case SIGINT:
+        case SIGQUIT:
+        case SIGTERM:
+            interrupted = 1;
+            break;
+        case SIGALRM:
+            if (kill(-1, SIGKILL) && errno != ESRCH) {
+                alarmed = -errno;
+                return;
+            }
+            alarmed = 1;
+            break;
+        case SIGCHLD:
+            break;
     }
 }
 
+// clang-format off
 static struct sig_rule init_sigrules[] = {
     { SIGHUP  , sigact , NULL, 0, {{0}}, 0 },
     { SIGINT  , sigact , NULL, 0, {{0}}, 0 },
@@ -66,6 +67,7 @@ static struct sig_rule init_sigrules[] = {
     { SIGREADY, sigact , NULL, 0, {{0}}, 0 },
     { 0       , NULL   , NULL, 0, {{0}}, 0 },
 };
+// clang-format on
 
 static int ifchildfailed(pid_t pid)
 {
@@ -93,7 +95,7 @@ static int setprocname(const char *argv, const char *procname)
     int ret = -1;
     if (argv) {
         ret = prctl(PR_SET_MM, PR_SET_MM_ARG_START, argv, 0, 0) ||
-            prctl(PR_SET_MM, PR_SET_MM_ARG_END, argv + strlen(argv) + 1, 0, 0);
+              prctl(PR_SET_MM, PR_SET_MM_ARG_END, argv + strlen(argv) + 1, 0, 0);
     }
     if (!ret && procname) {
         ret = prctl(PR_SET_NAME, procname, 0, 0, 0);
@@ -117,7 +119,8 @@ static int write_tasks(int fd, pid_t pid)
     return 0;
 }
 
-static int set_timer(const struct timeval time) {
+static int set_timer(const struct timeval time)
+{
     struct itimerval it;
     memset(&it, 0, sizeof(it));
     it.it_value = time;
@@ -127,7 +130,8 @@ static int set_timer(const struct timeval time) {
     return 0;
 }
 
-static int unset_timer() {
+static int unset_timer()
+{
     struct itimerval it;
     memset(&it, 0, sizeof(it));
     if (setitimer(ITIMER_REAL, &it, NULL)) {
@@ -136,7 +140,8 @@ static int unset_timer() {
     return 0;
 }
 
-error_t get_child_error(const siginfo_t *info, int cg_rss) {
+error_t get_child_error(const siginfo_t *info, int cg_rss)
+{
     switch (info->si_code) {
         case CLD_EXITED:
             return info->si_status;
@@ -187,12 +192,12 @@ static int mount_fs(const struct cjail_para para)
     }
     return 0;
 
-    error:
+error:
     PFTL("setup_fs");
     return -1;
 }
 
-static int allow_execve(struct seccomp_config *cfg, void* argv)
+static int allow_execve(struct seccomp_config *cfg, void *argv)
 {
     struct seccomp_rule exec_rule;
     struct args_rule arg1 = {
@@ -216,7 +221,7 @@ int child_init(void *arg)
     int ttymode, childstatus = -1;
     pid_t childpid;
     struct termios term;
-    struct exec_para ep = *(struct exec_para *) arg;
+    struct exec_para ep = *(struct exec_para *)arg;
 
     if (getpid() != 1) {
         fatalf("This process should be run as init process.\n");
@@ -386,7 +391,7 @@ int child_init(void *arg)
         write(ep.resultpipe[1], &result, sizeof(result));
 
         exit(childerr);
-    } else if(childpid == 0) {
+    } else if (childpid == 0) {
         child_process(ep);
     } else {
         PFTL("fork");

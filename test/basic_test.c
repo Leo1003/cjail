@@ -1,11 +1,12 @@
 #include "cjail.h"
 
-#include <criterion/criterion.h>
 #include <criterion/assert.h>
+#include <criterion/criterion.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-void setup() {
+void setup()
+{
     if (geteuid()) {
         cr_skip_test("Not running as root!\n");
     }

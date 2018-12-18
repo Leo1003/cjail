@@ -3,15 +3,15 @@
  * @file taskstats.c
  * @brief taskstat resource statistics source
  */
+#include "taskstats.h"
 #include "cjail.h"
 #include "logger.h"
-#include "taskstats.h"
 
 #include <fcntl.h>
+#include <linux/netlink.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <linux/netlink.h>
 
 /* getdelays.c
  *
@@ -38,20 +38,20 @@ static int create_nl_socket(int protocol)
     memset(&local, 0, sizeof(local));
     local.nl_family = AF_NETLINK;
 
-    if (bind(fd, (struct sockaddr *) &local, sizeof(local))) {
+    if (bind(fd, (struct sockaddr *)&local, sizeof(local))) {
         goto error;
     }
 
     return fd;
 
-    error:
+error:
     close(fd);
     return -1;
 }
 
 static int send_cmd(int sd, __u16 nlmsg_type, __u32 nlmsg_pid,
-             __u8 genl_cmd, __u16 nla_type,
-             void *nla_data, int nla_len)
+                    __u8 genl_cmd, __u16 nla_type,
+                    void *nla_data, int nla_len)
 {
     struct nlattr *na;
     struct sockaddr_nl nladdr;
@@ -68,18 +68,18 @@ static int send_cmd(int sd, __u16 nlmsg_type, __u32 nlmsg_pid,
     msg.n.nlmsg_pid = nlmsg_pid;
     msg.g.cmd = genl_cmd;
     msg.g.version = 0x1;
-    na = (struct nlattr *) GENLMSG_DATA(&msg);
+    na = (struct nlattr *)GENLMSG_DATA(&msg);
     na->nla_type = nla_type;
     na->nla_len = nla_len + 1 + NLA_HDRLEN;
     memcpy(NLA_DATA(na), nla_data, nla_len);
     msg.n.nlmsg_len += NLMSG_ALIGN(na->nla_len);
 
-    buf = (char *) &msg;
+    buf = (char *)&msg;
     buflen = msg.n.nlmsg_len;
     memset(&nladdr, 0, sizeof(nladdr));
     nladdr.nl_family = AF_NETLINK;
     while ((r = sendto(sd, buf, buflen, 0,
-            (struct sockaddr *) &nladdr, sizeof(nladdr))) < buflen) {
+                       (struct sockaddr *)&nladdr, sizeof(nladdr))) < buflen) {
         if (r > 0) {
             buf += r;
             buflen -= r;
@@ -101,27 +101,27 @@ static int get_family_id(int sd)
     char name[64];
     strcpy(name, TASKSTATS_GENL_NAME);
     rc = send_cmd(sd, GENL_ID_CTRL, getpid(), CTRL_CMD_GETFAMILY,
-              CTRL_ATTR_FAMILY_NAME, (void *)name, strlen(TASKSTATS_GENL_NAME) + 1);
+                  CTRL_ATTR_FAMILY_NAME, (void *)name, strlen(TASKSTATS_GENL_NAME) + 1);
     if (rc < 0) {
         PFTL("send_cmd()\n");
         return 0;
-    }   /* sendto() failure? */
+    } /* sendto() failure? */
 
     rep_len = recv(sd, &ans, sizeof(ans), 0);
     if (ans.n.nlmsg_type == NLMSG_ERROR ||
-            (rep_len < 0) || !NLMSG_OK((&ans.n), rep_len)) {
+        (rep_len < 0) || !NLMSG_OK((&ans.n), rep_len)) {
         errorf("NLMSG_ERROR: %d\n", ans.n.nlmsg_type == NLMSG_ERROR);
         debugf("rep_len: %d\n", rep_len);
-        struct nlmsgerr* err = NLMSG_DATA(&ans);
+        struct nlmsgerr *err = NLMSG_DATA(&ans);
         errorf("Error: %d\n", err->error);
         errno = err->error;
         return 0;
     }
 
-    na = (struct nlattr *) GENLMSG_DATA(&ans);
-    na = (struct nlattr *) ((char *) na + NLA_ALIGN(na->nla_len));
+    na = (struct nlattr *)GENLMSG_DATA(&ans);
+    na = (struct nlattr *)((char *)na + NLA_ALIGN(na->nla_len));
     if (na->nla_type == CTRL_ATTR_FAMILY_ID) {
-        id = *(__u16 *) NLA_DATA(na);
+        id = *(__u16 *)NLA_DATA(na);
     }
     return id;
 }
@@ -150,7 +150,7 @@ int taskstats_create(struct ts_socket *s)
     return 0;
 }
 
-int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
+int taskstats_setcpuset(struct ts_socket *s, cpu_set_t *cpuset)
 {
     if (cpuset_tostr(cpuset, s->cpumask, sizeof(s->cpumask)) < 0) {
         PERR("parse_cpuset");
@@ -158,8 +158,8 @@ int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
     }
     debugf("Setting cpumask to: %s\n", s->cpumask);
     if (send_cmd(s->socketfd, s->familyid, getpid(),
-            TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_REGISTER_CPUMASK,
-            s->cpumask, strlen(s->cpumask) + 1)) {
+                 TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_REGISTER_CPUMASK,
+                 s->cpumask, strlen(s->cpumask) + 1)) {
         PFTL("taskstats_setcpuset");
         return -1;
     }
@@ -167,17 +167,17 @@ int taskstats_setcpuset(struct ts_socket* s, cpu_set_t* cpuset)
     return 0;
 }
 
-int taskstats_setpid(struct ts_socket* s, pid_t pid)
+int taskstats_setpid(struct ts_socket *s, pid_t pid)
 {
     if (send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
-            TASKSTATS_CMD_ATTR_PID, &pid, sizeof(pid))) {
+                 TASKSTATS_CMD_ATTR_PID, &pid, sizeof(pid))) {
         PFTL("taskstats_setpid\n");
         return -1;
     }
     return 0;
 }
 
-int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
+int taskstats_getstats(struct ts_socket *s, struct taskstats *ts)
 {
     struct msgtemplate msg;
     int rep_len = recv(s->socketfd, &msg, sizeof(msg), 0);
@@ -194,14 +194,14 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
         return -1;
     }
     if (msg.n.nlmsg_type == NLMSG_ERROR || !NLMSG_OK((&msg.n), rep_len)) {
-        struct nlmsgerr* err = NLMSG_DATA(&msg);
+        struct nlmsgerr *err = NLMSG_DATA(&msg);
         errno = -(err->error);
         PFTL("getstats (taskstats error)");
         return -1;
     }
 
     rep_len = GENLMSG_PAYLOAD(&msg.n);
-    struct nlattr* na = (struct nlattr*) GENLMSG_DATA(&msg);
+    struct nlattr *na = (struct nlattr *)GENLMSG_DATA(&msg);
     int len = 0;
     while (len < rep_len) {
         len += NLA_ALIGN(na->nla_len);
@@ -211,13 +211,15 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
                 int aggr_len = NLA_PAYLOAD(na->nla_len);
                 int len2 = 0;
                 /* For nested attributes, na follows */
-                na = (struct nlattr*) NLA_DATA(na);
+                na = (struct nlattr *)NLA_DATA(na);
                 while (len2 < aggr_len) {
                     switch (na->nla_type) {
-                        case TASKSTATS_TYPE_PID: break;
-                        case TASKSTATS_TYPE_TGID: break;
+                        case TASKSTATS_TYPE_PID:
+                            break;
+                        case TASKSTATS_TYPE_TGID:
+                            break;
                         case TASKSTATS_TYPE_STATS:
-                            memcpy(ts, (struct taskstats*) NLA_DATA(na),
+                            memcpy(ts, (struct taskstats *)NLA_DATA(na),
                                    sizeof(struct taskstats));
                             return 0;
                             break;
@@ -226,26 +228,25 @@ int taskstats_getstats(struct ts_socket* s, struct taskstats* ts)
                             break;
                     }
                     len2 += NLA_ALIGN(na->nla_len);
-                    na = (struct nlattr*) ((char*) na + len2);
+                    na = (struct nlattr *)((char *)na + len2);
                 }
-            }
-            break;
+            } break;
             default:
                 errorf("Unknown nla_type %d\n", na->nla_type);
                 break;
         }
-        na = (struct nlattr*) (GENLMSG_DATA(&msg) + len);
+        na = (struct nlattr *)(GENLMSG_DATA(&msg) + len);
     }
     errno = EFAULT;
     return -2;
 }
 
-int taskstats_destory(struct ts_socket* s)
+int taskstats_destory(struct ts_socket *s)
 {
     if (s->maskset) {
         if (send_cmd(s->socketfd, s->familyid, getpid(), TASKSTATS_CMD_GET,
-                      TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK,
-                      s->cpumask, strlen(s->cpumask) + 1)) {
+                     TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK,
+                     s->cpumask, strlen(s->cpumask) + 1)) {
             PWRN("deregister cpumask");
         }
     }
