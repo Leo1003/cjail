@@ -1,0 +1,19 @@
+# This repo follow the following coding style
+# Based on WebKit configures
+
+BasedOnStyle: WebKit
+IndentWidth: 4
+Language: Cpp
+
+AlignAfterOpenBracket: Align
+AlignOperands: true
+AllowShortIfStatementsOnASingleLine: true
+BreakBeforeBinaryOperators: None
+BreakBeforeBraces: Linux
+ColumnLimit: 0
+IncludeBlocks: Preserve
+IndentCaseLabels: true
+MaxEmptyLinesToKeep: 2
+PointerAlignment: Right
+SortIncludes: true
+SpaceAfterCStyleCast: false

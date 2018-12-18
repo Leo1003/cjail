@@ -1,0 +1,23 @@
+# EditorConfig for cjail repo
+# https://editorconfig.org
+
+# Top-most .editorconfig file
+root = true
+
+[*]
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{c,h}]
+curly_bracket_next_line = false
+indent_brace_style = K&R
+
+[{*.{diff,md}, LICENSE}]
+trim_trailing_whitespace = false
+
+[.ycm_extra_conf.py]
+indent_size = 2
