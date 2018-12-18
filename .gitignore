@@ -12,6 +12,7 @@ build/
 
 # Visual Code files
 .vscode/
+*.code-workspace
 
 # Output files
 *.o
