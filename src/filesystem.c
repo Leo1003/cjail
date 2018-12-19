@@ -6,6 +6,7 @@
 #define _GNU_SOURCE
 #include "filesystem.h"
 #include "logger.h"
+#include "loop.h"
 #include "utils.h"
 
 #include <fcntl.h>
@@ -32,12 +33,7 @@ static int is_valid_source(const char *source, int type)
     switch (type) {
         case FS_DISK: {
             mode_t t = get_filetype(source);
-            /*
-             * mounting disk image require loopback support
-             * So, I don't want to unsupport it now...
-             */
-            // return (t == S_IFBLK || t == S_IFREG);
-            return t == S_IFBLK;
+            return (t == S_IFBLK || t == S_IFREG);
         }
         case FS_BIND: {
             return (get_filetype(source) == S_IFDIR);
@@ -77,8 +73,42 @@ int jail_symlinkat(const char *root, const char *target, int fd, const char *nam
 }
 
 static int mount_disk(const char *source, const char *target,
+                      unsigned int flags, const char *option);
+
+static int mount_loop(const char *source, const char *target,
                       unsigned int flags, const char *option)
 {
+    devf("%s\n", __func__);
+    int loopid, loopflags = 0;
+
+    if (!(flags & FS_RW)) loopflags |= LOOP_LOAD_READONLY;
+
+    if ((loopid = loop_load(source, loopflags, NULL)) < 0) {
+        PERR("mount loop");
+        return -1;
+    }
+
+    char looppath[PATH_MAX];
+    pathprintf(looppath, "/dev/loop%d", loopid);
+    debugf("Loaded loop file: %s -> %s\n", source, looppath);
+
+    if (mount_disk(looppath, target, flags, option) < 0) {
+        loop_detach(loopid);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int mount_disk(const char *source, const char *target,
+                      unsigned int flags, const char *option)
+{
+    if (get_filetype(source) == S_IFREG) {
+        debugf("Loading loop file: %s\n", source);
+        return mount_loop(source, target, flags, option);
+        //TODO: Implement cleanup function to detach all loop devices
+    }
+
     devf("%s\n", __func__);
     char fstype[256], *optstr;
     char *p = strchrnul(option, '|');

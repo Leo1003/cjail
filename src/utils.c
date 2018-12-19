@@ -173,7 +173,7 @@ int combine_path(char *s, const char *root, const char *path)
     if (ptmp[0] == '/')
         strrmchr(ptmp, 0);
 
-    snprintf(s, sizeof(char) * PATH_MAX, "%s/%s", rtmp, ptmp);
+    pathprintf(s, "%s/%s", rtmp, ptmp);
     return 0;
 }
 

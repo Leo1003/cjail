@@ -9,6 +9,7 @@ add_library(libcjail SHARED
     filesystem.c
     init.c
     logger.c
+    loop.c
     process.c
     scconfig_parser.c
     simple_seccomp.c

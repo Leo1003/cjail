@@ -7,6 +7,7 @@
 #define UTILS_H
 
 #include <errno.h>
+#include <linux/limits.h>
 #include <sched.h>
 #include <stdio.h>
 #include <string.h>
@@ -26,6 +27,8 @@
     ({ __typeof__ (a) _a = (a); \
     __typeof__ (b) _b = (b); \
     _a < _b ? _a : _b; })
+
+#define pathprintf(dest, fmt, ...) snprintf(dest, sizeof(char) * PATH_MAX, fmt, ##__VA_ARGS__)
 
 struct _int_table {
     char *name;
