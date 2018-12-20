@@ -79,6 +79,7 @@ static int ifchildfailed(pid_t pid)
     }
     if (fscanf(fp, "%*s %*s %*s %*s %*s %*s %*s %*s %lu", &procflag) < 0) {
         PFTL("read proc stat file");
+        fclose(fp);
         return -1;
     }
     fclose(fp);

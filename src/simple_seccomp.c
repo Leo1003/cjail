@@ -174,13 +174,13 @@ struct seccomp_config * scconfig_init()
     cfg->deny_action = DENY_KILL;
     cfg->rules_count = 0;
     cfg->rules_alloc = SC_ALLOC_BASE;
+    cfg->callback = NULL;
     cfg->rules = malloc(SC_ALLOC_BASE * sizeof(struct seccomp_rule));
     if (cfg->rules == NULL) {
         PFTL("malloc memory");
         free(cfg);
-        cfg = NULL; //return NULL
+        return NULL;
     }
-    cfg->callback = NULL;
     return cfg;
 }
 
