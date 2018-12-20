@@ -2,7 +2,7 @@
 # Project configuration
 #
 cmake_minimum_required(VERSION 3.0.2)
-project(cjail VERSION 0.7.0 LANGUAGES C)
+project(cjail VERSION 0.7.1 LANGUAGES C)
 set(SOVERSION 0)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
