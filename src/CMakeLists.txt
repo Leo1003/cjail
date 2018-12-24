@@ -19,6 +19,11 @@ add_library(libcjail SHARED
 )
 add_library(CJail::libcjail ALIAS libcjail)
 
+set(PUBLIC_HEADERS
+    ${CMAKE_SOURCE_DIR}/include/cjail.h
+    ${CMAKE_SOURCE_DIR}/include/scconfig.h
+)
+
 target_include_directories(libcjail
     INTERFACE
         $<INSTALL_INTERFACE:include>
@@ -37,9 +42,7 @@ set_target_properties(libcjail PROPERTIES
     OUTPUT_NAME "cjail"
     PREFIX "lib"
     VERSION ${PROJECT_VERSION} SOVERSION ${SOVERSION}
-    PUBLIC_HEADER
-        "${CMAKE_SOURCE_DIR}/include/cjail.h;
-        ${CMAKE_SOURCE_DIR}/include/scconfig.h"
+    PUBLIC_HEADER "${PUBLIC_HEADER_LIST}"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
