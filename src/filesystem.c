@@ -16,8 +16,24 @@
 #include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/sysmacros.h>
 #include <unistd.h>
+
+#ifndef TMPFS_MAGIC
+# define TMPFS_MAGIC 0x01021994
+#endif
+
+/* clang-format off */
+#define NBIND_MASKOUT   (~(JAIL_MNT_REC))
+#define SYSFS_MASKOUT   (~(JAIL_MNT_NOEXEC | JAIL_MNT_SUID | JAIL_MNT_SYNC | JAIL_MNT_REC))
+/* clang-format on  */
+
+typedef int (*mount_oper_fn)(const struct jail_mount_ctx *);
+struct mount_operator {
+    char *name;
+    mount_oper_fn fn;
+};
 
 int get_filetype(const char *path)
 {
@@ -28,26 +44,13 @@ int get_filetype(const char *path)
     return (st.st_mode & S_IFMT);
 }
 
-static int is_valid_source(const char *source, int type)
+int get_fstype(const char *path)
 {
-    switch (type) {
-        case FS_DISK: {
-            mode_t t = get_filetype(source);
-            return (t == S_IFBLK || t == S_IFREG);
-        }
-        case FS_BIND: {
-            return (get_filetype(source) == S_IFDIR);
-        }
-        case FS_TMP:
-        case FS_PROC:
-        case FS_DEV:
-        case FS_SYS:
-        case FS_UDEV:
-            return 1;
-        default:
-            return 0;
+    struct statfs stf;
+    if (statfs(path, &stf)) {
+        return -1;
     }
-    return 0;
+    return stf.f_type;
 }
 
 int is_same_inode(const char *patha, const char *pathb)
@@ -72,9 +75,21 @@ int jail_symlinkat(const char *root, const char *target, int fd, const char *nam
     return symlinkat(path, fd, name);
 }
 
+inline static int try_umount(const char *path)
+{
+    if (umount2(path, UMOUNT_NOFOLLOW) == 0) {
+        return 0;
+    }
+    if (errno != EBUSY) {
+        return -1;
+    }
+    return umount2(path, MNT_DETACH | UMOUNT_NOFOLLOW);
+}
+/*
 static int mount_disk(const char *source, const char *target,
                       unsigned int flags, const char *option);
-
+                      */
+/*
 static int mount_loop(const char *source, const char *target,
                       unsigned int flags, const char *option)
 {
@@ -99,136 +114,131 @@ static int mount_loop(const char *source, const char *target,
 
     return 0;
 }
+*/
 
-static int mount_disk(const char *source, const char *target,
-                      unsigned int flags, const char *option)
+static unsigned int convert_flags(unsigned int flags, unsigned int mask, unsigned int setflags)
 {
-    if (get_filetype(source) == S_IFREG) {
-        debugf("Loading loop file: %s\n", source);
-        return mount_loop(source, target, flags, option);
-        //TODO: Implement cleanup function to detach all loop devices
+    unsigned int maskflags = flags & mask;
+
+    if (!(maskflags & JAIL_MNT_RW)) setflags |= MS_RDONLY;
+    if (maskflags & JAIL_MNT_NOEXEC) setflags |= MS_NOEXEC;
+    if (!(maskflags & JAIL_MNT_SUID)) setflags |= MS_NOSUID;
+    if (maskflags & JAIL_MNT_SYNC) setflags |= (MS_SYNCHRONOUS | MS_DIRSYNC);
+    if (maskflags & JAIL_MNT_NOATIME) setflags |= MS_NOATIME;
+    if (maskflags & JAIL_MNT_REC) setflags |= MS_REC;
+
+    return setflags;
+}
+
+static int mount_disk(const struct jail_mount_ctx *ctx)
+{
+    if (get_filetype(ctx->source) != S_IFBLK) {
+        errno = EINVAL;
+        return -1;
     }
 
-    devf("%s\n", __func__);
-    char fstype[256], *optstr;
-    char *p = strchrnul(option, '|');
-    strncpy(fstype, option, MIN(sizeof(fstype), p - option));
-    if (*p) {
-        optstr = p + 1;
-    } else {
-        optstr = p;
-    }
-    unsigned int mountflags = 0;
-    mountflags |= MS_NODEV;
-    if (!(flags & FS_RW)) mountflags |= MS_RDONLY;
-    if (flags & FS_NOEXEC) mountflags |= MS_NOEXEC;
-    if (!(flags & FS_SUID)) mountflags |= MS_NOSUID;
-    if (mount(source, target, fstype, mountflags, optstr)) {
+    unsigned int mountflags = convert_flags(ctx->flags, NBIND_MASKOUT, MS_NODEV);
+
+    if (mount(ctx->source, ctx->target, ctx->fstype, mountflags, ctx->data)) {
         return -1;
     }
     return 0;
 }
 
-static int mount_bind(const char *source, const char *target,
-                      unsigned int flags, const char *option)
+static int mount_bind(const struct jail_mount_ctx *ctx)
 {
-    devf("%s\n", __func__);
-    if (mount(source, target, "", MS_BIND, "")) {
+    unsigned int mountflags = convert_flags(ctx->flags, 0, MS_BIND | MS_NODEV);
+
+    if (mount(ctx->source, ctx->target, NULL, MS_BIND, NULL)) {
         return -1;
     }
-    unsigned int mountflags = 0;
-    mountflags |= MS_NODEV;
-    if (!(flags & FS_RW)) mountflags |= MS_RDONLY;
-    if (flags & FS_NOEXEC) mountflags |= MS_NOEXEC;
-    if (!(flags & FS_SUID)) mountflags |= MS_NOSUID;
+    /* Apply other flags using remount */
     mountflags |= MS_REMOUNT;
-    mountflags |= MS_BIND;
-    if (mount("", target, "", mountflags, option)) {
+
+    if (mount(NULL, ctx->target, NULL, mountflags, ctx->data)) {
         return -1;
     }
     return 0;
 }
 
-static int mount_proc(const char *target, const char *option)
+static int mount_proc(const struct jail_mount_ctx *ctx)
 {
-    devf("%s\n", __func__);
-    if (mount("proc", target, "proc", MS_NODEV | MS_NOEXEC | MS_NOSUID, option)) {
+    unsigned int mountflags = convert_flags(ctx->flags, SYSFS_MASKOUT, MS_NODEV | MS_NOEXEC | MS_NOSUID);
+
+    if (mount("proc", ctx->target, "proc", mountflags, ctx->data)) {
         fatalf("mount proc filesystem failed!\n");
         return -1;
     }
     return 0;
 }
 
-static int mount_tmpfs(const char *target, unsigned int flags, const char *option)
+static int mount_tmpfs(const struct jail_mount_ctx *ctx)
 {
-    devf("%s\n", __func__);
-    unsigned int mountflags = 0;
-    mountflags |= MS_NODEV;
-    if (!(flags & FS_RW)) mountflags |= MS_RDONLY;
-    if (flags & FS_NOEXEC) mountflags |= MS_NOEXEC;
-    if (!(flags & FS_SUID)) mountflags |= MS_NOSUID;
-    if (mount("tmpfs", target, "tmpfs", mountflags, option)) {
+    unsigned int mountflags = convert_flags(ctx->flags, NBIND_MASKOUT, MS_NODEV);
+
+    if (mount("tmpfs", ctx->target, "tmpfs", mountflags, ctx->data)) {
         return -1;
     }
     return 0;
 }
 
-static int mount_devfs(const char *target, const char *option)
+static int mount_devfs(const struct jail_mount_ctx *ctx)
 {
-    devf("%s\n", __func__);
-    if (is_same_inode("/dev", target)) {
+    if (get_fstype(ctx->target) == TMPFS_MAGIC) {
         debugf("Unmounting old devfs...\n");
-        if (umount2(target, MNT_DETACH | UMOUNT_NOFOLLOW)) {
+        if (try_umount(ctx->target)) {
             return -1;
         }
     }
-    if (mount("dev", target, "devtmpfs", MS_NOEXEC | MS_NOSUID, option)) {
+
+    unsigned int mountflags = convert_flags(ctx->flags | JAIL_MNT_RW, SYSFS_MASKOUT, MS_NOEXEC | MS_NOSUID);
+
+    if (mount("dev", ctx->target, "devtmpfs", mountflags, ctx->data)) {
         return -1;
     }
     return 0;
 }
 
-static int mount_sysfs(const char *target, unsigned int flags, const char *option)
+static int mount_sysfs(const struct jail_mount_ctx *ctx)
 {
-    devf("%s\n", __func__);
-    unsigned int mountflags = 0;
-    mountflags |= MS_NODEV;
-    if (!(flags & FS_RW)) mountflags |= MS_RDONLY;
-    mountflags |= MS_NOEXEC;
-    mountflags |= MS_NOSUID;
-    if (mount("sys", target, "sysfs", mountflags, option)) {
+    unsigned int mountflags = convert_flags(ctx->flags, SYSFS_MASKOUT, MS_NODEV | MS_NOEXEC | MS_NOSUID);
+
+    if (mount("sys", ctx->target, "sysfs", mountflags, ctx->data)) {
         return -1;
     }
     return 0;
 }
 
-static int mount_udev(const char *root, const char *target, const char *option)
+static int mount_udev(const struct jail_mount_ctx *ctx)
 {
-    devf("%s\n", __func__);
-    if (is_same_inode("/dev", target)) {
+    if (get_fstype(ctx->target) == TMPFS_MAGIC) {
         debugf("Unmounting old devfs...\n");
-        if (umount2(target, MNT_DETACH | UMOUNT_NOFOLLOW)) {
+        if (try_umount(ctx->target)) {
             return -1;
         }
     }
+    unsigned int mountflags = convert_flags(ctx->flags | JAIL_MNT_RW, SYSFS_MASKOUT, MS_NOEXEC | MS_NOSUID);
+
     char optstr[4096], ptspath[PATH_MAX];
-    if (strlen(option) > 0) {
-        snprintf(optstr, sizeof(optstr), "mode=755,%s", option);
+    if (ctx->data && strlen(ctx->data) > 0) {
+        snprintf(optstr, sizeof(optstr), "mode=755,%s", ctx->data);
     } else {
         snprintf(optstr, sizeof(optstr), "mode=755");
     }
-    if (mount("dev", target, "tmpfs", MS_NOEXEC | MS_NOSUID, optstr)) {
+    if (mount("dev", ctx->target, "tmpfs", mountflags, optstr)) {
         return -1;
     }
+
+    devf("Creating device node...\n");
     int rfd;
-    if ((rfd = open(target, O_DIRECTORY | O_CLOEXEC)) < 0) {
+    if ((rfd = open(ctx->target, O_DIRECTORY | O_CLOEXEC)) < 0) {
         return -1;
     }
     int ret = 0;
     mode_t orig_umask = umask(0000);
-    ret |= combine_path(ptspath, root, "/dev/pts");
+    ret |= combine_path(ptspath, ctx->target, "/pts");
     ret |= mkdirat(rfd, "pts", 0755);
-    ret |= mount("devpts", ptspath, "devpts", MS_NOEXEC | MS_NOSUID, "mode=620,ptmxmode=000");
+    ret |= mount("devpts", ptspath, "devpts", mountflags, "mode=620,ptmxmode=000");
     ret |= mknodat(rfd, "console", S_IFCHR | 0600, makedev(5, 1));
     ret |= mknodat(rfd, "ptmx", S_IFCHR | 0666, makedev(5, 2));
     ret |= mknodat(rfd, "full", S_IFCHR | 0666, makedev(1, 7));
@@ -247,48 +257,42 @@ static int mount_udev(const char *root, const char *target, const char *option)
     return ret;
 }
 
-int jail_mount(const char *source, const char *root, const char *target,
-               unsigned int flags, const char *option)
+/* clang-format off */
+static struct mount_operator mnt_ops[] = {
+    { .name = "block", .fn = mount_disk },
+    { .name = "bind", .fn = mount_bind },
+    { .name = "tmpfs", .fn = mount_tmpfs },
+    { .name = "proc", .fn = mount_proc },
+    { .name = "sysfs", .fn = mount_sysfs },
+    { .name = "devfs", .fn = mount_devfs },
+    { .name = "udevfs", .fn = mount_udev },
+    { .name = NULL, .fn = NULL },
+};
+/* clang-format on  */
+
+int jail_mount(const char *root, const struct jail_mount_ctx *ctx)
 {
     char path[PATH_MAX];
-    combine_path(path, root, target);
-    if (!is_valid_source(source, flags & 0xF)) {
-        errorf("invalid source!\n");
+    combine_path(path, root, ctx->target);
+
+    struct jail_mount_ctx cctx;
+    memcpy(&cctx, ctx, sizeof(struct jail_mount_ctx));
+    cctx.target = path;
+
+    int i = 0;
+    while (mnt_ops[i].name) {
+        if (strcmp(cctx.type, mnt_ops[i].name) == 0) {
+            break;
+        }
+        i++;
+    }
+
+    if (mnt_ops[i].fn == NULL) {
         errno = EINVAL;
         return -1;
     }
-    if (mkdir_r(path)) {
-        return -1;
-    }
-    int ret;
-    switch (flags & 0xF) {
-        case FS_DISK:
-            ret = mount_disk(source, path, flags, option);
-            break;
-        case FS_BIND:
-            ret = mount_bind(source, path, flags, option);
-            break;
-        case FS_TMP:
-            ret = mount_tmpfs(path, flags, option);
-            break;
-        case FS_PROC:
-            ret = mount_proc(path, option);
-            break;
-        case FS_DEV:
-            ret = mount_devfs(path, option);
-            break;
-        case FS_SYS:
-            ret = mount_sysfs(path, flags, option);
-            break;
-        case FS_UDEV:
-            ret = mount_udev(root, path, option);
-            break;
-        default:
-            errorf("invalid mount type!\n");
-            errno = EINVAL;
-            return -1;
-    }
-    return ret;
+    debugf("Mounting type %s on %s\n", cctx.type, cctx.target);
+    return mnt_ops[i].fn(&cctx);
 }
 
 int jail_chroot(const char *path, const char *cdpath)

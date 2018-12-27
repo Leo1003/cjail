@@ -180,11 +180,27 @@ static int mount_fs(const struct cjail_para para)
     if (privatize_fs()) {
         goto error;
     }
-    if (jail_mount("", para.chroot, "/proc", FS_PROC, "")) {
+    struct jail_mount_ctx procctx = {
+        .type = "proc",
+        .source = NULL,
+        .target = "/proc",
+        .fstype = NULL,
+        .flags = JAIL_MNT_RW,
+        .data = NULL
+    };
+    struct jail_mount_ctx devctx = {
+        .type = "udevfs",
+        .source = NULL,
+        .target = "/dev",
+        .fstype = NULL,
+        .flags = JAIL_MNT_RW,
+        .data = NULL
+    };
+    if (jail_mount(para.chroot, &procctx)) {
         PFTL("mount procfs");
         goto error;
     }
-    if (jail_mount("", para.chroot, "/dev", FS_UDEV, "")) {
+    if (jail_mount(para.chroot, &devctx)) {
         PFTL("mount devfs");
         goto error;
     }
