@@ -5,7 +5,7 @@
  */
 #define _GNU_SOURCE
 #include "loop.h"
-
+#include "logger.h"
 #include "utils.h"
 
 #include <fcntl.h>
@@ -30,13 +30,13 @@ int loop_load(const char *path, int flags, struct loop_info *info)
         return -1;
     }
 
-    int ret = loop_attach(imagefd, info);
+    int ret = loop_attach(imagefd, flags, info);
 
     close(imagefd);
     return ret;
 }
 
-int loop_attach(int fd, struct loop_info *info)
+int loop_attach(int fd, int flags, struct loop_info *info)
 {
     int ctrlfd, loopid, loopfd;
     if ((ctrlfd = open("/dev/loop-control", O_RDWR | O_CLOEXEC)) < 0) {
@@ -53,9 +53,20 @@ int loop_attach(int fd, struct loop_info *info)
         goto out_ctrl;
     }
 
-    if (ioctl(loopfd, LOOP_SET_FD) < 0) {
+    if (ioctl(loopfd, LOOP_SET_FD, fd) < 0) {
         loopid = -1;
         goto out_loop;
+    }
+
+    if (flags & LOOP_AUTO_DETACH) {
+        struct loop_info li;
+        memset(&li, 0, sizeof(li));
+        li.lo_flags |= LO_FLAGS_AUTOCLEAR;
+        if (ioctl(loopfd, LOOP_SET_STATUS, &li)) {
+            loop_detach(loopid);
+            loopid = -1;
+            goto out_loop;
+        }
     }
 
     if (info) {
@@ -67,10 +78,14 @@ int loop_attach(int fd, struct loop_info *info)
     }
 
 out_loop:
-    close(loopfd);
+    if (loopid == -1 || !(flags & LOOP_AUTO_DETACH)) {
+        close(loopfd);
+        close(ctrlfd);
+        return loopid;
+    }
 out_ctrl:
     close(ctrlfd);
-    return loopid;
+    return loopfd;
 }
 
 int loop_detach(int loop)

@@ -53,6 +53,17 @@ int get_fstype(const char *path)
     return stf.f_type;
 }
 
+int get_fdpath(int fd, char *path, size_t len)
+{
+    char fdpath[PATH_MAX];
+    pathprintf(fdpath, "/proc/self/fd/%d", fd);
+    int ret = readlink(fdpath, path, len);
+    if (ret < 0 && errno == ENOENT) {
+        errno = EBADF;
+    }
+    return ret;
+}
+
 int is_same_inode(const char *patha, const char *pathb)
 {
     if (!patha || !pathb) {
@@ -63,9 +74,9 @@ int is_same_inode(const char *patha, const char *pathb)
     if (stat(patha, &sta) || stat(pathb, &stb)) {
         return 0;
     }
-    devf("a: %s ; b: %s\n", patha, pathb);
-    devf("a.inode: %lu ; b.inode: %lu\n", sta.st_ino, stb.st_ino);
-    return sta.st_ino == stb.st_ino;
+    devf("%s <=> %s\n", patha, pathb);
+    devf("%lu:%lu <=> %lu:%lu\n", sta.st_dev, sta.st_ino, stb.st_dev, stb.st_ino);
+    return (sta.st_dev == stb.st_dev) && (sta.st_ino == stb.st_ino);
 }
 
 int jail_symlinkat(const char *root, const char *target, int fd, const char *name)
@@ -85,36 +96,42 @@ inline static int try_umount(const char *path)
     }
     return umount2(path, MNT_DETACH | UMOUNT_NOFOLLOW);
 }
-/*
-static int mount_disk(const char *source, const char *target,
-                      unsigned int flags, const char *option);
-                      */
-/*
-static int mount_loop(const char *source, const char *target,
-                      unsigned int flags, const char *option)
+
+static int mount_loop(const struct jail_mount_ctx *ctx)
 {
-    devf("%s\n", __func__);
-    int loopid, loopflags = 0;
+    int loopfd, loopflags = LOOP_AUTO_DETACH;
 
-    if (!(flags & FS_RW)) loopflags |= LOOP_LOAD_READONLY;
+    if (!(ctx->flags & JAIL_MNT_RW)) loopflags |= LOOP_LOAD_READONLY;
 
-    if ((loopid = loop_load(source, loopflags, NULL)) < 0) {
+    if ((loopfd = loop_load(ctx->source, loopflags, NULL)) < 0) {
         PERR("mount loop");
         return -1;
     }
 
     char looppath[PATH_MAX];
-    pathprintf(looppath, "/dev/loop%d", loopid);
-    debugf("Loaded loop file: %s -> %s\n", source, looppath);
-
-    if (mount_disk(looppath, target, flags, option) < 0) {
-        loop_detach(loopid);
+    if (get_fdpath(loopfd, looppath, sizeof(looppath)) < 0) {
+        close(loopfd);
         return -1;
     }
+    debugf("Loaded loop file: %s -> %s\n", ctx->source, looppath);
 
+    struct jail_mount_ctx mctx = {
+        .type = "block",
+        .source = looppath,
+        .target = ctx->target,
+        .fstype = ctx->fstype,
+        .flags = ctx->flags,
+        .data = ctx->data
+    };
+    /* The target has already chrooted, so the root argument can just pass NULL */
+    if (jail_mount(NULL, &mctx) < 0) {
+        close(loopfd);
+        return -1;
+    }
+    close(loopfd);
     return 0;
 }
-*/
+
 
 static unsigned int convert_flags(unsigned int flags, unsigned int mask, unsigned int setflags)
 {
@@ -260,6 +277,7 @@ static int mount_udev(const struct jail_mount_ctx *ctx)
 /* clang-format off */
 static struct mount_operator mnt_ops[] = {
     { .name = "block", .fn = mount_disk },
+    { .name = "loop", .fn = mount_loop },
     { .name = "bind", .fn = mount_bind },
     { .name = "tmpfs", .fn = mount_tmpfs },
     { .name = "proc", .fn = mount_proc },
@@ -273,7 +291,11 @@ static struct mount_operator mnt_ops[] = {
 int jail_mount(const char *root, const struct jail_mount_ctx *ctx)
 {
     char path[PATH_MAX];
-    combine_path(path, root, ctx->target);
+    if (root) {
+        combine_path(path, root, ctx->target);
+    } else {
+        strncpy(path, ctx->target, sizeof(path));
+    }
 
     struct jail_mount_ctx cctx;
     memcpy(&cctx, ctx, sizeof(struct jail_mount_ctx));

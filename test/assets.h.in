@@ -1,0 +1,14 @@
+#ifndef ASSETS_H
+#define ASSETS_H
+
+#cmakedefine ASSETS_DIR "@ASSETS_DIR@"
+#ifndef ASSETS_DIR
+# error "Can't locate assets directory"
+#endif
+
+#cmakedefine DISKIMAGE1_PATH "@DISKIMAGE1_PATH@"
+#ifndef DISKIMAGE1_PATH
+# error "Can't find disk image1.img"
+#endif
+
+#endif
