@@ -50,15 +50,6 @@ static void test_filedata(const char *path)
     fclose(fp);
 }
 
-__fsword_t get_fstype(const char *path)
-{
-    struct statfs stf;
-    if (statfs(path, &stf)) {
-        return -1;
-    }
-    return stf.f_type;
-}
-
 TestSuite(mount_test, .init = setup);
 
 Test(mount_test, test_loop)

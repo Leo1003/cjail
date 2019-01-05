@@ -85,6 +85,9 @@ out_loop:
     }
 out_ctrl:
     close(ctrlfd);
+    if (loopid == -1) {
+        return loopid;
+    }
     return loopfd;
 }
 

@@ -10,6 +10,7 @@ add_library(libcjail SHARED
     init.c
     logger.c
     loop.c
+    mount.c
     process.c
     scconfig_parser.c
     simple_seccomp.c
