@@ -18,11 +18,6 @@
 #define JAIL_MNT_REC        0x00000020U
 // clang-format on
 
-struct jail_mount_option {
-    char *root, *source, *path, *option;
-    unsigned int flags;
-};
-
 struct jail_mount_ctx {
     char *type;
     char *source, *target, *fstype;
@@ -49,6 +44,19 @@ struct mnt_ops {
     unsigned int mask;
     struct mnt_ops *next;
 };
+
+struct jail_mount_item {
+    struct jail_mount_ctx ctx;
+    struct jail_mount_item *next;
+};
+struct jail_mount_list {
+    struct jail_mount_item *head, *end;
+};
+
+struct jail_mount_list *mnt_list_new();
+void mnt_list_free(struct jail_mount_list *ml);
+int mnt_list_add(struct jail_mount_list *ml, const struct jail_mount_ctx *ctx);
+int mnt_list_clear(struct jail_mount_list *ml);
 
 int mnt_ops_register(const struct mnt_ops *ops);
 int mnt_ops_deregister(const char *name);

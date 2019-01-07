@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <time.h>
 
+#include "filesystem.h"
 #include "scconfig.h"
 
 #ifdef __cplusplus
@@ -84,6 +85,7 @@ struct cjail_para {
     struct timeval lim_time;    /**< @brief Limit the time of the jail can live
                                      @note set to zero to disable time limit */
     scconfig seccompcfg;        /**< @brief Linux seccomp rules to apply on the sandbox */
+    struct jail_mount_list *mount_cfg;
 };
 
 /**

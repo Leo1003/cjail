@@ -1,6 +1,6 @@
 - Version 0.8:
     - [x] using config.h to hold some defines
-    - [ ] expose mounting api interface
+    - [x] expose mounting api interface
     - [x] support disk image loopback mount
     - [x] redesign mounting functions filesystem
     - [ ] collect taskstats in a forked process

@@ -132,6 +132,66 @@ int privatize_fs()
     return 0;
 }
 
+struct jail_mount_list *mnt_list_new()
+{
+    struct jail_mount_list *ml = (struct jail_mount_list *)malloc(sizeof(struct jail_mount_list));
+    if (!ml) {
+        return NULL;
+    }
+    memset(ml, 0, sizeof(struct jail_mount_list));
+    return ml;
+}
+
+void mnt_list_free(struct jail_mount_list *ml)
+{
+    if (!ml) {
+        return;
+    }
+
+    mnt_list_clear(ml);
+    free(ml);
+}
+
+int mnt_list_add(struct jail_mount_list *ml, const struct jail_mount_ctx *ctx)
+{
+    if (!ml) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    struct jail_mount_item *item = (struct jail_mount_item *)malloc(sizeof(struct jail_mount_item));
+    if (!item) {
+        return -1;
+    }
+
+    item->ctx = *ctx;
+    item->next = NULL;
+    if (!ml->end) {
+        ml->head = ml->end = item;
+    } else {
+        ml->end->next = item;
+        ml->end = item;
+    }
+    return 0;
+}
+
+int mnt_list_clear(struct jail_mount_list *ml)
+{
+    if (!ml) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    struct jail_mount_item *cur = ml->head, *next = NULL;
+    while (cur) {
+        next = cur->next;
+        free(cur);
+        cur = next;
+    }
+    ml->head = ml->end = NULL;
+    return 0;
+}
+
 static struct mnt_ops *mnt_ops_head = NULL;
 
 static struct mnt_ops *mnt_ops_find_prev(const char *name, struct mnt_ops **ops, struct mnt_ops **prev)

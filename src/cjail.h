@@ -12,6 +12,7 @@
 
 #define _GNU_SOURCE
 #include "simple_seccomp.h"
+#include "filesystem.h"
 
 #include <linux/filter.h>
 #include <linux/taskstats.h>
@@ -32,7 +33,8 @@ struct cjail_para {
     long long rlim_as, rlim_core, rlim_nofile, rlim_fsize, rlim_proc, rlim_stack;
     long long cg_rss;
     struct timeval lim_time;
-    struct seccomp_config *seccompcfg;
+    struct seccomp_config *seccomp_cfg;
+    struct jail_mount_list *mount_cfg;
 };
 
 struct cjail_result {

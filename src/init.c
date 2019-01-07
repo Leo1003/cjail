@@ -67,6 +67,23 @@ static struct sig_rule init_sigrules[] = {
     { SIGREADY, sigact , NULL, 0, {{0}}, 0 },
     { 0       , NULL   , NULL, 0, {{0}}, 0 },
 };
+
+const struct jail_mount_ctx procctx = {
+    .type = "proc",
+    .source = NULL,
+    .target = "/proc",
+    .fstype = NULL,
+    .flags = JAIL_MNT_RW,
+    .data = NULL
+};
+const struct jail_mount_ctx devctx = {
+    .type = "udevfs",
+    .source = NULL,
+    .target = "/dev",
+    .fstype = NULL,
+    .flags = JAIL_MNT_RW,
+    .data = NULL
+};
 // clang-format on
 
 static int ifchildfailed(pid_t pid)
@@ -178,40 +195,33 @@ error_t get_child_error(const siginfo_t *info, int cg_rss)
 static int mount_fs(const struct cjail_para para)
 {
     if (privatize_fs()) {
-        goto error;
+        return -1;
     }
-    struct jail_mount_ctx procctx = {
-        .type = "proc",
-        .source = NULL,
-        .target = "/proc",
-        .fstype = NULL,
-        .flags = JAIL_MNT_RW,
-        .data = NULL
-    };
-    struct jail_mount_ctx devctx = {
-        .type = "udevfs",
-        .source = NULL,
-        .target = "/dev",
-        .fstype = NULL,
-        .flags = JAIL_MNT_RW,
-        .data = NULL
-    };
+
     if (jail_mount(para.chroot, &procctx)) {
         PFTL("mount procfs");
-        goto error;
+        return -1;
     }
     if (jail_mount(para.chroot, &devctx)) {
         PFTL("mount devfs");
-        goto error;
+        return -1;
     }
+
+    if (para.mount_cfg) {
+        struct jail_mount_item *cur = para.mount_cfg->head;
+        while (cur) {
+            if (jail_mount(para.chroot, &(cur->ctx))) {
+                fatalf("Failed to mount <%s> -> %s: %s\n", cur->ctx.fstype, cur->ctx.target, strerror(errno));
+                return -1;
+            }
+            cur = cur->next;
+        }
+    }
+
     if (jail_chroot(para.chroot, para.workingDir)) {
-        goto error;
+        return -1;
     }
     return 0;
-
-error:
-    PFTL("setup_fs");
-    return -1;
 }
 
 static int allow_execve(struct seccomp_config *cfg, void *argv)
@@ -281,14 +291,14 @@ int child_init(void *arg)
     //detect if we need to trace the child process
     int traceflag = 0;
     //precompile seccomp bpf to reduce the impact on timing
-    if (ep.para.seccompcfg) {
-        if (ep.para.seccompcfg->deny_action == DENY_TRACE || ep.para.seccompcfg->deny_action == DENY_TRACE_KILL) {
+    if (ep.para.seccomp_cfg) {
+        if (ep.para.seccomp_cfg->deny_action == DENY_TRACE || ep.para.seccomp_cfg->deny_action == DENY_TRACE_KILL) {
             traceflag = 1;
         }
-        if (allow_execve(ep.para.seccompcfg, ep.para.argv)) {
+        if (allow_execve(ep.para.seccomp_cfg, ep.para.argv)) {
             exit(errno);
         }
-        if (scconfig_compile(ep.para.seccompcfg, &ep.bpf)) {
+        if (scconfig_compile(ep.para.seccomp_cfg, &ep.bpf)) {
             exit(errno);
         }
     }
@@ -308,7 +318,7 @@ int child_init(void *arg)
 
         if (traceflag) {
             trace_seize(childpid);
-            ops.seccomp_event = scconfig_get_callback(ep.para.seccompcfg);
+            ops.seccomp_event = scconfig_get_callback(ep.para.seccomp_cfg);
         }
 
         sigwait(&rtset, &rtsig);

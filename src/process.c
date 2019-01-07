@@ -83,7 +83,7 @@ static int load_seccomp(const struct cjail_para para, struct sock_fprog *bpf)
         PFTL("set no new privs");
         return -1;
     }
-    if (!para.seccompcfg)
+    if (!para.seccomp_cfg)
         return 0;
 
     if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, bpf, 0, 0)) {

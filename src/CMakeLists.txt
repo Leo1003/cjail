@@ -24,6 +24,7 @@ add_library(CJail::libcjail ALIAS libcjail)
 set(PUBLIC_HEADERS
     ${CMAKE_SOURCE_DIR}/include/cjail.h
     ${CMAKE_SOURCE_DIR}/include/scconfig.h
+    ${CMAKE_SOURCE_DIR}/include/filesystem.h
 )
 
 target_include_directories(libcjail
