@@ -28,8 +28,8 @@ set(PUBLIC_HEADERS
 )
 
 target_include_directories(libcjail
-    INTERFACE
-        $<INSTALL_INTERFACE:include>
+    PUBLIC
+        $<INSTALL_INTERFACE:include/cjail>
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     PRIVATE
         ${CMAKE_SOURCE_DIR}/src

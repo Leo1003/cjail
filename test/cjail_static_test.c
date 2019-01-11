@@ -1,5 +1,5 @@
 #define _GNU_SOURCE
-#include <cjail.h>
+#include <cjail/cjail.h>
 
 #include <errno.h>
 #include <stdio.h>

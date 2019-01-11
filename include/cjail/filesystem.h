@@ -1,5 +1,5 @@
-#ifndef _FILESYSTEM_H
-#define _FILESYSTEM_H
+#ifndef CJAIL_FILESYSTEM_H
+#define CJAIL_FILESYSTEM_H
 
 #ifdef __cplusplus
 extern "C" {

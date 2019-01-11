@@ -6,15 +6,13 @@
 #ifndef SCCONFIG_PARSER_H
 #define SCCONFIG_PARSER_H
 
+#include <cjail/scconfig.h>
 #include "simple_seccomp.h"
 #include "utils.h"
 
 #include <stdio.h>
 
 // clang-format off
-#define SCOPT_IGN_NOSYS     0x00000001
-#define SCOPT_IGN_NORULE    0x00000002
-
 #define CMD_MAX_LENGTH      16
 #define VAL_MAX_LENGTH      64
 
@@ -83,37 +81,6 @@ const table_int32 op_table[] = {
     { NULL,                 -1 }
 };
 // clang-format on
-
-#ifndef _DOXYGEN
-enum parser_err_type {
-    ErrNone = 0,
-    ErrFileNotFound,
-    ErrNotFile,
-    ErrMemory,
-    ErrPermission,
-    ErrIO,
-    ErrSyntax,
-    ErrUnknownCmd,
-    ErrDupOption,
-    ErrUnknownValue,
-    ErrNoSyscall,
-    ErrNoRule,
-    ErrArgCount,
-};
-#endif
-
-struct parser_error {
-    enum parser_err_type type;
-    int line;
-};
-
-typedef struct parser_error parser_error_t;
-
-parser_error_t parser_get_err();
-const char *parser_errstr(enum parser_err_type type);
-struct seccomp_config *scconfig_parse_path(const char *path, unsigned int options);
-struct seccomp_config *scconfig_parse_file(FILE *stream, unsigned int options);
-struct seccomp_config *scconfig_parse_string(const char *str, unsigned int options);
 
 #define skip_spaces(fp) fscanf(fp, "%*[ \t]")
 

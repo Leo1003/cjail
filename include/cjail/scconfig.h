@@ -2,10 +2,12 @@
  * @file scconfig.h
  * @brief cjail secconp_config public header
  */
-#ifndef _SCCONFIG_H
-#define _SCCONFIG_H
+#ifndef CJAIL_SCCONFIG_H
+#define CJAIL_SCCONFIG_H
 
 #include <linux/filter.h>
+#include <stddef.h>
+#include <stdio.h>
 #include <sys/user.h>
 #include <sys/types.h>
 
@@ -20,7 +22,7 @@ extern "C" {
  * @brief The seccomp configure struct. This object is made opaque.
  * Use scconfig_*() to use this type.
  */
-typedef void *scconfig;
+typedef struct seccomp_config scconfig;
 
 /**
  * @brief The seccomp trace callback.
@@ -110,7 +112,7 @@ struct seccomp_rule {
  * @retval 0 Succeed
  * @retval -1 One or more errors encountered
  */
-int scconfig_compile(const scconfig cfg, struct sock_fprog *bpf);
+int scconfig_compile(const scconfig *cfg, struct sock_fprog *bpf);
 
 /**
  * @brief Allocate and initialize a seccomp configure
@@ -121,7 +123,7 @@ int scconfig_compile(const scconfig cfg, struct sock_fprog *bpf);
  *
  * @see scconfig_free
  */
-scconfig scconfig_init();
+scconfig *scconfig_init();
 
 /**
  * @brief Get the type of a seccomp configure
@@ -131,7 +133,7 @@ scconfig scconfig_init();
  *
  * @see scconfig_set_type
  */
-enum config_type scconfig_get_type(const scconfig cfg);
+enum config_type scconfig_get_type(const scconfig *cfg);
 
 /**
  * @brief Set the type of a seccomp configure
@@ -141,7 +143,7 @@ enum config_type scconfig_get_type(const scconfig cfg);
  *
  * @see scconfig_get_type
  */
-void scconfig_set_type(scconfig cfg, enum config_type type);
+void scconfig_set_type(scconfig *cfg, enum config_type type);
 
 /**
  * @brief Get the current seccomp trace callback
@@ -152,7 +154,7 @@ void scconfig_set_type(scconfig cfg, enum config_type type);
  * @retval NULL One or more errors encountered
  * @see seccomp_cb
  */
-seccomp_cb scconfig_get_callback(const scconfig cfg);
+seccomp_cb scconfig_get_callback(const scconfig *cfg);
 
 /**
  * @brief Set seccomp trace callback
@@ -162,7 +164,7 @@ seccomp_cb scconfig_get_callback(const scconfig cfg);
  *
  * @see seccomp_cb
  */
-void scconfig_set_callback(scconfig cfg, seccomp_cb callback);
+void scconfig_set_callback(scconfig *cfg, seccomp_cb callback);
 
 /**
  * @brief Reset seccomp trace callback to builtin callback
@@ -171,7 +173,7 @@ void scconfig_set_callback(scconfig cfg, seccomp_cb callback);
  *
  * @see seccomp_cb
  */
-void scconfig_reset_callback(scconfig cfg);
+void scconfig_reset_callback(scconfig *cfg);
 
 
 /**
@@ -182,7 +184,7 @@ void scconfig_reset_callback(scconfig cfg);
  *
  * @see scconfig_set_deny
  */
-enum deny_method scconfig_get_deny(const scconfig cfg);
+enum deny_method scconfig_get_deny(const scconfig *cfg);
 
 /**
  * @brief Set deny method of a seccomp configure
@@ -192,7 +194,7 @@ enum deny_method scconfig_get_deny(const scconfig cfg);
  *
  * @see scconfig_set_deny
  */
-void scconfig_set_deny(scconfig cfg, enum deny_method deny);
+void scconfig_set_deny(scconfig *cfg, enum deny_method deny);
 
 /**
  * @brief Clear all rules in a configure
@@ -202,7 +204,7 @@ void scconfig_set_deny(scconfig cfg, enum deny_method deny);
  * @retval 0 Succeed
  * @retval -1 One or more errors encountered
  */
-int scconfig_clear(scconfig cfg);
+int scconfig_clear(scconfig *cfg);
 
 /**
  * @brief Add rules into a configure
@@ -218,7 +220,7 @@ int scconfig_clear(scconfig cfg);
  * @see scconfig_get_rule
  * @see scconfig_len
  */
-int scconfig_add(scconfig cfg, const struct seccomp_rule *rules, size_t len);
+int scconfig_add(scconfig *cfg, const struct seccomp_rule *rules, size_t len);
 
 /**
  * @brief Remove rules in a configure
@@ -234,7 +236,7 @@ int scconfig_add(scconfig cfg, const struct seccomp_rule *rules, size_t len);
  * @see scconfig_get_rule
  * @see scconfig_len
  */
-int scconfig_remove(scconfig cfg, size_t i, size_t len);
+int scconfig_remove(scconfig *cfg, size_t i, size_t len);
 
 /**
  * @brief Get a rule in a configure
@@ -250,7 +252,7 @@ int scconfig_remove(scconfig cfg, size_t i, size_t len);
  * @see scconfig_remove
  * @see scconfig_len
  */
-struct seccomp_rule *scconfig_get_rule(scconfig cfg, size_t i);
+struct seccomp_rule *scconfig_get_rule(scconfig *cfg, size_t i);
 
 /**
  * @brief Preallocate memory for rules
@@ -261,7 +263,7 @@ struct seccomp_rule *scconfig_get_rule(scconfig cfg, size_t i);
  * @retval 0 Succeed
  * @retval -1 One or more errors encountered
  */
-int scconfig_allocate(scconfig cfg, size_t len);
+int scconfig_allocate(scconfig *cfg, size_t len);
 
 /**
  * @brief Get rules count in a configure
@@ -273,7 +275,7 @@ int scconfig_allocate(scconfig cfg, size_t len);
  * @see scconfig_remove
  * @see scconfig_get_rule
  */
-size_t scconfig_len(const scconfig cfg);
+size_t scconfig_len(const scconfig *cfg);
 
 /**
  * @brief Free the configure
@@ -281,7 +283,7 @@ size_t scconfig_len(const scconfig cfg);
  *
  * @param cfg seccomp configure to be free
  */
-void scconfig_free(scconfig cfg);
+void scconfig_free(scconfig *cfg);
 
 /**
  * @def SCOPT_IGN_NOSYS
@@ -364,7 +366,7 @@ const char *parser_errstr(enum parser_err_type type);
  * @note Remember to call scconfig_free() after using it
  * @see seccomp_config
  */
-scconfig scconfig_parse_path(const char *path, unsigned int options);
+scconfig *scconfig_parse_path(const char *path, unsigned int options);
 
 /**
  * @brief Parse configure by stream
@@ -378,7 +380,7 @@ scconfig scconfig_parse_path(const char *path, unsigned int options);
  * @note Remember to call scconfig_free() after using it
  * @see seccomp_config
  */
-scconfig scconfig_parse_file(FILE *stream, unsigned int options);
+scconfig *scconfig_parse_file(FILE *stream, unsigned int options);
 
 /**
  * @brief Parse configure by string
@@ -392,7 +394,7 @@ scconfig scconfig_parse_file(FILE *stream, unsigned int options);
  * @note Remember to call scconfig_free() after using it
  * @see seccomp_config
  */
-scconfig scconfig_parse_string(const char *str, unsigned int options);
+scconfig *scconfig_parse_string(const char *str, unsigned int options);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,5 @@
-#include "cjail.h"
+#define _GNU_SOURCE
+#include <cjail/cjail.h>
 
 #include <criterion/assert.h>
 #include <criterion/criterion.h>

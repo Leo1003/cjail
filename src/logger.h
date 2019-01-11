@@ -6,25 +6,12 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
+#include <cjail/cjail.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
-#ifndef _DOXYGEN
-enum logger_level {
-    LOG_NONE,
-    LOG_DEBUG,
-    LOG_INFO,
-    LOG_WARN,
-    LOG_ERROR,
-    LOG_FATAL,
-    LOG_SLIENT = 255
-};
-#endif
-
-enum logger_level get_log_level();
-void set_log_level(enum logger_level level);
-void set_log_file(FILE *f);
 int swap_log_file();
 
 #ifdef NDEBUG

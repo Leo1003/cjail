@@ -6,8 +6,8 @@
  * @file include/cjail.h
  * @brief cjail main public header
  */
-#ifndef _CJAIL_H
-#define _CJAIL_H
+#ifndef CJAIL_CJAIL_H
+#define CJAIL_CJAIL_H
 
 #include <linux/filter.h>
 #include <linux/taskstats.h>
@@ -84,7 +84,7 @@ struct cjail_para {
                                      @note Set to zero to disable this limit */
     struct timeval lim_time;    /**< @brief Limit the time of the jail can live
                                      @note set to zero to disable time limit */
-    scconfig seccompcfg;        /**< @brief Linux seccomp rules to apply on the sandbox */
+    scconfig *seccomp_cfg;      /**< @brief Linux seccomp rules to apply on the sandbox */
     struct jail_mount_list *mount_cfg;
 };
 
@@ -119,6 +119,27 @@ enum logger_level {
     LOG_FATAL,          /**< @brief fatal level, something wrong happened accidentally */
     LOG_SLIENT = 255    /**< @brief let the logger DO NOT output anything! */
 };
+
+/**
+* @brief Get current log level
+*
+* @return current log level
+*/
+enum logger_level get_log_level();
+
+/**
+* @brief Set the log level
+*
+* @param[in] level log level to be set (can not be LOG_NONE)
+*/
+void set_log_level(enum logger_level level);
+
+/**
+* @brief Change the logger's output stream
+*
+* @param[in] f the new file stream
+*/
+void set_log_file(FILE *f);
 
 /**
  * @brief Initialize cjail_para struct
@@ -164,27 +185,6 @@ int cpuset_tostr(const cpu_set_t *cpuset, char *str, size_t len);
  * @retval -1 One or more errors encountered
  */
 int cpuset_parse(const char *str, cpu_set_t *cpuset);
-
-/**
-* @brief Get current log level
-*
-* @return current log level
-*/
-enum logger_level get_log_level();
-
-/**
-* @brief Set the log level
-*
-* @param[in] level log level to be set (can not be LOG_NONE)
-*/
-void set_log_level(enum logger_level level);
-
-/**
-* @brief Change the logger's output stream
-*
-* @param[in] f the new file stream
-*/
-void set_log_file(FILE *f);
 
 #ifdef __cplusplus
 }

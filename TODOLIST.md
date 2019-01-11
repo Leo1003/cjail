@@ -5,9 +5,9 @@
     - [x] redesign mounting functions filesystem
     - [ ] collect taskstats in a forked process
     - [ ] call trace callback in the calling process
+    - [x] source code using public header too
 - Future Version: 
 	- [ ] using config.h to disable optional features
-    - [ ] source code using public header too
     - [ ] add user namespace support
     - [ ] unit tests & integration tests
     - [ ] detect if required kernel features are supported before compiling
