@@ -89,7 +89,7 @@ int applyfd(int fd, int to, int clos)
     return 0;
 }
 
-int setup_fd(const struct cjail_para para)
+int setup_fd(const struct cjail_ctx ctx)
 {
     int tfd[3] = { -1, -1, -1 };
     int clo[3] = { 0, 0, 0 };
@@ -102,13 +102,13 @@ int setup_fd(const struct cjail_para para)
         return -1;
     }
 
-    if (reopen(STDIN_FILENO, para.redir_input, 'r')) {
+    if (reopen(STDIN_FILENO, ctx.redir_input, 'r')) {
         goto error;
     }
-    if (reopen(STDOUT_FILENO, para.redir_output, 'w')) {
+    if (reopen(STDOUT_FILENO, ctx.redir_output, 'w')) {
         goto error;
     }
-    if (reopen(STDERR_FILENO, para.redir_error, 'w')) {
+    if (reopen(STDERR_FILENO, ctx.redir_error, 'w')) {
         goto error;
     }
 
@@ -117,13 +117,13 @@ int setup_fd(const struct cjail_para para)
      * this will cause strange behaviors.
      * So we need to dup them before closing them.
      */
-    if (tfddup(para.fd_input, STDIN_FILENO, &tfd[0], &clo[0])) {
+    if (tfddup(ctx.fd_input, STDIN_FILENO, &tfd[0], &clo[0])) {
         goto error;
     }
-    if (tfddup(para.fd_output, STDOUT_FILENO, &tfd[1], &clo[1])) {
+    if (tfddup(ctx.fd_output, STDOUT_FILENO, &tfd[1], &clo[1])) {
         goto error;
     }
-    if (tfddup(para.fd_error, STDERR_FILENO, &tfd[2], &clo[2])) {
+    if (tfddup(ctx.fd_error, STDERR_FILENO, &tfd[2], &clo[2])) {
         goto error;
     }
 
@@ -137,7 +137,7 @@ int setup_fd(const struct cjail_para para)
         goto error;
     }
 
-    if (!para.preservefd)
+    if (!ctx.preservefd)
         if (closefrom(STDERR_FILENO + 1) < 0)
             return -1;
     return 0;

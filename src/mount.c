@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+#define _XOPEN_SOURCE 500
 #include "filesystem.h"
 #include "logger.h"
 #include "loop.h"
@@ -10,6 +12,8 @@
 #include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/sysmacros.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 unsigned int convert_flags(unsigned int flags)

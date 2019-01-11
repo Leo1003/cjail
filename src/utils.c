@@ -45,7 +45,7 @@ const char *table_to_str(const table_int32 *table, int value)
 
 int cpuset_tostr(const cpu_set_t *cpuset, char *str, size_t len)
 {
-    snprintf(str, len, "");
+    memset(str, 0, len);
     int s = -1, w = 0, l = 0;
     for (int c = 0; c <= CPU_SETSIZE; c++) {
         if (c == CPU_SETSIZE && s > -1)

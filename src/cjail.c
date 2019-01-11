@@ -73,10 +73,10 @@ error:
     return -1;
 }
 
-static int init_cgroup(const struct cjail_para para, int *pidfd)
+static int init_cgroup(const struct cjail_ctx ctx, int *pidfd)
 {
-    if (para.cgroup_root) {
-        if (cgroup_set_root(para.cgroup_root)) {
+    if (ctx.cgroup_root) {
+        if (cgroup_set_root(ctx.cgroup_root)) {
             return -1;
         }
     }
@@ -88,12 +88,12 @@ static int init_cgroup(const struct cjail_para para, int *pidfd)
         return -1;
     }
 
-    if (para.cg_rss > 0) {
+    if (ctx.cg_rss > 0) {
         if (cgroup_create("memory")) {
             return -1;
         }
         if (cgroup_write("memory", "memory.limit_in_bytes", "%lld",
-                         para.cg_rss * 1024) < 0) {
+                         ctx.cg_rss * 1024) < 0) {
             return -1;
         }
         if (cgroup_write("memory", "memory.swappiness", "%u", 0) < 0) {
@@ -148,7 +148,7 @@ error:
     return -1;
 }
 
-int cjail_exec(const struct cjail_para *para, struct cjail_result *result)
+int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
 {
     char child_stack[STACKSIZE + 1] __attribute__((aligned(16)));
     int wstatus, ret = 0, tsgot = 0, initerr = 0;
@@ -156,39 +156,39 @@ int cjail_exec(const struct cjail_para *para, struct cjail_result *result)
     struct ts_socket tssock = { 0 };
     struct taskstats ts = { 0 };
     struct cleanupstack cstack = { 0 }, pipestack = { 0 };
-    struct exec_para *ep;
+    struct exec_meta *meta;
     child = 0;
     interrupted = 0;
 
     if (geteuid())
         RETERR(EPERM);
-    if (!para)
+    if (!ctx)
         RETERR(EINVAL);
 
-    ep = (struct exec_para *)malloc(sizeof(struct exec_para));
-    stack_push(&cstack, CLN_FREE, &ep);
-    ep->para = *para;
+    meta = (struct exec_meta *)malloc(sizeof(struct exec_meta));
+    stack_push(&cstack, CLN_FREE, &meta);
+    meta->ctx = *ctx;
 
     installsigs(lib_sigrules);
     stack_push(&cstack, CLN_SIGSET, lib_sigrules);
 
     //setup pipe
-    if (pipe_c(ep->resultpipe)) {
+    if (pipe_c(meta->resultpipe)) {
         PFTL("create pipe");
         ret = -1;
         goto out_cleanup;
     }
-    stack_push(&cstack, CLN_CLOSE, ep->resultpipe[0]);
-    stack_push(&pipestack, CLN_CLOSE, ep->resultpipe[1]);
+    stack_push(&cstack, CLN_CLOSE, meta->resultpipe[0]);
+    stack_push(&pipestack, CLN_CLOSE, meta->resultpipe[1]);
 
     //setup cgroup stage I
-    if (init_cgroup(ep->para, &ep->cgtasksfd)) {
+    if (init_cgroup(meta->ctx, &meta->cgtasksfd)) {
         ret = -1;
         goto out_cleanup;
     }
-    stack_push(&cstack, CLN_CLOSE, ep->cgtasksfd);
+    stack_push(&cstack, CLN_CLOSE, meta->cgtasksfd);
     stack_push(&cstack, CLN_CGROUP, "pids");
-    if (ep->para.cg_rss > 0)
+    if (meta->ctx.cg_rss > 0)
         stack_push(&cstack, CLN_CGROUP, "memory");
 
     //setup taskstats
@@ -200,11 +200,11 @@ int cjail_exec(const struct cjail_para *para, struct cjail_result *result)
 
     //clone
     int optionflag = 0;
-    optionflag |= ep->para.sharenet ? 0 : CLONE_NEWNET;
-    initpid = clone(child_init, child_stack + STACKSIZE,
+    optionflag |= meta->ctx.sharenet ? 0 : CLONE_NEWNET;
+    initpid = clone(jail_init, child_stack + STACKSIZE,
                     SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS |
                         CLONE_NEWPID | optionflag,
-                    (void *)ep);
+                    (void *)meta);
     if (initpid < 0) {
         PFTL("clone child namespace init process");
         ret = -1;
@@ -221,7 +221,7 @@ int cjail_exec(const struct cjail_para *para, struct cjail_result *result)
         usleep(100000);
     }
     debugf("Got childpid: %d\n", childpid);
-    if (ep->para.cg_rss) {
+    if (meta->ctx.cg_rss) {
         cgroup_write("memory", "tasks", "%d", childpid);
     }
     kill(initpid, SIGREADY);
@@ -262,11 +262,11 @@ int cjail_exec(const struct cjail_para *para, struct cjail_result *result)
     if (result) {
         //get result from pipe
         memset(result, 0, sizeof(*result));
-        size_t n = read(ep->resultpipe[0], result, sizeof(*result));
+        size_t n = read(meta->resultpipe[0], result, sizeof(*result));
         if (n < 0)
             PFTL("get result");
         result->stats = ts;
-        if (ep->para.cg_rss) {
+        if (meta->ctx.cg_rss) {
             if (cgroup_read("memory", "memory.oom_control",
                             "oom_kill_disable %*d\n"
                             "under_oom %*d\n"
@@ -298,13 +298,13 @@ out_cleanup:
     return ret;
 }
 
-void cjail_para_init(struct cjail_para *para)
+void cjail_ctx_init(struct cjail_ctx *ctx)
 {
-    memset(para, 0, sizeof(struct cjail_para));
-    para->rlim_core = -1;
-    para->uid = 65534;
-    para->gid = 65534;
-    para->fd_input = STDIN_FILENO;
-    para->fd_output = STDOUT_FILENO;
-    para->fd_error = STDERR_FILENO;
+    memset(ctx, 0, sizeof(struct cjail_ctx));
+    ctx->rlim_core = -1;
+    ctx->uid = 65534;
+    ctx->gid = 65534;
+    ctx->fd_input = STDIN_FILENO;
+    ctx->fd_output = STDOUT_FILENO;
+    ctx->fd_error = STDERR_FILENO;
 }

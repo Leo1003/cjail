@@ -20,11 +20,11 @@ TestSuite(timing_test, .init = setup, .timeout = 12);
 Test(timing_test, test_1)
 {
     char *argv[] = { "/bin/sleep", "3", NULL };
-    struct cjail_para para;
+    struct cjail_ctx ctx;
     struct cjail_result result;
-    cjail_para_init(&para);
-    para.argv = argv;
-    cr_assert_eq(cjail_exec(&para, &result), 0);
+    cjail_ctx_init(&ctx);
+    ctx.argv = argv;
+    cr_assert_eq(cjail_exec(&ctx, &result), 0);
     cr_expect_eq(result.info.si_code, CLD_EXITED);
     cr_expect_eq(result.info.si_status, EXIT_SUCCESS);
     cr_expect_eq(result.time.tv_sec, 3);
@@ -38,11 +38,11 @@ Test(timing_test, test_2)
     snprintf(sec_s, sizeof(sec_s), "%d", sec);
     cr_log_info("Random timing test: %d sec\n", sec);
     char *argv[] = { "/bin/sleep", sec_s, NULL };
-    struct cjail_para para;
+    struct cjail_ctx ctx;
     struct cjail_result result;
-    cjail_para_init(&para);
-    para.argv = argv;
-    cr_assert_eq(cjail_exec(&para, &result), 0);
+    cjail_ctx_init(&ctx);
+    ctx.argv = argv;
+    cr_assert_eq(cjail_exec(&ctx, &result), 0);
     cr_expect_eq(result.info.si_code, CLD_EXITED);
     cr_expect_eq(result.info.si_status, EXIT_SUCCESS);
     cr_expect_eq(result.time.tv_sec, sec);
@@ -53,12 +53,12 @@ TestSuite(timeout_test, .init = setup, .timeout = 10);
 Test(timeout_test, test_1)
 {
     char *argv[] = { "/bin/sleep", "3", NULL };
-    struct cjail_para para;
+    struct cjail_ctx ctx;
     struct cjail_result result;
-    cjail_para_init(&para);
-    para.argv = argv;
-    para.lim_time.tv_sec = 2;
-    cr_assert_eq(cjail_exec(&para, &result), 0);
+    cjail_ctx_init(&ctx);
+    ctx.argv = argv;
+    ctx.lim_time.tv_sec = 2;
+    cr_assert_eq(cjail_exec(&ctx, &result), 0);
     cr_expect_eq(result.info.si_code, CLD_KILLED);
     cr_expect_eq(result.info.si_status, SIGKILL);
     cr_expect_eq(result.timekill, 1);

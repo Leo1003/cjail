@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
     cpu_set_t cpuset;
-    struct cjail_para para;
+    struct cjail_ctx para;
     struct cjail_result res;
     bzero(&para, sizeof(para));
     para.argv = argv + 1;

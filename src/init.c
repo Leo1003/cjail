@@ -192,25 +192,25 @@ error_t get_child_error(const siginfo_t *info, int cg_rss)
     }
 }
 
-static int mount_fs(const struct cjail_para para)
+static int mount_fs(const struct cjail_ctx ctx)
 {
     if (privatize_fs()) {
         return -1;
     }
 
-    if (jail_mount(para.chroot, &procctx)) {
+    if (jail_mount(ctx.chroot, &procctx)) {
         PFTL("mount procfs");
         return -1;
     }
-    if (jail_mount(para.chroot, &devctx)) {
+    if (jail_mount(ctx.chroot, &devctx)) {
         PFTL("mount devfs");
         return -1;
     }
 
-    if (para.mount_cfg) {
-        struct jail_mount_item *cur = para.mount_cfg->head;
+    if (ctx.mount_cfg) {
+        struct jail_mount_item *cur = ctx.mount_cfg->head;
         while (cur) {
-            if (jail_mount(para.chroot, &(cur->ctx))) {
+            if (jail_mount(ctx.chroot, &(cur->ctx))) {
                 fatalf("Failed to mount <%s> -> %s: %s\n", cur->ctx.fstype, cur->ctx.target, strerror(errno));
                 return -1;
             }
@@ -218,7 +218,7 @@ static int mount_fs(const struct cjail_para para)
         }
     }
 
-    if (jail_chroot(para.chroot, para.workingDir)) {
+    if (jail_chroot(ctx.chroot, ctx.workingDir)) {
         return -1;
     }
     return 0;
@@ -238,7 +238,7 @@ static int allow_execve(struct seccomp_config *cfg, void *argv)
     return scconfig_add(cfg, &exec_rule, 1);
 }
 
-int child_init(void *arg)
+int jail_init(void *arg)
 {
     /*
      * The address passed with PR_SET_MM_ARG_START, PR_SET_MM_ARG_END should
@@ -248,7 +248,7 @@ int child_init(void *arg)
     int ttymode, childstatus = -1;
     pid_t childpid;
     struct termios term;
-    struct exec_para ep = *(struct exec_para *)arg;
+    struct exec_meta meta = *(struct exec_meta *)arg;
 
     if (getpid() != 1) {
         fatalf("This process should be run as init process.\n");
@@ -266,7 +266,7 @@ int child_init(void *arg)
     sigsetset(&rtset, 2, SIGCHLD, SIGREADY);
     sigprocmask(SIG_BLOCK, &rtset, NULL);
 
-    close(ep.resultpipe[0]);
+    close(meta.resultpipe[0]);
     if (prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0)) {
         PFTL("set parent death signal");
         exit(errno);
@@ -281,7 +281,7 @@ int child_init(void *arg)
     }
 
     //mount filesystems
-    if (mount_fs(ep.para)) {
+    if (mount_fs(meta.ctx)) {
         exit(errno);
     }
 
@@ -291,14 +291,14 @@ int child_init(void *arg)
     //detect if we need to trace the child process
     int traceflag = 0;
     //precompile seccomp bpf to reduce the impact on timing
-    if (ep.para.seccomp_cfg) {
-        if (ep.para.seccomp_cfg->deny_action == DENY_TRACE || ep.para.seccomp_cfg->deny_action == DENY_TRACE_KILL) {
+    if (meta.ctx.seccomp_cfg) {
+        if (meta.ctx.seccomp_cfg->deny_action == DENY_TRACE || meta.ctx.seccomp_cfg->deny_action == DENY_TRACE_KILL) {
             traceflag = 1;
         }
-        if (allow_execve(ep.para.seccomp_cfg, ep.para.argv)) {
+        if (allow_execve(meta.ctx.seccomp_cfg, meta.ctx.argv)) {
             exit(errno);
         }
-        if (scconfig_compile(ep.para.seccomp_cfg, &ep.bpf)) {
+        if (scconfig_compile(meta.ctx.seccomp_cfg, &meta.bpf)) {
             exit(errno);
         }
     }
@@ -311,14 +311,14 @@ int child_init(void *arg)
         struct trace_ops ops;
         memset(&result, 0, sizeof(result));
 
-        if (write_tasks(ep.cgtasksfd, childpid)) {
+        if (write_tasks(meta.cgtasksfd, childpid)) {
             PFTL("write tasks file");
             exit(errno);
         }
 
         if (traceflag) {
             trace_seize(childpid);
-            ops.seccomp_event = scconfig_get_callback(ep.para.seccomp_cfg);
+            ops.seccomp_event = scconfig_get_callback(meta.ctx.seccomp_cfg);
         }
 
         sigwait(&rtset, &rtsig);
@@ -338,9 +338,9 @@ int child_init(void *arg)
         sigprocmask(SIG_UNBLOCK, &rtset, NULL);
 
         gettimeofday(&stime, NULL);
-        if (timerisset(&ep.para.lim_time)) {
+        if (timerisset(&meta.ctx.lim_time)) {
             devf("Setting timer...\n");
-            if (set_timer(ep.para.lim_time)) {
+            if (set_timer(meta.ctx.lim_time)) {
                 PFTL("setitimer");
                 exit(errno);
             }
@@ -390,7 +390,7 @@ int child_init(void *arg)
         }
 
         //deregister alarm
-        if (timerisset(&ep.para.lim_time)) {
+        if (timerisset(&meta.ctx.lim_time)) {
             if (unset_timer()) {
                 PWRN("stop itimer");
             }
@@ -411,15 +411,15 @@ int child_init(void *arg)
             fatalf("Lost control of child process\n");
             exit(ECHILD);
         } else if (childstatus) {
-            childerr = get_child_error(&result.info, ep.para.cg_rss);
+            childerr = get_child_error(&result.info, meta.ctx.cg_rss);
         }
         getrusage(RUSAGE_CHILDREN, &result.rus);
         devf("Sending result...\n");
-        write(ep.resultpipe[1], &result, sizeof(result));
+        write(meta.resultpipe[1], &result, sizeof(result));
 
         exit(childerr);
     } else if (childpid == 0) {
-        child_process(ep);
+        child_process(meta);
     } else {
         PFTL("fork");
         exit(errno);

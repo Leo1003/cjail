@@ -13,13 +13,11 @@
 #define _GNU_SOURCE
 
 #include <cjail/cjail.h>
-#include "simple_seccomp.h"
-#include "filesystem.h"
 
 #include <linux/filter.h>
 
-struct exec_para {
-    struct cjail_para para;
+struct exec_meta {
+    struct cjail_ctx ctx;
     int resultpipe[2];
     int cgtasksfd;
     struct sock_fprog bpf;

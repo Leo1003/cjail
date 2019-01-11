@@ -9,6 +9,7 @@
 #ifndef CJAIL_CJAIL_H
 #define CJAIL_CJAIL_H
 
+#define _POSIX_C_SOURCE 200809L
 #include <linux/filter.h>
 #include <linux/taskstats.h>
 #include <sched.h>
@@ -27,12 +28,12 @@ extern "C" {
 #endif  /* __cplusplus */
 
 /**
- * @struct cjail_para
- * @brief cjail executing parameters
+ * @struct cjail_ctx
+ * @brief cjail configuring context
  *
  * parameters indicating the sandbox settings and process configures
  */
-struct cjail_para {
+struct cjail_ctx {
     unsigned int preservefd;    /**< @brief Set this to 1 to keep non-standard file descriptors opening
                                      @warning Use this carefully! */
     unsigned int sharenet;      /**< @brief Set this to 1 to share the same network namespace with host
@@ -115,7 +116,7 @@ enum logger_level {
     LOG_DEBUG,          /**< @brief debug level, output all messages */
     LOG_INFO,           /**< @brief information level, default value for release build */
     LOG_WARN,           /**< @brief warning level, some unimportant error occurred or dangerous settings */
-    LOG_ERROR,          /**< @brief error level, usually caused by wrong parameters */
+    LOG_ERROR,          /**< @brief error level, usually caused by wrong configures */
     LOG_FATAL,          /**< @brief fatal level, something wrong happened accidentally */
     LOG_SLIENT = 255    /**< @brief let the logger DO NOT output anything! */
 };
@@ -142,22 +143,22 @@ void set_log_level(enum logger_level level);
 void set_log_file(FILE *f);
 
 /**
- * @brief Initialize cjail_para struct
+ * @brief Initialize cjail context
  *
- * @param[in,out] para cjail_para struct to be initialized
+ * @param ctx cjail_ctx structure to be initialized
  */
-void cjail_para_init(struct cjail_para *para);
+void cjail_ctx_init(struct cjail_ctx *ctx);
 
 /**
  * @brief Execute a process in the jail
  *
- * @param[in] para Executing parameters to the jail
+ * @param[in] ctx Executing parameters to the jail
  * @param[out] result Executing results to be filled
  * @return Execution result
  * @retval 0 Succeed
  * @retval -1 One or more errors encountered
  */
-int cjail_exec(const struct cjail_para *para, struct cjail_result *result);
+int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result);
 
 /**
  * @brief Convert cpu_set_t to human readable format

@@ -19,11 +19,11 @@ TestSuite(basic_test, .init = setup);
 Test(basic_test, test_1)
 {
     char *argv[] = { "/bin/echo", NULL };
-    struct cjail_para para;
+    struct cjail_ctx ctx;
     struct cjail_result result;
-    cjail_para_init(&para);
-    para.argv = argv;
-    cr_assert_eq(cjail_exec(&para, &result), 0);
+    cjail_ctx_init(&ctx);
+    ctx.argv = argv;
+    cr_assert_eq(cjail_exec(&ctx, &result), 0);
     cr_expect_eq(result.info.si_code, CLD_EXITED);
     cr_expect_eq(result.info.si_status, EXIT_SUCCESS);
 }

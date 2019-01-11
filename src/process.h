@@ -8,6 +8,6 @@
 
 #include "cjail.h"
 
-_Noreturn void child_process(struct exec_para ep);
+_Noreturn void child_process(struct exec_meta meta);
 
 #endif

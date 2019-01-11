@@ -8,7 +8,7 @@
  * @brief cjail command line interface(cli) source
  */
 #define _GNU_SOURCE
-#include <cjail.h>
+#include <cjail/cjail.h>
 
 #include <argz.h>
 #include <envz.h>
@@ -178,7 +178,7 @@ int main(int argc, char *argv[], char *envp[])
 {
     int o;
     cpu_set_t cpuset;
-    struct cjail_para para;
+    struct cjail_ctx ctx;
     struct cjail_result res;
     struct timeval time;
     int inherenv = 0, allow_root = 0;
@@ -187,7 +187,7 @@ int main(int argc, char *argv[], char *envp[])
 #ifndef NDEBUG
     char cpustr[1024];
 #endif
-    cjail_para_init(&para);
+    cjail_ctx_init(&ctx);
     while ((o = getopt_long(argc, argv, opts, longopts, NULL)) >= 0) {
         switch (o) {
             case 'e':
@@ -197,87 +197,87 @@ int main(int argc, char *argv[], char *envp[])
                 inherenv = 1;
                 break;
             case 'c':
-                para.chroot = optarg;
+                ctx.chroot = optarg;
                 break;
             case 'd':
-                para.workingDir = optarg;
+                ctx.workingDir = optarg;
                 break;
             case 'u':
-                para.uid = toul(optarg, 1);
-                if (para.uid >= 65535) {
+                ctx.uid = toul(optarg, 1);
+                if (ctx.uid >= 65535) {
                     perrf("Error: Invalid UID: %s\n", optarg);
                     exit(1);
                 }
                 break;
             case 'g':
-                para.gid = toul(optarg, 1);
-                if (para.gid >= 65535) {
+                ctx.gid = toul(optarg, 1);
+                if (ctx.gid >= 65535) {
                     perrf("Error: Invalid GID: %s", optarg);
                     exit(1);
                 }
                 break;
             case 'i':
-                para.redir_input = optarg;
+                ctx.redir_input = optarg;
                 break;
             case 'o':
-                para.redir_output = optarg;
+                ctx.redir_output = optarg;
                 break;
             case 'r':
-                para.redir_error = optarg;
+                ctx.redir_error = optarg;
                 break;
             case 'I':
-                para.fd_input = toul(optarg, 1);
+                ctx.fd_input = toul(optarg, 1);
                 break;
             case 'O':
-                para.fd_output = toul(optarg, 1);
+                ctx.fd_output = toul(optarg, 1);
                 break;
             case 'R':
-                para.fd_error = toul(optarg, 1);
+                ctx.fd_error = toul(optarg, 1);
                 break;
             case OPT_PFD:
-                para.preservefd = 1;
+                ctx.preservefd = 1;
                 break;
             case OPT_NET:
-                para.sharenet = 1;
+                ctx.sharenet = 1;
                 break;
             case 's':
                 if (cpuset_parse(optarg, &cpuset) < 0) {
                     perrf("Error: Invalid cpuset string: %s\n", optarg);
                     exit(1);
                 }
-                para.cpuset = &cpuset;
+                ctx.cpuset = &cpuset;
 #ifndef NDEBUG
                 cpuset_tostr(&cpuset, cpustr, 1024);
                 devf("cpuset: %s\n", cpustr);
 #endif
                 break;
             case 'V':
-                para.rlim_as = toll(optarg, 1);
+                ctx.rlim_as = toll(optarg, 1);
                 break;
             case 'C':
-                para.rlim_core = toll(optarg, 1);
+                ctx.rlim_core = toll(optarg, 1);
                 break;
             case 'F':
-                para.rlim_nofile = toll(optarg, 1);
+                ctx.rlim_nofile = toll(optarg, 1);
                 break;
             case 'Z':
-                para.rlim_fsize = toll(optarg, 1);
+                ctx.rlim_fsize = toll(optarg, 1);
                 break;
             case 'P':
-                para.rlim_proc = toll(optarg, 1);
+                ctx.rlim_proc = toll(optarg, 1);
                 break;
             case 'S':
-                para.rlim_stack = toll(optarg, 1);
+                ctx.rlim_stack = toll(optarg, 1);
                 break;
             case 'T':
                 time = totime(optarg, 1);
-                para.lim_time = time;
+                ctx.lim_time = time;
                 break;
             case OPT_CGR:
-                para.cgroup_root = optarg;
+                ctx.cgroup_root = optarg;
                 break;
             case 'M':
-                para.cg_rss = toll(optarg, 1);
+                ctx.cg_rss = toll(optarg, 1);
                 break;
             case OPT_SCC:
                 sccfg_path = optarg;
@@ -306,11 +306,11 @@ int main(int argc, char *argv[], char *envp[])
         perrf("Error: command not specified\n");
         exit(1);
     }
-    para.argv = argv + optind;
+    ctx.argv = argv + optind;
 
     if (sccfg_path) {
-        para.seccompcfg = scconfig_parse_path(sccfg_path, 0);
-        if (!para.seccompcfg) {
+        ctx.seccomp_cfg = scconfig_parse_path(sccfg_path, 0);
+        if (!ctx.seccomp_cfg) {
             perrf("Failed to parse seccomp config file: %s\n", sccfg_path);
             pserr = parser_get_err();
             if (pserr.line) {
@@ -321,12 +321,12 @@ int main(int argc, char *argv[], char *envp[])
         }
     }
 
-    if (!para.uid && !allow_root) {
+    if (!ctx.uid && !allow_root) {
         perrf("ERROR: Running with UID 0!!!\n");
         perrf("Specify \"--allow-root\" option to allow running as root.\n");
         exit(1);
     }
-    if (!para.gid && !allow_root) {
+    if (!ctx.gid && !allow_root) {
         perrf("ERROR: Running with GID 0!!!\n");
         perrf("Specify \"--allow-root\" option to allow running as root.\n");
         exit(1);
@@ -337,13 +337,13 @@ int main(int argc, char *argv[], char *envp[])
             perrf("ERROR: Parsing environment variables\n");
             exit(1);
         }
-        para.environ = para_env;
+        ctx.environ = para_env;
     }
     if (inherenv && !envstr) {
-        para.environ = envp;
+        ctx.environ = envp;
     }
 
-    int ret = cjail_exec(&para, &res);
+    int ret = cjail_exec(&ctx, &res);
 
     if (para_env) {
         free(para_env);
@@ -358,7 +358,7 @@ int main(int argc, char *argv[], char *envp[])
         exit(1);
     }
     print_result(&res);
-    scconfig_free(para.seccompcfg);
+    scconfig_free(ctx.seccomp_cfg);
     return 0;
 }
 
