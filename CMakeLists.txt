@@ -39,12 +39,12 @@ add_subdirectory(tools)
 find_package(Criterion)
 
 if(CRITERION_FOUND)
-    message(STATUS "Found Criterion library.")
-    message(STATUS "Test Enabled.")
+    message(STATUS "Found Criterion library")
+    message(STATUS "Test Enabled")
     enable_testing()
     add_subdirectory(test)
 else()
-    message(WARNING "Criterion library not found!\nTests disabled.")
+    message(WARNING "Criterion library not found!\nTests disabled")
 endif()
 
 #--------------------------------

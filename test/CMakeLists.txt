@@ -5,13 +5,12 @@ function(cjail_utest test)
     add_executable("unit_${test}" "unit/${test}.c")
     target_link_libraries("unit_${test}"
         PRIVATE
-            ${CRITERION_LIBRARY}
+            Criterion::Criterion
             CJail::libcjail
     )
     target_include_directories("unit_${test}"
         PRIVATE
             ${CMAKE_CURRENT_BINARY_DIR}
-            ${CRITERION_INCLUDE_DIR}
             "${CMAKE_SOURCE_DIR}/src"
     )
     add_test("unit/${test}" "${CMAKE_CURRENT_BINARY_DIR}/unit_${test}")
@@ -21,13 +20,12 @@ function(cjail_itest test)
     add_executable("integration_${test}" "integration/${test}.c")
     target_link_libraries("integration_${test}"
         PRIVATE
-            ${CRITERION_LIBRARY}
+            Criterion::Criterion
             CJail::libcjail
     )
     target_include_directories("integration_${test}"
         PRIVATE
             ${CMAKE_CURRENT_BINARY_DIR}
-            ${CRITERION_INCLUDE_DIR}
     )
     add_test("integration/${test}" "${CMAKE_CURRENT_BINARY_DIR}/integration_${test}")
 endfunction(cjail_itest)
