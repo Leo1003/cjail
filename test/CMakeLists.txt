@@ -1,25 +1,40 @@
 #--------------------------------
-# Function Defination
+# Test Building Function Definitions
 #
-set(ASSETS_DIR "${CMAKE_SOURCE_DIR}/assets")
-
-function(cjailtest testname)
-    add_executable(${testname} "${testname}.c")
-    target_link_libraries(${testname}
+function(cjail_utest test)
+    add_executable("unit_${test}" "unit/${test}.c")
+    target_link_libraries("unit_${test}"
         PRIVATE
             ${CRITERION_LIBRARY}
             CJail::libcjail
     )
-    target_include_directories(${testname}
+    target_include_directories("unit_${test}"
         PRIVATE
             ${CMAKE_CURRENT_BINARY_DIR}
             ${CRITERION_INCLUDE_DIR}
             "${CMAKE_SOURCE_DIR}/src"
-            ${CMAKE_BINARY_DIR}/include
     )
-    add_test(${testname} "${CMAKE_CURRENT_BINARY_DIR}/${testname}")
-endfunction(cjailtest)
+    add_test("unit/${test}" "${CMAKE_CURRENT_BINARY_DIR}/unit_${test}")
+endfunction(cjail_utest)
 
+function(cjail_itest test)
+    add_executable("integration_${test}" "integration/${test}.c")
+    target_link_libraries("integration_${test}"
+        PRIVATE
+            ${CRITERION_LIBRARY}
+            CJail::libcjail
+    )
+    target_include_directories("integration_${test}"
+        PRIVATE
+            ${CMAKE_CURRENT_BINARY_DIR}
+            ${CRITERION_INCLUDE_DIR}
+    )
+    add_test("integration/${test}" "${CMAKE_CURRENT_BINARY_DIR}/integration_${test}")
+endfunction(cjail_itest)
+
+#--------------------------------
+# Find Testing Assets
+#
 function(find_assets VAR NAMES)
     find_file(${VAR}
         NAMES ${NAMES}
@@ -31,25 +46,16 @@ function(find_assets VAR NAMES)
     )
 endfunction(find_assets)
 
+set(ASSETS_DIR "${CMAKE_SOURCE_DIR}/assets")
 find_assets(DISKIMAGE1_PATH image1.img)
-
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets.h.in ${CMAKE_CURRENT_BINARY_DIR}/assets.h @ONLY)
 
 #--------------------------------
 # Setup tests
 #
-cjailtest(utils_test)
-cjailtest(basic_test)
-cjailtest(timing_test)
-cjailtest(scconfig_parser_test)
-cjailtest(mount_test)
+cjail_utest(utils)
+cjail_utest(scconfig_parser)
+cjail_utest(mount)
 
-#--------------------------------
-# Setup static_test
-# (for temporary usage, will be removed in future)
-#
-add_executable(cjail_static_test cjail_static_test.c seccomptest.c)
-target_link_libraries(cjail_static_test
-    PRIVATE
-        CJail::libcjail
-)
+cjail_itest(basic)
+cjail_itest(timing)
