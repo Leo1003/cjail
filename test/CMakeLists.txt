@@ -51,6 +51,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets.h.in ${CMAKE_CURRENT_BINARY_DI
 #--------------------------------
 # Setup tests
 #
+cjail_utest(context)
 cjail_utest(utils)
 cjail_utest(scconfig_parser)
 cjail_utest(mount)
