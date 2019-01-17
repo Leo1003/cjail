@@ -17,6 +17,11 @@ message("Build Type: ${CMAKE_BUILD_TYPE}")
 # Building targets
 #
 find_package(libseccomp REQUIRED)
+find_package(Libnl REQUIRED
+    COMPONENTS
+        libnl
+        genl
+)
 
 include(GNUInstallDirs)
 
