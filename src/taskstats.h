@@ -17,38 +17,38 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
-/*
- * Generic macros for dealing with netlink sockets. Might be duplicated
- * elsewhere. It is recommended that commercial grade applications use
- * libnl or libnetlink and use the interfaces provided by the library
- */
-// clang-format off
-#define GENLMSG_DATA(glh)	    ((void *)(NLMSG_DATA(glh) + GENL_HDRLEN))
-#define GENLMSG_PAYLOAD(glh)	(NLMSG_PAYLOAD(glh, 0) - GENL_HDRLEN)
-#define NLA_DATA(na)		    ((void *)((char*)(na) + NLA_HDRLEN))
-#define NLA_PAYLOAD(len)	    (len - NLA_HDRLEN)
-
 /* Maximum size of response requested or message sent */
-#define MAX_MSG_SIZE	1024
 #define MAX_CPU_MASK    1024
-// clang-format on
 
-struct msgtemplate {
-    struct nlmsghdr n;
-    struct genlmsghdr g;
-    char buf[MAX_MSG_SIZE];
+/* clang-format off */
+#define BUFFER_SIZE         1024
+
+#define TSCTRL_S_OK         0x80
+#define TSCTRL_S_ERR        0xFF
+#define TSCTRL_C_LISTEN     0x01
+#define TSCTRL_C_STATUS     0x02
+#define TSCTRL_S_STATUS     0x82
+#define TSCTRL_C_RESULT     0x03
+#define TSCTRL_S_RESULT     0x83
+#define TSCTRL_C_STOP       0x04
+
+enum taskstats_status {
+    TSSTA_NONE,
+    TSSTA_WAIT,
+    TSSTA_DONE,
+    TSSTA_WAIT_DONE,
 };
+/* clang-format on */
 
-struct ts_socket {
-    int socketfd, maskset;
-    unsigned short familyid;
-    char cpumask[MAX_CPU_MASK];
-};
+typedef struct taskstats_proc {
+    pid_t pid;
+    int socket;
+} tsproc_t;
 
-int taskstats_create(struct ts_socket *s);
-int taskstats_setcpuset(struct ts_socket *s, cpu_set_t *cpuset);
-int taskstats_setpid(struct ts_socket *s, pid_t pid);
-int taskstats_getstats(struct ts_socket *s, struct taskstats *ts);
-int taskstats_destory(struct ts_socket *s);
+int taskstats_run(tsproc_t *tsproc);
+int taskstats_listen(const tsproc_t *tsproc, pid_t pid);
+int taskstats_status(const tsproc_t *tsproc);
+int taskstats_result(const tsproc_t *tsproc, pid_t pid, struct taskstats *ts);
+int taskstats_stop(const tsproc_t *tsproc);
 
 #endif

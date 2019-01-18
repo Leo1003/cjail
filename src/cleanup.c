@@ -79,17 +79,17 @@ static void clean_cgroup(const char *subsystem)
         PFTL("cleanup cgroup");
     }
 }
-static void push_taskstat(struct cleanupstack *stack, struct ts_socket *tssock)
+static void push_taskstat(struct cleanupstack *stack, tsproc_t *tsproc)
 {
     struct cleanuptask task;
     task.type = CLN_TASKSTAT;
-    task.arg.tssock = tssock;
+    task.arg.tsproc = tsproc;
     push_task(stack, &task);
     return;
 }
-static void clean_taskstat(struct ts_socket *tssock)
+static void clean_taskstat(tsproc_t *tsproc)
 {
-    if (taskstats_destory(tssock)) {
+    if (taskstats_stop(tsproc)) {
         PFTL("cleanup taskstats");
     }
 }
@@ -114,7 +114,7 @@ void stack_push(struct cleanupstack *stack, int type, ...)
     va_start(args, type);
     switch (type) {
         case CLN_FREE:
-            push_free(stack, va_arg(args, void *));
+            push_free(stack, va_arg(args, void **));
             break;
         case CLN_CLOSE:
             push_close(stack, va_arg(args, int));
@@ -126,7 +126,7 @@ void stack_push(struct cleanupstack *stack, int type, ...)
             push_cgroup(stack, va_arg(args, const char *));
             break;
         case CLN_TASKSTAT:
-            push_taskstat(stack, va_arg(args, struct ts_socket *));
+            push_taskstat(stack, va_arg(args, tsproc_t *));
             break;
         case CLN_SIGSET:
             push_sigset(stack, va_arg(args, struct sig_rule *));
@@ -183,7 +183,7 @@ void do_cleanup(struct cleanupstack *stack)
                 clean_cgroup(task.arg.subsystem);
                 break;
             case CLN_TASKSTAT:
-                clean_taskstat(task.arg.tssock);
+                clean_taskstat(task.arg.tsproc);
                 break;
             case CLN_SIGSET:
                 clean_sigset(task.arg.rules);

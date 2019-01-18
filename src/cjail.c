@@ -45,6 +45,7 @@ static struct sig_rule lib_sigrules[] = {
     { SIGHUP  , sighandler, NULL, 0, {{0}}, 0 },
     { SIGINT  , sighandler, NULL, 0, {{0}}, 0 },
     { SIGQUIT , sighandler, NULL, 0, {{0}}, 0 },
+    { SIGPIPE , SIG_IGN   , NULL, 0, {{0}}, 0 },
     { SIGTERM , sighandler, NULL, 0, {{0}}, 0 },
     { SIGCHLD , sighandler, NULL, 0, {{0}}, 0 },
     { SIGTTIN , SIG_IGN   , NULL, 0, {{0}}, 0 },
@@ -52,26 +53,6 @@ static struct sig_rule lib_sigrules[] = {
     { 0       , NULL      , NULL, 0, {{0}}, 0 },
 };
 // clang-format on
-
-static int init_taskstats(struct ts_socket *s)
-{
-    if (taskstats_create(s)) {
-        goto error;
-    }
-    cpu_set_t cur;
-    CPU_ZERO(&cur);
-    for (int i = 0; i < get_nprocs(); i++) {
-        CPU_SET(i, &cur);
-    }
-    if (taskstats_setcpuset(s, &cur)) {
-        goto error;
-    }
-    return 0;
-
-error:
-    PFTL("init taskstats");
-    return -1;
-}
 
 static int init_cgroup(const struct cjail_ctx ctx, int *pidfd)
 {
@@ -113,11 +94,12 @@ static int cjail_kill(pid_t pid)
     return 0;
 }
 
-static pid_t cjail_wait(pid_t initpid, int *wstatus, int *initerrno)
+static pid_t cjail_wait(pid_t initpid, int *initerrno)
 {
+    int wstatus;
     pid_t retp;
 retry:
-    retp = waitpid(initpid, wstatus, 0);
+    retp = waitpid(initpid, &wstatus, 0);
     if (retp < 0) {
         if (errno == ECHILD) {
             fatalf("Lost control of child namespace init process\n");
@@ -132,13 +114,27 @@ retry:
         }
     }
 
-    if ((WIFEXITED(*wstatus) && WEXITSTATUS(*wstatus) != 0) || WIFSIGNALED(*wstatus)) {
+    if ((WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0) || WIFSIGNALED(wstatus)) {
         errorf("child namespace init process abnormal terminated\n");
-        *initerrno = WIFEXITED(*wstatus) ? WEXITSTATUS(*wstatus) : (interrupted ? EINTR : EFAULT);
-        errorf("Failed to setup child: %s\n", strerror(*initerrno));
-        if (WIFSIGNALED(*wstatus)) {
-            errorf("Received signal: %d\n", WTERMSIG(*wstatus));
+        if (WIFEXITED(wstatus)) {
+            *initerrno = WEXITSTATUS(wstatus);
+        } else if (WIFSIGNALED(wstatus)) {
+            errorf("Received signal: %d\n", WTERMSIG(wstatus));
+            switch (WTERMSIG(wstatus)) {
+                case SIGSEGV:
+                case SIGFPE:
+                case SIGILL:
+                case SIGIOT:
+                case SIGBUS:
+                    *initerrno = EFAULT;
+                case SIGKILL:
+                    *initerrno = ECANCELED;
+                default:
+                    *initerrno = EINTR;
+            }
         }
+        errorf("setup process failed with error: %s\n", strerror(*initerrno));
+
         goto error;
     }
 
@@ -151,9 +147,10 @@ error:
 int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
 {
     char child_stack[STACKSIZE + 1] __attribute__((aligned(16)));
-    int wstatus, ret = 0, tsgot = 0, initerr = 0;
+    int ret = 0, initerr = 0;
+    unsigned int flag = SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWPID;
     pid_t initpid, childpid;
-    struct ts_socket tssock = { 0 };
+    tsproc_t tsproc = { 0 };
     struct taskstats ts = { 0 };
     struct cleanupstack cstack = { 0 }, pipestack = { 0 };
     struct exec_meta *meta;
@@ -192,19 +189,15 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
         stack_push(&cstack, CLN_CGROUP, "memory");
 
     //setup taskstats
-    if (init_taskstats(&tssock)) {
+    if (taskstats_run(&tsproc)) {
         ret = -1;
         goto out_cleanup;
     }
-    stack_push(&cstack, CLN_TASKSTAT, &tssock);
+    stack_push(&cstack, CLN_TASKSTAT, &tsproc);
 
     //clone
-    int optionflag = 0;
-    optionflag |= meta->ctx.sharenet ? 0 : CLONE_NEWNET;
-    initpid = clone(jail_init, child_stack + STACKSIZE,
-                    SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS |
-                        CLONE_NEWPID | optionflag,
-                    (void *)meta);
+    if (!meta->ctx.sharenet) flag |= CLONE_NEWNET;
+    initpid = clone(jail_init, child_stack + STACKSIZE, flag, (void *)meta);
     if (initpid < 0) {
         PFTL("clone child namespace init process");
         ret = -1;
@@ -216,55 +209,41 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
 
     //setup cgroup stage II
     while (cgroup_read("pids", "tasks", "%d", &childpid) == EOF) {
-        if (child || interrupted)
-            goto out_kill;
+        if (child || interrupted) {
+            ret = -1;
+            cjail_kill(initpid);
+            goto out_wait;
+        }
         usleep(100000);
     }
     debugf("Got childpid: %d\n", childpid);
     if (meta->ctx.cg_rss) {
         cgroup_write("memory", "tasks", "%d", childpid);
     }
+    if (taskstats_listen(&tsproc, childpid)) {
+        PFTL("listen on child process");
+        ret = -1;
+        cjail_kill(initpid);
+        goto out_wait;
+    }
     kill(initpid, SIGREADY);
 
-    //socket buffer may overflow while the child process are executing
-    while (!tsgot) {
-        if (interrupted && !child) {
-            if (kill(initpid, SIGTERM)) {
-                if (errno != ESRCH) {
-                    PFTL("terminate init process");
-                    goto out_kill;
-                }
-            }
-        }
-        if (taskstats_getstats(&tssock, &ts)) {
-            switch (errno) {
-                case EAGAIN:
-                case ETIMEDOUT:
-                case EINTR:
-                case EBUSY:
-                    if (child)
-                        tsgot = -1;
-                    break;
-                default:
-                    tsgot = -1;
-                    break;
-            }
-        } else if (ts.ac_pid == childpid) {
-            tsgot = 1;
-        }
-    }
-    if (tsgot == -1) {
-        errorf("Failed to receive from taskstats.\n");
+out_wait:
+    if (cjail_wait(initpid, &initerr) < 0) {
         ret = -1;
-        goto out_kill;
     }
 
-    if (result) {
+    if (taskstats_result(&tsproc, childpid, &ts)) {
+        errorf("Failed to receive from taskstats.\n");
+        ret = -1;
+    }
+
+    if (ret == 0 && result) {
         //get result from pipe
         memset(result, 0, sizeof(*result));
         size_t n = read(meta->resultpipe[0], result, sizeof(*result));
         if (n < 0)
-            PFTL("get result");
+            PERR("get result");
         result->stats = ts;
         if (meta->ctx.cg_rss) {
             if (cgroup_read("memory", "memory.oom_control",
@@ -279,12 +258,9 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
         }
     }
 
-out_kill:
-    if ((interrupted && !child) || tsgot != 1)
+    if ((interrupted && !child))
         if (cjail_kill(initpid))
             ret = -1;
-    if (cjail_wait(initpid, &wstatus, &initerr) < 0)
-        ret = -1;
 
     if (isatty(STDIN_FILENO))
         if (tcsetpgrp(STDIN_FILENO, getpgrp()))
@@ -294,7 +270,9 @@ out_cleanup:
     do_cleanup(&pipestack);
     do_cleanup(&cstack);
 
-    errno = (initerr ? initerr : errno);
+    if (!errno && initerr) {
+        errno = initerr;
+    }
     return ret;
 }
 

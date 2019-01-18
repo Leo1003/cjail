@@ -34,11 +34,12 @@ target_include_directories(libcjail
     PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_BINARY_DIR}/include
-        ${LIBSECCOMP_INCLUDE_DIRS}
 )
 target_link_libraries(libcjail
     PRIVATE
         libseccomp::libseccomp
+        libnl::libnl
+        libnl::genl
         "bsd"
 )
 set_target_properties(libcjail PROPERTIES
