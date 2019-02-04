@@ -3,9 +3,13 @@
     - [x] expose mounting api interface
     - [x] support disk image loopback mount
     - [x] redesign mounting functions filesystem
-    - [ ] collect taskstats in a forked process
+    - [x] collect taskstats in a forked process
     - [ ] call trace callback in the calling process
     - [x] source code using public header too
+    - [ ] rewrite cjail_exec() using socketpair and signalfd
+    - [ ] CLI return child process exit code (can be disable by option)
+    - [ ] CLI not print all resource statistics by default
+    - [ ] CLI add mount option
 - Future Version: 
 	- [ ] using config.h to disable optional features
     - [ ] add user namespace support
