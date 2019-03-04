@@ -9,6 +9,7 @@
 #include "init.h"
 #include "logger.h"
 #include "sigset.h"
+#include "protocol.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -146,21 +147,23 @@ error:
 
 int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
 {
-    char child_stack[STACKSIZE + 1] __attribute__((aligned(16)));
+    unsigned char clone_stack[STACKSIZE] __attribute__((aligned(16)));
     int ret = 0, initerr = 0;
     unsigned int flag = SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWPID;
     pid_t initpid, childpid;
     tsproc_t tsproc = { 0 };
     struct taskstats ts = { 0 };
-    struct cleanupstack cstack = { 0 }, pipestack = { 0 };
-    struct exec_meta *meta;
+    struct cleanupstack cstack = { 0 }, socketstack = { 0 };
+    struct exec_meta *meta = NULL;
     child = 0;
     interrupted = 0;
 
-    if (geteuid())
+    if (geteuid()) {
         RETERR(EPERM);
-    if (!ctx)
+    }
+    if (!ctx) {
         RETERR(EINVAL);
+    }
 
     meta = (struct exec_meta *)malloc(sizeof(struct exec_meta));
     stack_push(&cstack, CLN_FREE, &meta);
@@ -169,14 +172,19 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
     installsigs(lib_sigrules);
     stack_push(&cstack, CLN_SIGSET, lib_sigrules);
 
-    //setup pipe
-    if (pipe_c(meta->resultpipe)) {
-        PFTL("create pipe");
+    //setup socketpair
+    if (socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, meta->sockpair)) {
+        PFTL("create main socketpair");
         ret = -1;
         goto out_cleanup;
     }
-    stack_push(&cstack, CLN_CLOSE, meta->resultpipe[0]);
-    stack_push(&pipestack, CLN_CLOSE, meta->resultpipe[1]);
+    stack_push(&cstack, CLN_CLOSE, meta->sockpair[0]);
+    stack_push(&socketstack, CLN_CLOSE, meta->sockpair[1]);
+    if (set_passcred(meta->sockpair[0])) {
+        PFTL("set SO_PASSCRED on socketpair");
+        ret = -1;
+        goto out_cleanup;
+    }
 
     //setup cgroup stage I
     if (init_cgroup(meta->ctx, &meta->cgtasksfd)) {
@@ -197,14 +205,14 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
 
     //clone
     if (!meta->ctx.sharenet) flag |= CLONE_NEWNET;
-    initpid = clone(jail_init, child_stack + STACKSIZE, flag, (void *)meta);
+    initpid = clone(jail_init, clone_stack + STACKSIZE, flag, (void *)meta);
     if (initpid < 0) {
         PFTL("clone child namespace init process");
         ret = -1;
         goto out_cleanup;
     }
-    //use cleanupstack to close the write side
-    do_cleanup(&pipestack);
+    //use cleanupstack to close the client side
+    do_cleanup(&socketstack);
     debugf("Init PID: %d\n", initpid);
 
     //setup cgroup stage II
@@ -241,7 +249,7 @@ out_wait:
     if (ret == 0 && result) {
         //get result from pipe
         memset(result, 0, sizeof(*result));
-        size_t n = read(meta->resultpipe[0], result, sizeof(*result));
+        size_t n = read(meta->sockpair[0], result, sizeof(*result));
         if (n < 0)
             PERR("get result");
         result->stats = ts;
@@ -267,7 +275,7 @@ out_wait:
             PWRN("set back control terminal");
 
 out_cleanup:
-    do_cleanup(&pipestack);
+    do_cleanup(&socketstack);
     do_cleanup(&cstack);
 
     if (!errno && initerr) {

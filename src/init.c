@@ -266,7 +266,7 @@ int jail_init(void *arg)
     sigsetset(&rtset, 2, SIGCHLD, SIGREADY);
     sigprocmask(SIG_BLOCK, &rtset, NULL);
 
-    close(meta.resultpipe[0]);
+    close(meta.sockpair[0]);
     if (prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0)) {
         PFTL("set parent death signal");
         exit(errno);
@@ -415,7 +415,7 @@ int jail_init(void *arg)
         }
         getrusage(RUSAGE_CHILDREN, &result.rus);
         devf("Sending result...\n");
-        write(meta.resultpipe[1], &result, sizeof(result));
+        write(meta.sockpair[1], &result, sizeof(result));
 
         exit(childerr);
     } else if (childpid == 0) {

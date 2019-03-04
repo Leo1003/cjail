@@ -18,7 +18,7 @@
 
 struct exec_meta {
     struct cjail_ctx ctx;
-    int resultpipe[2];
+    int sockpair[2];
     int cgtasksfd;
     struct sock_fprog bpf;
 };
