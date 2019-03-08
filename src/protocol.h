@@ -18,5 +18,7 @@ ssize_t send_cred(int un_sock, const struct ucred *cred);
 ssize_t recv_cred(int un_sock, struct ucred *cred);
 ssize_t send_result(int un_sock, const struct cjail_result *result);
 ssize_t recv_result(int un_sock, struct cjail_result *result);
+int send_ready(int un_sock);
+int wait_for_ready(int un_sock);
 
 #endif

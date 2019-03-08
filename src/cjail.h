@@ -19,8 +19,8 @@
 struct exec_meta {
     struct cjail_ctx ctx;
     int sockpair[2];
-    int cgtasksfd;
     struct sock_fprog bpf;
+    pid_t jailpid, childpid;
 };
 
 #endif

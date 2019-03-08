@@ -48,4 +48,6 @@ int pipe_c(int pipedes[2]);
 char *strupr(char *str);
 char *strlwr(char *str);
 
+int epoll_add(int epfd, int fd, unsigned long events);
+
 #endif

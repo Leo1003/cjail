@@ -3,6 +3,7 @@
  * @file init.c
  * @brief init process(PID 1) in the pid namespace daemon source
  */
+#define _GNU_SOURCE
 #include "init.h"
 #include "cjail.h"
 #include "config.h"
@@ -10,6 +11,7 @@
 #include "filesystem.h"
 #include "logger.h"
 #include "process.h"
+#include "protocol.h"
 #include "sigset.h"
 #include "simple_seccomp.h"
 #include "taskstats.h"
@@ -25,6 +27,7 @@
 #include <sys/param.h>
 #include <sys/prctl.h>
 #include <sys/signal.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -119,22 +122,6 @@ static int setprocname(const char *argv, const char *procname)
         ret = prctl(PR_SET_NAME, procname, 0, 0, 0);
     }
     return ret;
-}
-
-static int write_tasks(int fd, pid_t pid)
-{
-    devf("Writing tasks file, PID: %d\n", pid);
-    int dfd = dup(fd);
-    FILE *pidfile = fdopen(dfd, "r+");
-    if (!pidfile) {
-        close(dfd);
-        return -1;
-    }
-    fprintf(pidfile, "%d", pid);
-    fflush(pidfile);
-    fclose(pidfile);
-    devf("Writed into tasks file\n");
-    return 0;
 }
 
 static int set_timer(const struct timeval time)
@@ -261,7 +248,6 @@ int jail_init(void *arg)
         exit(errno);
     }
     //block the signal SIGREADY(SIGRTMIN)
-    int rtsig;
     sigset_t rtset;
     sigsetset(&rtset, 2, SIGCHLD, SIGREADY);
     sigprocmask(SIG_BLOCK, &rtset, NULL);
@@ -309,10 +295,16 @@ int jail_init(void *arg)
         siginfo_t sinfo;
         struct timeval stime, etime, timespan;
         struct trace_ops ops;
+        struct ucred cred;
         memset(&result, 0, sizeof(result));
 
-        if (write_tasks(meta.cgtasksfd, childpid)) {
-            PFTL("write tasks file");
+        sigprocmask(SIG_UNBLOCK, &rtset, NULL);
+
+        cred.pid = childpid;
+        cred.uid = meta.ctx.uid;
+        cred.gid = meta.ctx.gid;
+        if (send_cred(meta.sockpair[1], &cred) < 0) {
+            PFTL("send credential data");
             exit(errno);
         }
 
@@ -321,21 +313,11 @@ int jail_init(void *arg)
             ops.seccomp_event = scconfig_get_callback(meta.ctx.seccomp_cfg);
         }
 
-        sigwait(&rtset, &rtsig);
-        switch (rtsig) {
-            case SIGCHLD:
-                errorf("Child process exit unexpectedly!\n");
-                break;
-            case SIGREADY:
-                devf("init continued from rt_signal\n");
-                kill(childpid, SIGREADY);
-                break;
-            default:
-                fatalf("Unknown signal!\n");
-                exit(EINTR);
-                break;
+        if (wait_for_ready(meta.sockpair[1]) < 0) {
+            PFTL("wait for ready data");
+            exit(errno);
         }
-        sigprocmask(SIG_UNBLOCK, &rtset, NULL);
+        kill(childpid, SIGREADY);
 
         gettimeofday(&stime, NULL);
         if (timerisset(&meta.ctx.lim_time)) {
@@ -415,7 +397,10 @@ int jail_init(void *arg)
         }
         getrusage(RUSAGE_CHILDREN, &result.rus);
         devf("Sending result...\n");
-        write(meta.sockpair[1], &result, sizeof(result));
+        if (send_result(meta.sockpair[1], &result) < 0) {
+            PERR("send result");
+        }
+        devf("Sent result.\n");
 
         exit(childerr);
     } else if (childpid == 0) {

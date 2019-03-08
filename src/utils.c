@@ -15,6 +15,7 @@
 #include <libgen.h>
 #include <sched.h>
 #include <stdlib.h>
+#include <sys/epoll.h>
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -230,4 +231,16 @@ char *strlwr(char *str)
         }
     }
     return str;
+}
+
+int epoll_add(int epfd, int fd, unsigned long events)
+{
+    struct epoll_event epev = {
+        .events = events,
+        .data.fd = fd
+    };
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &epev)) {
+        return -1;
+    }
+    return 0;
 }
