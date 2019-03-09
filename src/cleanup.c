@@ -167,6 +167,7 @@ int stack_pop(struct cleanupstack *stack, struct cleanuptask *task)
 
 void do_cleanup(struct cleanupstack *stack)
 {
+    int saved_errno = errno;
     struct cleanuptask task;
     while (stack_pop(stack, &task)) {
         switch (task.type) {
@@ -193,5 +194,6 @@ void do_cleanup(struct cleanupstack *stack)
                 break;
         }
     }
+    errno = saved_errno;
     return;
 }

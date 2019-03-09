@@ -139,9 +139,12 @@ void child_process(struct exec_meta meta)
     //We move before it.
     int rtsig;
     sigset_t rtset;
-    sigsetset(&rtset, 1, SIGREADY);
+    sigsetset(&rtset, 1, SIGUSR1);
     sigwait(&rtset, &rtsig);
-    devf("child continued from rt_signal\n");
+    devf("child continued\n");
+    /* Clear signal mask */
+    sigemptyset(&rtset);
+    sigprocmask(SIG_SETMASK, &rtset, NULL);
 
     if (load_seccomp(meta.ctx, &meta.bpf))
         child_exit();

@@ -67,7 +67,6 @@ static struct sig_rule init_sigrules[] = {
     { SIGCHLD , sigact , NULL, SA_NOCLDSTOP, {{0}}, 0 },
     { SIGTTIN , SIG_IGN, NULL, 0, {{0}}, 0 },
     { SIGTTOU , SIG_IGN, NULL, 0, {{0}}, 0 },
-    { SIGREADY, sigact , NULL, 0, {{0}}, 0 },
     { 0       , NULL   , NULL, 0, {{0}}, 0 },
 };
 
@@ -236,20 +235,24 @@ int jail_init(void *arg)
     pid_t childpid;
     struct termios term;
     struct exec_meta meta = *(struct exec_meta *)arg;
+    sigset_t rtset;
 
     if (getpid() != 1) {
         fatalf("This process should be run as init process.\n");
         exit(EINVAL);
     }
 
+    /* Reset blocked signals */
+    sigemptyset(&rtset);
+    sigprocmask(SIG_SETMASK, &rtset, NULL);
     //it should register the signals, otherwise, they will be ignored because it's a init process
     if (installsigs(init_sigrules)) {
         PFTL("install init signals");
         exit(errno);
     }
-    //block the signal SIGREADY(SIGRTMIN)
-    sigset_t rtset;
-    sigsetset(&rtset, 2, SIGCHLD, SIGREADY);
+
+    //block the signal
+    sigsetset(&rtset, 2, SIGCHLD, SIGUSR1);
     sigprocmask(SIG_BLOCK, &rtset, NULL);
 
     close(meta.sockpair[0]);
@@ -317,7 +320,7 @@ int jail_init(void *arg)
             PFTL("wait for ready data");
             exit(errno);
         }
-        kill(childpid, SIGREADY);
+        kill(childpid, SIGUSR1);
 
         gettimeofday(&stime, NULL);
         if (timerisset(&meta.ctx.lim_time)) {

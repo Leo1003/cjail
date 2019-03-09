@@ -21,6 +21,8 @@ struct exec_meta {
     int sockpair[2];
     struct sock_fprog bpf;
     pid_t jailpid, childpid;
+    int jail_errno;
+    int child, interrupted, result;
 };
 
 #endif

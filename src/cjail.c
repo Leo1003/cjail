@@ -22,36 +22,16 @@
 
 #include <sys/epoll.h>
 #include <sys/signal.h>
+#include <sys/signalfd.h>
 #include <sys/socket.h>
 #include <sys/sysinfo.h>
 #include <sys/wait.h>
 
 #define STACKSIZE 16
 
-static volatile sig_atomic_t child = 0, interrupted = 0;
-static void sighandler(int sig)
-{
-    switch (sig) {
-        case SIGHUP:
-        case SIGINT:
-        case SIGQUIT:
-        case SIGTERM:
-            interrupted = 1;
-            break;
-        case SIGCHLD:
-            child = 1;
-            break;
-    }
-}
-
 // clang-format off
 static struct sig_rule lib_sigrules[] = {
-    { SIGHUP  , sighandler, NULL, 0, {{0}}, 0 },
-    { SIGINT  , sighandler, NULL, 0, {{0}}, 0 },
-    { SIGQUIT , sighandler, NULL, 0, {{0}}, 0 },
     { SIGPIPE , SIG_IGN   , NULL, 0, {{0}}, 0 },
-    { SIGTERM , sighandler, NULL, 0, {{0}}, 0 },
-    { SIGCHLD , sighandler, NULL, 0, {{0}}, 0 },
     { SIGTTIN , SIG_IGN   , NULL, 0, {{0}}, 0 },
     { SIGTTOU , SIG_IGN   , NULL, 0, {{0}}, 0 },
     { 0       , NULL      , NULL, 0, {{0}}, 0 },
@@ -96,19 +76,21 @@ static int cjail_kill(pid_t pid)
     return 0;
 }
 
-static pid_t cjail_wait(pid_t initpid, int *initerrno)
+static pid_t cjail_wait(struct exec_meta *meta)
 {
     int wstatus;
     pid_t retp;
 retry:
-    retp = waitpid(initpid, &wstatus, 0);
+    retp = waitpid(meta->jailpid, &wstatus, 0);
     if (retp < 0) {
         if (errno == ECHILD) {
             fatalf("Lost control of child namespace init process\n");
             goto error;
         } else if (errno == EINTR) {
-            if (interrupted && !child)
-                cjail_kill(initpid);
+            if (meta->interrupted && !meta->child) {
+                cjail_kill(meta->jailpid);
+                goto error;
+            }
             goto retry;
         } else {
             PFTL("waitpid");
@@ -119,7 +101,7 @@ retry:
     if ((WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0) || WIFSIGNALED(wstatus)) {
         errorf("child namespace init process abnormal terminated\n");
         if (WIFEXITED(wstatus)) {
-            *initerrno = WEXITSTATUS(wstatus);
+            meta->jail_errno = WEXITSTATUS(wstatus);
         } else if (WIFSIGNALED(wstatus)) {
             errorf("Received signal: %d\n", WTERMSIG(wstatus));
             switch (WTERMSIG(wstatus)) {
@@ -128,14 +110,14 @@ retry:
                 case SIGILL:
                 case SIGIOT:
                 case SIGBUS:
-                    *initerrno = EFAULT;
+                    meta->jail_errno = EFAULT;
                 case SIGKILL:
-                    *initerrno = ECANCELED;
+                    meta->jail_errno = ECANCELED;
                 default:
-                    *initerrno = EINTR;
+                    meta->jail_errno = EINTR;
             }
         }
-        errorf("setup process failed with error: %s\n", strerror(*initerrno));
+        errorf("setup process failed with error: %s\n", strerror(meta->jail_errno));
 
         goto error;
     }
@@ -184,6 +166,7 @@ static int handle_sock(struct exec_meta *meta, tsproc_t *tsproc, struct cjail_re
             if (recv_result(meta->sockpair[0], result) < 0) {
                 PERR("get result");
             }
+            meta->result = 1;
             break;
         default:
             errorf("Received unknown magic\n");
@@ -192,18 +175,45 @@ static int handle_sock(struct exec_meta *meta, tsproc_t *tsproc, struct cjail_re
     return 0;
 }
 
+static int handle_sigfd(int sigfd, struct exec_meta *meta)
+{
+    struct signalfd_siginfo sinfo;
+    if (read(sigfd, &sinfo, sizeof(sinfo)) < 0) {
+        return -1;
+    }
+    switch (sinfo.ssi_signo) {
+        case SIGHUP:
+        case SIGINT:
+        case SIGQUIT:
+        case SIGTERM:
+            meta->interrupted = 1;
+            cjail_kill(meta->jailpid);
+            break;
+        case SIGCHLD:
+            if (sinfo.ssi_code != SI_USER && sinfo.ssi_code != SI_QUEUE && sinfo.ssi_pid == meta->jailpid) {
+                meta->child = 1;
+                if (!meta->interrupted) {
+                    if (cjail_wait(meta) < 0) {
+                        return -1;
+                    }
+                }
+            }
+            break;
+    }
+    return 0;
+}
+
 int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
 {
     unsigned char clone_stack[STACKSIZE] __attribute__((aligned(16)));
-    int ret = 0, initerr = 0, cloned = 0;
+    int ret = 0, cloned = 0;
     unsigned int flag = SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWPID;
     tsproc_t tsproc = { 0 };
     struct taskstats ts = { 0 };
     struct cleanupstack cstack = { 0 }, socketstack = { 0 };
     struct exec_meta *meta = NULL;
-    int epfd;
-    child = 0;
-    interrupted = 0;
+    sigset_t sigset, origset;
+    int epfd, sigfd;
 
     if (geteuid()) {
         RETERR(EPERM);
@@ -211,6 +221,9 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
     if (!ctx) {
         RETERR(EINVAL);
     }
+
+    /* Record original signal mask */
+    sigprocmask(SIG_SETMASK, NULL, &origset);
 
     meta = (struct exec_meta *)malloc(sizeof(struct exec_meta));
     memset(meta, 0, sizeof(struct exec_meta));
@@ -243,19 +256,9 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
         stack_push(&cstack, CLN_CGROUP, "memory");
     }
 
-    /* Setup Epoll */
-    epfd = epoll_create1(EPOLL_CLOEXEC);
-    if (epfd < 0) {
-        PFTL("create epoll file descriptor");
-        ret = -1;
-        goto out_cleanup;
-    }
-    stack_push(&cstack, CLN_CLOSE, epfd);
-    if (epoll_add(epfd, meta->sockpair[0], EPOLLIN | EPOLLERR | EPOLLRDHUP)) {
-        PFTL("add communicate socket epoll event");
-        ret = -1;
-        goto out_cleanup;
-    }
+    /* Block signals for signalfd */
+    sigsetset(&sigset, 5, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGCHLD);
+    sigprocmask(SIG_SETMASK, &sigset, NULL);
 
     /* Setup taskstats */
     if (taskstats_run(&tsproc)) {
@@ -277,15 +280,39 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
     do_cleanup(&socketstack);
     debugf("Init PID: %d\n", meta->jailpid);
 
+    sigfd = signalfd(-1, &sigset, SFD_CLOEXEC);
+    if (sigfd < 0) {
+        PFTL("create signalfd");
+        ret = -1;
+        goto out_cleanup;
+    }
+    stack_push(&cstack, CLN_CLOSE, sigfd);
+
+    /* Setup Epoll */
+    epfd = epoll_create1(EPOLL_CLOEXEC);
+    if (epfd < 0) {
+        PFTL("create epoll file descriptor");
+        ret = -1;
+        goto out_cleanup;
+    }
+    stack_push(&cstack, CLN_CLOSE, epfd);
+    if (epoll_add(epfd, meta->sockpair[0], EPOLLIN | EPOLLERR | EPOLLRDHUP)) {
+        PFTL("add communicate socket epoll event");
+        ret = -1;
+        goto out_cleanup;
+    }
+    if (epoll_add(epfd, sigfd, EPOLLIN)) {
+        PFTL("add signalfd epoll event");
+        ret = -1;
+        goto out_cleanup;
+    }
+
     /* Enter waiting loop */
-    while (!interrupted && !child) {
+    while (!meta->interrupted && (!meta->child || !meta->result)) {
         struct epoll_event epev;
         int epcnt = 0;
+
         if ((epcnt = epoll_wait(epfd, &epev, 1, -1)) < 0) {
-            if (errno == EINTR) {
-                /* to check if interrupted */
-                continue;
-            }
             PFTL("wait epoll event");
             ret = -1;
             goto out_cleanup;
@@ -301,7 +328,7 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
                     }
                 }
                 if (epev.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
-                    errorf("Caught socket event: %#x on fd: %d\n", epev.events, epev.data.fd);
+                    debugf("Caught socket event: %#x on fd: %d\n", epev.events, epev.data.fd);
                     errorf("Socket closed by peer, stop listening!\n");
                     if (epoll_ctl(epfd, EPOLL_CTL_DEL, epev.data.fd, NULL)) {
                         PFTL("delete netlink socket epoll event");
@@ -311,20 +338,26 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
                     continue;
                 }
             }
+            if (epev.data.fd == sigfd) {
+                devf("Got signal event\n");
+                if (epev.events & EPOLLIN) {
+                    if (handle_sigfd(sigfd, meta) < 0) {
+                        ret = -1;
+                        goto out_cleanup;
+                    }
+                    if (meta->interrupted) {
+                        ret = -1;
+                    }
+                }
+            }
         }
     }
 
-out_wait:
-    if (cjail_wait(meta->jailpid, &initerr) < 0) {
-        ret = -1;
-    }
-
-    if (taskstats_result(&tsproc, meta->childpid, &ts)) {
-        errorf("Failed to receive from taskstats.\n");
-        ret = -1;
-    }
-
     if (ret == 0 && result) {
+        if (taskstats_result(&tsproc, meta->childpid, &ts)) {
+            errorf("Failed to receive from taskstats.\n");
+            ret = -1;
+        }
         result->stats = ts;
         if (meta->ctx.cg_rss) {
             if (cgroup_read("memory", "memory.oom_control",
@@ -341,7 +374,7 @@ out_wait:
 
 out_cleanup:
     if (cloned) {
-        if (!child) {
+        if (!meta->child) {
             if (cjail_kill(meta->jailpid)) {
                 ret = -1;
             }
@@ -354,12 +387,17 @@ out_cleanup:
         }
     }
 
+    if (!errno && meta->jail_errno) {
+        errno = meta->jail_errno;
+    }
+    if (meta->interrupted) {
+        errno = EINTR;
+    }
+
     do_cleanup(&socketstack);
     do_cleanup(&cstack);
+    sigprocmask(SIG_SETMASK, &origset, NULL);
 
-    if (!errno && initerr) {
-        errno = initerr;
-    }
     return ret;
 }
 

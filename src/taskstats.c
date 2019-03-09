@@ -380,6 +380,7 @@ static int taskstats_daemon(int ctrl_socket)
     int status = -1, ret = 0, familyid = 0, running = 1, epfd, saved_errno = 0;
     struct nl_sock *sock;
     struct epoll_event epev_nl, epev_ctrl;
+    sigset_t emptyset;
 
     interrupted = 0;
     installsigs(ts_sigrules);
@@ -387,6 +388,8 @@ static int taskstats_daemon(int ctrl_socket)
     if (prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0)) {
         PERR("set parent death signal");
     }
+    sigemptyset(&emptyset);
+    sigprocmask(SIG_SETMASK, &emptyset, NULL);
 
     /* Acquire system cpumask */
     cpu_set_t system_cpuset;
