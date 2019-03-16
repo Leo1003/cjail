@@ -40,7 +40,7 @@ typedef struct _int_table table_int32;
 int table_to_int(const table_int32 *table, const char *str);
 const char *table_to_str(const table_int32 *table, int value);
 
-int get_system_cpumask(char *mask, size_t len);
+int get_online_cpumask(char *mask, size_t len);
 int mkdir_r(const char *path);
 int combine_path(char *s, const char *root, const char *path);
 int strrmchr(char *str, int index);
@@ -48,6 +48,7 @@ int setcloexec(int fd);
 int pipe_c(int pipedes[2]);
 char *strupr(char *str);
 char *strlwr(char *str);
+char *strtrim(char *str);
 
 int epoll_add(int epfd, int fd, unsigned long events);
 int epoll_del(int epfd, int fd);

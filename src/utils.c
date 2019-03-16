@@ -78,14 +78,22 @@ int cpuset_tostr(const cpu_set_t *cpuset, char *str, size_t len)
     return l;
 }
 
-int get_system_cpumask(char *mask, size_t len)
+int get_online_cpumask(char *mask, size_t buflen)
 {
-    cpu_set_t system_cpuset;
-    CPU_ZERO(&system_cpuset);
-    for (int i = 0; i < get_nprocs(); i++) {
-        CPU_SET(i, &system_cpuset);
+    int ret = 0;
+    FILE *fp = fopen("/sys/devices/system/cpu/online", "r");
+    if (!fp) {
+        return -1;
     }
-    return cpuset_tostr(&system_cpuset, mask, len);
+    if (fgets(mask, buflen, fp) == NULL) {
+        ret = -1;
+        goto out;
+    }
+    /* Trim trailing newline characters */
+    strtrim(mask);
+out:
+    fclose(fp);
+    return ret;
 }
 
 static int readcpunum(const char *str, char **end_ptr)
@@ -241,6 +249,32 @@ char *strlwr(char *str)
             i++;
         }
     }
+    return str;
+}
+
+char *strtrim(char *str)
+{
+    char *start = str, *end;
+
+    /* Trim leading space */
+    while (*start != '\0' && isspace(*start)) {
+        start++;
+    }
+    /* All spaces, fast return */
+    if (*start == '\0') {
+        str[0] = '\0';
+        return str;
+    }
+    /* Trim trailing space */
+    end = str + strlen(str) - 1;
+    while (end > start && isspace(*end)) {
+        end--;
+    }
+    /* Write the null character */
+    end[1] = '\0';
+    /* Move new string to the head */
+    memmove(str, start, strlen(start) + 1);
+
     return str;
 }
 

@@ -25,6 +25,7 @@ typedef struct _taskstats_control {
     struct nl_sock *sock;
     int familyid;
     ts_pool pool;
+    char reg_mask[MAX_CPU_MASK];
 } ts_t;
 
 static void setnlerr(int nlerr);
@@ -114,19 +115,18 @@ ts_t *taskstats_new()
     int status;
     ts_t *ts;
 
-    /* Acquire system cpumask */
-    char cpumask[MAX_CPU_MASK];
-    if (get_system_cpumask(cpumask, sizeof(cpumask)) < 0) {
-        PERR("parse_cpuset");
-        goto out;
-    }
-
     /* Allocate struct */
     ts = (ts_t *)malloc(sizeof(ts_t));
     if (!ts) {
         return NULL;
     }
     pool_init(&ts->pool);
+
+    /* Acquire system cpumask */
+    if (get_online_cpumask(ts->reg_mask, sizeof(ts->reg_mask)) < 0) {
+        PERR("parse_cpuset");
+        goto out_free;
+    }
 
     /* Create generic netlink socket */
     ts->sock = nl_socket_alloc();
@@ -161,8 +161,8 @@ ts_t *taskstats_new()
         goto out_nl;
     }
     /* Register taskstats cpumask */
-    debugf("Setting cpumask to: %s\n", cpumask);
-    if (taskstats_send_cmd(ts->sock, ts->familyid, TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_REGISTER_CPUMASK, cpumask, strlen(cpumask) + 1) < 0) {
+    debugf("Setting cpumask to: %s\n", ts->reg_mask);
+    if (taskstats_send_cmd(ts->sock, ts->familyid, TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_REGISTER_CPUMASK, ts->reg_mask, strlen(ts->reg_mask) + 1) < 0) {
         PFTL("taskstats_setcpuset");
         goto out_nl;
     }
@@ -172,7 +172,6 @@ out_nl:
     nl_socket_free(ts->sock);
 out_free:
     free(ts);
-out:
     return NULL;
 }
 
@@ -232,15 +231,8 @@ int taskstats_free(ts_t *ts)
         return -1;
     }
 
-    /* Acquire system cpumask */
-    char cpumask[MAX_CPU_MASK];
-    if (get_system_cpumask(cpumask, sizeof(cpumask)) < 0) {
-        PERR("parse_cpuset");
-        return -1;
-    }
-
     /* Deregister to save system resource */
-    if (taskstats_send_cmd(ts->sock, ts->familyid, TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK, cpumask, strlen(cpumask) + 1) < 0) {
+    if (taskstats_send_cmd(ts->sock, ts->familyid, TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK, ts->reg_mask, strlen(ts->reg_mask) + 1) < 0) {
         PWRN("deregister cpumask");
     }
 
