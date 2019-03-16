@@ -24,7 +24,6 @@
 #include <sys/signal.h>
 #include <sys/signalfd.h>
 #include <sys/socket.h>
-#include <sys/sysinfo.h>
 #include <sys/wait.h>
 
 #define STACKSIZE 16
@@ -222,7 +221,6 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
     int ret = 0, cloned = 0;
     unsigned int flag = SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWPID;
     ts_t *ts;
-    //struct taskstats ts = { 0 };
     struct cleanupstack cstack = { 0 }, socketstack = { 0 };
     struct exec_meta *meta = NULL;
     sigset_t sigset, origset;

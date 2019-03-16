@@ -17,6 +17,7 @@ add_library(libcjail SHARED
     simple_seccomp.c
     sigset.c
     taskstats.c
+    taskstats_pool.c
     trace.c
     utils.c
 )
