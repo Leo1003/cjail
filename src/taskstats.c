@@ -7,7 +7,7 @@
 #include "taskstats.h"
 #include "cjail.h"
 #include "logger.h"
-#include "sigset.h"
+#include "utils.h"
 
 #include <fcntl.h>
 #include <linux/netlink.h>
@@ -18,7 +18,6 @@
 #include <sys/epoll.h>
 #include <sys/prctl.h>
 #include <sys/socket.h>
-#include <sys/sysinfo.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -45,7 +44,12 @@ typedef struct taskstats_list {
 typedef struct taskstats_proc_pool {
     ts_list pending, completed;
 } ts_pool;
-static ts_pool ts_global_pool;
+
+typedef struct _taskstats_control {
+    struct nl_sock *sock;
+    int familyid;
+    ts_pool pool;
+} ts_t;
 
 int ts_list_link(ts_list *list, ts_item *item)
 {
@@ -166,14 +170,6 @@ int pool_result(ts_pool *pool, pid_t pid, struct taskstats *stats)
     return 0;
 }
 
-enum taskstats_status pool_status(ts_pool *pool)
-{
-    enum taskstats_status status = TSSTA_NONE;
-    if (pool->pending.head) status = (enum taskstats_status)(status & TSSTA_WAIT);
-    if (pool->completed.head) status = (enum taskstats_status)(status & TSSTA_DONE);
-    return status;
-}
-
 int pool_drop(ts_pool *pool, pid_t pid)
 {
     ts_item *item = ts_list_find(&pool->completed, pid);
@@ -192,84 +188,7 @@ void pool_fini(ts_pool *pool)
     ts_list_clear(&pool->completed);
 }
 
-static int taskstats_daemon(int ctrl_socket);
 static void setnlerr(int nlerr);
-
-static int ctrl_send_ok(int ctrlsock)
-{
-    unsigned char sendbuf[1];
-    sendbuf[0] = TSCTRL_S_OK;
-    return send(ctrlsock, sendbuf, sizeof(sendbuf), 0);
-}
-
-static int ctrl_send_error(int ctrlsock)
-{
-    unsigned char sendbuf[1 + sizeof(errno)];
-    sendbuf[0] = TSCTRL_S_ERR;
-    memcpy(sendbuf + 1, &errno, sizeof(errno));
-    return send(ctrlsock, sendbuf, sizeof(sendbuf), 0);
-}
-
-static int ctrl_send_status(int ctrlsock)
-{
-    unsigned char sendbuf[1 + sizeof(enum taskstats_status)];
-    sendbuf[0] = TSCTRL_S_STATUS;
-    *(enum taskstats_status *)(sendbuf + 1) = pool_status(&ts_global_pool);
-    return send(ctrlsock, sendbuf, sizeof(sendbuf), 0);
-}
-
-static int ctrl_send_result(int ctrlsock, pid_t pid)
-{
-    unsigned char sendbuf[1 + sizeof(struct taskstats)];
-    sendbuf[0] = TSCTRL_S_RESULT;
-    if (pool_result(&ts_global_pool, pid, (struct taskstats *)(sendbuf + 1)) < 0) {
-        return ctrl_send_error(ctrlsock);
-    }
-    return send(ctrlsock, sendbuf, sizeof(sendbuf), 0);
-}
-
-static int taskstats_ctrl_server(int ctrlsock)
-{
-    unsigned char recvbuf[BUFFER_SIZE];
-    int ret = 0;
-    pid_t pid;
-
-    if (recv(ctrlsock, &recvbuf, BUFFER_SIZE, 0) < 0) {
-        PFTL("receive control message on server side");
-        return -1;
-    }
-    switch (recvbuf[0]) {
-        case TSCTRL_C_STATUS:
-            if (ctrl_send_status(ctrlsock) < 0) {
-                ret = -1;
-            }
-            break;
-        case TSCTRL_C_LISTEN:
-            memcpy(&pid, recvbuf + 1, sizeof(pid_t));
-            if (pool_append_pid(&ts_global_pool, pid)) {
-                ret = ctrl_send_error(ctrlsock);
-            }
-            if (ctrl_send_ok(ctrlsock) < 0) {
-                ret = -1;
-            }
-            break;
-        case TSCTRL_C_RESULT:
-            memcpy(&pid, recvbuf + 1, sizeof(pid_t));
-            if (ctrl_send_result(ctrlsock, pid) < 0) {
-                ret = -1;
-            }
-            break;
-        case TSCTRL_C_STOP:
-            ctrl_send_ok(ctrlsock);
-            ret = 1;
-            break;
-        default:
-            errorf("Received unknown control message: %#hhX\n", recvbuf[0]);
-            ret = -1;
-            break;
-    }
-    return ret;
-}
 
 static int taskstats_send_cmd(struct nl_sock *sock, int familyid, __u8 genl_cmd, __u16 nla_type, void *nla_data, int nla_len)
 {
@@ -297,7 +216,7 @@ error:
     return -1;
 }
 
-static int parse_aggr_attr(struct nlattr *attr)
+static int parse_aggr_attr(struct nlattr *attr, ts_pool *pool)
 {
     int ret = 0;
     pid_t pid;
@@ -318,7 +237,8 @@ static int parse_aggr_attr(struct nlattr *attr)
         errorf("Can't find taskstats attribute!\n");
         return -1;
     }
-    pool_completed(&ts_global_pool, pid, (struct taskstats *)nla_data(attrs[TASKSTATS_TYPE_STATS]));
+    pool_completed(pool, pid, (struct taskstats *)nla_data(attrs[TASKSTATS_TYPE_STATS]));
+
     return 0;
 }
 
@@ -326,6 +246,7 @@ static int taskstats_callback(struct nl_msg *msg, void *arg)
 {
     struct nlmsghdr *hdr = nlmsg_hdr(msg);
     struct nlattr *attrs[TASKSTATS_TYPE_MAX + 1];
+    ts_t *ts = (ts_t *)arg;
 
     int ret = 0;
     if ((ret = genlmsg_parse(hdr, 0, attrs, TASKSTATS_TYPE_MAX, NULL)) < 0) {
@@ -333,11 +254,11 @@ static int taskstats_callback(struct nl_msg *msg, void *arg)
         return NL_SKIP;
     }
     if (attrs[TASKSTATS_TYPE_AGGR_PID]) {
-        if (parse_aggr_attr(attrs[TASKSTATS_TYPE_AGGR_PID])) {
+        if (parse_aggr_attr(attrs[TASKSTATS_TYPE_AGGR_PID], &ts->pool)) {
             return NL_SKIP;
         }
     } else if (attrs[TASKSTATS_TYPE_AGGR_TGID]) {
-        if (parse_aggr_attr(attrs[TASKSTATS_TYPE_AGGR_TGID])) {
+        if (parse_aggr_attr(attrs[TASKSTATS_TYPE_AGGR_TGID], &ts->pool)) {
             return NL_SKIP;
         }
     } else if (attrs[TASKSTATS_TYPE_NULL]) {
@@ -349,396 +270,145 @@ static int taskstats_callback(struct nl_msg *msg, void *arg)
     return NL_OK;
 }
 
-static volatile sig_atomic_t interrupted = 0;
-static void sighandler(int sig)
+ts_t *taskstats_new()
 {
-    interrupted = 1;
-}
-
-// clang-format off
-static struct sig_rule ts_sigrules[] = {
-    { SIGHUP  , sighandler, NULL, 0, {{0}}, 0 },
-    { SIGINT  , sighandler, NULL, 0, {{0}}, 0 },
-    { SIGQUIT , sighandler, NULL, 0, {{0}}, 0 },
-    { SIGPIPE , SIG_IGN   , NULL, 0, {{0}}, 0 },
-    { SIGTERM , sighandler, NULL, 0, {{0}}, 0 },
-    { SIGCHLD , SIG_IGN   , NULL, 0, {{0}}, 0 },
-    { SIGTTIN , SIG_IGN   , NULL, 0, {{0}}, 0 },
-    { SIGTTOU , SIG_IGN   , NULL, 0, {{0}}, 0 },
-    { 0       , NULL      , NULL, 0, {{0}}, 0 },
-};
-// clang-format on
-
-#define SAVEERR_GOTO(label) \
-    do { \
-        saved_errno = errno; \
-        goto label; \
-    } while(0)
-
-static int taskstats_daemon(int ctrl_socket)
-{
-    int status = -1, ret = 0, familyid = 0, running = 1, epfd, saved_errno = 0;
-    struct nl_sock *sock;
-    struct epoll_event epev_nl, epev_ctrl;
-    sigset_t emptyset;
-
-    interrupted = 0;
-    installsigs(ts_sigrules);
-    pool_init(&ts_global_pool);
-    if (prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0)) {
-        PERR("set parent death signal");
-    }
-    sigemptyset(&emptyset);
-    sigprocmask(SIG_SETMASK, &emptyset, NULL);
+    int status;
+    ts_t *ts;
 
     /* Acquire system cpumask */
-    cpu_set_t system_cpuset;
-    CPU_ZERO(&system_cpuset);
-    for (int i = 0; i < get_nprocs(); i++) {
-        CPU_SET(i, &system_cpuset);
-    }
     char cpumask[MAX_CPU_MASK];
-    if (cpuset_tostr(&system_cpuset, cpumask, sizeof(cpumask)) < 0) {
+    if (get_system_cpumask(cpumask, sizeof(cpumask)) < 0) {
         PERR("parse_cpuset");
-        SAVEERR_GOTO(out_pool);
+        goto out;
     }
+
+    /* Allocate struct */
+    ts = (ts_t *)malloc(sizeof(ts_t));
+    if (!ts) {
+        return NULL;
+    }
+    pool_init(&ts->pool);
 
     /* Create generic netlink socket */
-    sock = nl_socket_alloc();
-    if (!sock) {
+    ts->sock = nl_socket_alloc();
+    if (!ts->sock) {
         PFTL("alloc netlink socket");
-        SAVEERR_GOTO(out_pool);
+        goto out_free;
     }
-    if ((ret = genl_connect(sock)) < 0) {
+    if ((status = genl_connect(ts->sock)) < 0) {
         PFTL("connect to generic netlink");
-        setnlerr(ret);
-        SAVEERR_GOTO(out_nl);
+        setnlerr(status);
+        goto out_nl;
     }
-    nl_socket_disable_seq_check(sock);
-    if (setcloexec(nl_socket_get_fd(sock))) {
-        SAVEERR_GOTO(out_nl);
+    /* Taskstats doesn't use normal sequence number */
+    nl_socket_disable_seq_check(ts->sock);
+    if (setcloexec(nl_socket_get_fd(ts->sock))) {
+        goto out_nl;
     }
-    devf("Created netlink socket: fd %d\n", nl_socket_get_fd(sock));
+    devf("Created netlink socket: fd %d\n", nl_socket_get_fd(ts->sock));
 
     /* Resolve taskstats generic netlink family id */
-    if ((ret = genl_ctrl_resolve(sock, TASKSTATS_GENL_NAME)) < 0) {
+    if ((ts->familyid = genl_ctrl_resolve(ts->sock, TASKSTATS_GENL_NAME)) < 0) {
         PFTL("get family id");
-        setnlerr(ret);
-        SAVEERR_GOTO(out_nl);
+        setnlerr(ts->familyid);
+        goto out_nl;
     }
-    familyid = ret;
-    devf("Resolved family id: %d\n", familyid);
+    devf("Resolved family id: %d\n", ts->familyid);
 
     /* Register libnl callback */
-    if ((ret = nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM, taskstats_callback, NULL)) < 0) {
+    if ((status = nl_socket_modify_cb(ts->sock, NL_CB_VALID, NL_CB_CUSTOM, taskstats_callback, ts)) < 0) {
         PFTL("set callback function");
-        setnlerr(ret);
-        SAVEERR_GOTO(out_nl);
+        setnlerr(status);
+        goto out_nl;
     }
     /* Register taskstats cpumask */
     debugf("Setting cpumask to: %s\n", cpumask);
-    if (taskstats_send_cmd(sock, familyid, TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_REGISTER_CPUMASK, cpumask, strlen(cpumask) + 1) < 0) {
+    if (taskstats_send_cmd(ts->sock, ts->familyid, TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_REGISTER_CPUMASK, cpumask, strlen(cpumask) + 1) < 0) {
         PFTL("taskstats_setcpuset");
-        SAVEERR_GOTO(out_nl);
+        goto out_nl;
+    }
+    return ts;
+
+out_nl:
+    nl_socket_free(ts->sock);
+out_free:
+    free(ts);
+out:
+    return NULL;
+}
+
+int taskstats_sockfd(const ts_t *ts)
+{
+    if (!ts || !ts->sock) {
+        errno = EINVAL;
+        return -1;
+    }
+    return nl_socket_get_fd(ts->sock);
+}
+
+int taskstats_recv(ts_t *ts)
+{
+    int cnt;
+    if (!ts || !ts->sock) {
+        errno = EINVAL;
+        return -1;
     }
 
-    /* Setup epoll */
-    epfd = epoll_create1(EPOLL_CLOEXEC);
-    if (epfd < 0) {
-        PFTL("create epoll file descriptor");
-        SAVEERR_GOTO(out_dereg);
+    /* Since nl_recvmsgs_default() doesn't provide the received messages count.
+       We have to use this way to receive message. */
+    struct nl_cb *def_cb = nl_socket_get_cb(ts->sock);
+    if ((cnt = nl_recvmsgs_report(ts->sock, def_cb)) < 0) {
+        errorf("Error occurred when receiving taskstats message: %s\n", nl_geterror(cnt));
+        setnlerr(cnt);
+        cnt = -1;
     }
-    epev_nl = (struct epoll_event){
-        .events = EPOLLIN,
-        .data.fd = nl_socket_get_fd(sock)
-    };
-    epev_ctrl = (struct epoll_event){
-        .events = EPOLLIN | EPOLLRDHUP,
-        .data.fd = ctrl_socket
-    };
-    if (epoll_ctl(epfd, EPOLL_CTL_ADD, nl_socket_get_fd(sock), &epev_nl)) {
-        PFTL("add netlink socket epoll event");
-        SAVEERR_GOTO(out_epoll);
+    /* The nl_cb which returned from nl_socket_get_cb() has increased its reference count.
+       So we need to put back its reference count. */
+    nl_cb_put(def_cb);
+    return cnt;
+}
+
+int taskstats_add_task(ts_t *ts, pid_t pid)
+{
+    if (!ts || !ts->sock) {
+        errno = EINVAL;
+        return -1;
     }
-    if (epoll_ctl(epfd, EPOLL_CTL_ADD, ctrl_socket, &epev_ctrl)) {
-        PFTL("add control socket epoll event");
-        SAVEERR_GOTO(out_epoll);
+    return pool_append_pid(&ts->pool, pid);
+}
+
+int taskstats_get_stats(ts_t *ts, pid_t pid, struct taskstats *stats)
+{
+    if (!ts || !ts->sock) {
+        errno = EINVAL;
+        return -1;
+    }
+    return pool_result(&ts->pool, pid, stats);
+}
+
+int taskstats_free(ts_t *ts)
+{
+    if (!ts || !ts->sock) {
+        errno = EINVAL;
+        return -1;
     }
 
-    /* Enter main loop */
-    sigset_t mask, orig;
-    sigsetset(&mask, 4, SIGHUP, SIGINT, SIGQUIT, SIGTERM);
-    sigprocmask(SIG_SETMASK, &mask, &orig);
-    ctrl_send_ok(ctrl_socket);
-    while (running && !interrupted) {
-        struct epoll_event epev_result[2];
-        int epcnt = 0;
-        if ((epcnt = epoll_pwait(epfd, epev_result, 2, -1, &orig)) < 0) {
-            if (errno == EINTR) {
-                /* to check if interrupted */
-                continue;
-            }
-            PFTL("wait epoll event");
-            goto out_epoll;
-        }
-        for (int i = 0; i < epcnt; i++) {
-            if (epev_result[i].events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
-                errorf("Caught socket event: %#x\n", epev_result[i].events);
-                errorf("Socket closed by peer, stop running.\n");
-                running = 0;
-                continue;
-            }
-            if (epev_result[i].events & EPOLLIN) {
-                if (epev_result[i].data.fd == nl_socket_get_fd(sock)) {
-                    if ((ret = nl_recvmsgs_default(sock)) < 0) {
-                        errorf("Error occurred when receiving taskstats message: %s\n", nl_geterror(ret));
-                    }
-                } else if (epev_result[i].data.fd == ctrl_socket) {
-                    int ret = taskstats_ctrl_server(ctrl_socket);
-                    if (ret < 0) {
-                        PERR("receive control message");
-                    }
-                    if (ret == 1) {
-                        debugf("Stopping taskstats daemon...\n");
-                        running = 0;
-                    }
-                }
-            }
-        }
+    /* Acquire system cpumask */
+    char cpumask[MAX_CPU_MASK];
+    if (get_system_cpumask(cpumask, sizeof(cpumask)) < 0) {
+        PERR("parse_cpuset");
+        return -1;
     }
-    sigprocmask(SIG_SETMASK, &orig, NULL);
 
-    status = 0;
-    if (interrupted) {
-        status = -1;
-        saved_errno = EINTR;
-    }
-out_epoll:
-    if (close(epfd)) {
-        PWRN("close epoll file descriptor");
-    }
-out_dereg:
-    /* Exit cleanup */
-    if (taskstats_send_cmd(sock, familyid, TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK, cpumask, strlen(cpumask) + 1) < 0) {
+    /* Deregister to save system resource */
+    if (taskstats_send_cmd(ts->sock, ts->familyid, TASKSTATS_CMD_GET, TASKSTATS_CMD_ATTR_DEREGISTER_CPUMASK, cpumask, strlen(cpumask) + 1) < 0) {
         PWRN("deregister cpumask");
     }
-out_nl:
-    nl_socket_free(sock);
-out_pool:
-    pool_fini(&ts_global_pool);
 
-    if (saved_errno) {
-        errno = saved_errno;
-        ctrl_send_error(ctrl_socket);
-    }
-    if (close(ctrl_socket)) {
-        PWRN("close control file descriptor");
-    }
-    return status;
-}
-#undef SAVEERR_GOTO
-
-/* Client side functions */
-int taskstats_run(tsproc_t *tsproc)
-{
-    int sockpair[2], sig, saved_errno;
-    if (!tsproc) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sockpair)) {
-        PFTL("create socketpair");
-        return -1;
-    }
-    sigset_t mask, orig;
-    sigsetset(&mask, 1, SIGCHLD);
-    sigprocmask(SIG_BLOCK, &mask, &orig);
-
-    pid_t pid = fork();
-    if (pid == 0) {
-        int ret = 0;
-        if (close(sockpair[0])) {
-            PERR("close sockpair 0");
-        }
-        ret = taskstats_daemon(sockpair[1]);
-        if (ret) {
-            ctrl_send_error(sockpair[1]);
-        }
-        exit(ret);
-    } else if (pid > 0) {
-        if (close(sockpair[1])) {
-            PFTL("close sockpair 1");
-            goto out_kill;
-        }
-        unsigned char recvbuf[BUFFER_SIZE];
-        if (recv(sockpair[0], recvbuf, sizeof(recvbuf), 0) < 0) {
-            PFTL("receive message");
-            goto out_kill;
-        }
-        switch (recvbuf[0]) {
-            case TSCTRL_S_OK:
-                break;
-            case TSCTRL_S_ERR:
-                errno = *(int *)(recvbuf + 1);
-                goto out_kill;
-            default:
-                errno = ENOMSG;
-                goto out_kill;
-        }
-    } else {
-        PFTL("fork taskstats listening process");
-        close(sockpair[1]);
-        goto parent_error;
-    }
-    sigprocmask(SIG_SETMASK, &orig, NULL);
-    tsproc->pid = pid;
-    tsproc->socket = sockpair[0];
-    return 0;
-
-out_kill:
-    saved_errno = errno;
-    kill(pid, SIGKILL);
-    waitpid(pid, NULL, 0);
-    sigwait(&mask, &sig); /* consume SIGCHLD signal */
-    errno = saved_errno;
-parent_error:
-    close(sockpair[0]);
-    sigprocmask(SIG_SETMASK, &orig, NULL);
-    return -1;
-}
-
-inline static int test_tsproc(const tsproc_t *tsproc)
-{
-    if (!tsproc) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (kill(tsproc->pid, 0)) {
-        return -1;
-    }
-    return 0;
-}
-
-int taskstats_listen(const tsproc_t *tsproc, pid_t pid)
-{
-    unsigned char sendbuf[1 + sizeof(pid_t)], recvbuf[BUFFER_SIZE];
-    if (test_tsproc(tsproc)) {
-        return -1;
-    }
-    sendbuf[0] = TSCTRL_C_LISTEN;
-    memcpy(sendbuf + 1, &pid, sizeof(pid_t));
-    if (send(tsproc->socket, sendbuf, sizeof(sendbuf), 0) < 0) {
-        PFTL("send message");
-        return -1;
-    }
-    if (recv(tsproc->socket, recvbuf, sizeof(recvbuf), 0) < 0) {
-        PFTL("receive message");
-        return -1;
-    }
-    switch (recvbuf[0]) {
-        case TSCTRL_S_OK:
-            break;
-        case TSCTRL_S_ERR:
-            errno = *(int *)(recvbuf + 1);
-            return -1;
-        default:
-            errno = ENOMSG;
-            return -1;
-    }
-    return 0;
-}
-
-int taskstats_status(const tsproc_t *tsproc)
-{
-    unsigned char sendbuf[1], recvbuf[BUFFER_SIZE];
-    enum taskstats_status ret = TSSTA_NONE;
-    if (test_tsproc(tsproc)) {
-        return -1;
-    }
-    sendbuf[0] = TSCTRL_C_STATUS;
-    if (send(tsproc->socket, sendbuf, sizeof(sendbuf), 0) < 0) {
-        PFTL("send message");
-        return -1;
-    }
-    if (recv(tsproc->socket, recvbuf, sizeof(recvbuf), 0) < 0) {
-        PFTL("receive message");
-        return -1;
-    }
-    switch (recvbuf[0]) {
-        case TSCTRL_S_STATUS:
-            memcpy(&ret, recvbuf + 1, sizeof(ret));
-            break;
-        default:
-            errno = ENOMSG;
-            return -1;
-    }
-    return ret;
-}
-
-int taskstats_result(const tsproc_t *tsproc, pid_t pid, struct taskstats *ts)
-{
-    unsigned char sendbuf[1 + sizeof(pid_t)], recvbuf[BUFFER_SIZE];
-    if (test_tsproc(tsproc)) {
-        return -1;
-    }
-    sendbuf[0] = TSCTRL_C_RESULT;
-    memcpy(sendbuf + 1, &pid, sizeof(pid_t));
-    if (send(tsproc->socket, sendbuf, sizeof(sendbuf), 0) < 0) {
-        PFTL("send message");
-        return -1;
-    }
-    if (recv(tsproc->socket, recvbuf, sizeof(recvbuf), 0) < 0) {
-        PFTL("receive message");
-        return -1;
-    }
-    switch (recvbuf[0]) {
-        case TSCTRL_S_RESULT:
-            if (ts) {
-                memcpy(ts, recvbuf + 1, sizeof(struct taskstats));
-            }
-            break;
-        case TSCTRL_S_ERR:
-            errno = *(int *)(recvbuf + 1);
-            devf("errno = %d %s\n", errno, strerror(errno));
-            return -1;
-        default:
-            errno = ENOMSG;
-            return -1;
-    }
-    return 0;
-}
-
-int taskstats_stop(const tsproc_t *tsproc)
-{
-    unsigned char sendbuf[1 + sizeof(pid_t)], recvbuf[BUFFER_SIZE];
-    if (test_tsproc(tsproc)) {
-        return -1;
-    }
-    int sig;
-    sigset_t mask, orig;
-    sigsetset(&mask, 1, SIGCHLD);
-    sigprocmask(SIG_BLOCK, &mask, &orig);
-
-    sendbuf[0] = TSCTRL_C_STOP;
-    if (send(tsproc->socket, sendbuf, sizeof(sendbuf), 0) < 0) {
-        PFTL("send message");
-        return -1;
-    }
-    if (recv(tsproc->socket, recvbuf, sizeof(recvbuf), 0) < 0) {
-        PFTL("receive message");
-        return -1;
-    }
-    switch (recvbuf[0]) {
-        case TSCTRL_S_OK:
-            break;
-        default:
-            warnf("Receive unknown message while stopping...\n");
-            kill(tsproc->pid, SIGKILL);
-            break;
-    }
-    waitpid(tsproc->pid, NULL, 0);
-    sigwait(&mask, &sig); /* consume SIGCHLD signal */
-    sigprocmask(SIG_SETMASK, &orig, NULL);
+    nl_socket_free(ts->sock);
+    ts->sock = NULL;
+    pool_fini(&ts->pool);
+    free(ts);
     return 0;
 }
 

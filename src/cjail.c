@@ -28,6 +28,7 @@
 #include <sys/wait.h>
 
 #define STACKSIZE 16
+#define EPOLL_EVENT_CNT 4
 
 // clang-format off
 static struct sig_rule lib_sigrules[] = {
@@ -128,50 +129,62 @@ error:
     return -1;
 }
 
-static int handle_sock(struct exec_meta *meta, tsproc_t *tsproc, struct cjail_result *result)
+static int handle_sock(const struct epoll_event *event, int epfd, struct exec_meta *meta, ts_t *ts, struct cjail_result *result)
 {
-    struct ucred cred;
-    switch (recv_magic(meta->sockpair[0])) {
-        case -1:
-            PFTL("receive magic packet");
+    if (event->events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
+        debugf("Caught socket event: %#x on fd: %d\n", event->events, event->data.fd);
+        debugf("Socket closed by peer, stop listening!\n");
+        if (epoll_del(epfd, event->data.fd)) {
+            PFTL("delete socketpair epoll event");
             return -1;
-        case CRED_MAGIC:
-            devf("Got CRED_MAGIC\n");
-            if (recv_cred(meta->sockpair[0], &cred) < 0) {
-                PFTL("receive cred packet");
-                return -1;
-            }
-            /* We only have one child process now, so ignore other request if childpid is set. */
-            if (meta->childpid) {
-                break;
-            }
-            meta->childpid = cred.pid;
-            debugf("Got childpid: %d\n", meta->childpid);
-            if (meta->ctx.cg_rss) {
-                cgroup_write("memory", "tasks", "%d", meta->childpid);
-            }
-            if (taskstats_listen(tsproc, meta->childpid)) {
-                PFTL("listen on child process");
-                return -1;
-            }
-            /* No longer use real-time signal to notify */
-            if (send_ready(meta->sockpair[0]) < 0) {
-                PFTL("notify container process");
-                return -1;
-            }
-            break;
-        case RESULT_MAGIC:
-            /* get result from socket */
-            devf("Got RESULT_MAGIC\n");
-            if (recv_result(meta->sockpair[0], result) < 0) {
-                PERR("get result");
-            }
-            meta->result = 1;
-            break;
-        default:
-            errorf("Received unknown magic\n");
-            break;
+        }
+        return 0;
     }
+    if (event->events & EPOLLIN) {
+        struct ucred cred;
+        switch (recv_magic(meta->sockpair[0])) {
+            case -1:
+                PFTL("receive magic packet");
+                return -1;
+            case CRED_MAGIC:
+                devf("Got CRED_MAGIC\n");
+                if (recv_cred(meta->sockpair[0], &cred) < 0) {
+                    PFTL("receive cred packet");
+                    return -1;
+                }
+                /* We only have one child process now, so ignore other request if childpid is set. */
+                if (meta->childpid) {
+                    break;
+                }
+                meta->childpid = cred.pid;
+                debugf("Got childpid: %d\n", meta->childpid);
+                if (meta->ctx.cg_rss) {
+                    cgroup_write("memory", "tasks", "%d", meta->childpid);
+                }
+                if (taskstats_add_task(ts, meta->childpid)) {
+                    PFTL("listen on child process");
+                    return -1;
+                }
+                /* No longer use real-time signal to notify */
+                if (send_ready(meta->sockpair[0]) < 0) {
+                    PFTL("notify container process");
+                    return -1;
+                }
+                break;
+            case RESULT_MAGIC:
+                /* get result from socket */
+                devf("Got RESULT_MAGIC\n");
+                if (recv_result(meta->sockpair[0], result) < 0) {
+                    PERR("get result");
+                }
+                meta->result = 1;
+                break;
+            default:
+                errorf("Received unknown magic\n");
+                break;
+        }
+    }
+
     return 0;
 }
 
@@ -208,8 +221,8 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
     unsigned char clone_stack[STACKSIZE] __attribute__((aligned(16)));
     int ret = 0, cloned = 0;
     unsigned int flag = SIGCHLD | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWNS | CLONE_NEWPID;
-    tsproc_t tsproc = { 0 };
-    struct taskstats ts = { 0 };
+    ts_t *ts;
+    //struct taskstats ts = { 0 };
     struct cleanupstack cstack = { 0 }, socketstack = { 0 };
     struct exec_meta *meta = NULL;
     sigset_t sigset, origset;
@@ -261,11 +274,11 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
     sigprocmask(SIG_SETMASK, &sigset, NULL);
 
     /* Setup taskstats */
-    if (taskstats_run(&tsproc)) {
+    if ((ts = taskstats_new()) == NULL) {
         ret = -1;
         goto out_cleanup;
     }
-    stack_push(&cstack, CLN_TASKSTAT, &tsproc);
+    stack_push(&cstack, CLN_TASKSTAT, ts);
 
     /* Clone a process in new namespace */
     if (!meta->ctx.sharenet) flag |= CLONE_NEWNET;
@@ -306,41 +319,38 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
         ret = -1;
         goto out_cleanup;
     }
+    if (epoll_add(epfd, taskstats_sockfd(ts), EPOLLIN)) {
+        PFTL("add taskstats epoll event");
+        ret = -1;
+        goto out_cleanup;
+    }
 
     /* Enter waiting loop */
     while (!meta->interrupted && (!meta->child || !meta->result)) {
-        struct epoll_event epev;
+        struct epoll_event epev[EPOLL_EVENT_CNT];
         int epcnt = 0;
 
-        if ((epcnt = epoll_wait(epfd, &epev, 1, -1)) < 0) {
+        if ((epcnt = epoll_wait(epfd, epev, EPOLL_EVENT_CNT, -1)) < 0) {
             PFTL("wait epoll event");
             ret = -1;
             goto out_cleanup;
         }
 
-        if (epcnt) {
-            devf("Got epoll event\n");
-            if (epev.data.fd == meta->sockpair[0]) {
-                if (epev.events & EPOLLIN) {
-                    if (handle_sock(meta, &tsproc, result) < 0) {
-                        ret = -1;
-                        goto out_cleanup;
-                    }
-                }
-                if (epev.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
-                    debugf("Caught socket event: %#x on fd: %d\n", epev.events, epev.data.fd);
-                    errorf("Socket closed by peer, stop listening!\n");
-                    if (epoll_ctl(epfd, EPOLL_CTL_DEL, epev.data.fd, NULL)) {
-                        PFTL("delete netlink socket epoll event");
-                        ret = -1;
-                        goto out_cleanup;
-                    }
-                    continue;
+        for (int i = 0; i < epcnt; i++) {
+            devf("Got epoll event for fd: %d\n", epev[i].data.fd);
+            if (epev[i].data.fd == meta->sockpair[0]) {
+                if (handle_sock(&epev[i], epfd, meta, ts, result) < 0) {
+                    ret = -1;
+                    goto out_cleanup;
                 }
             }
-            if (epev.data.fd == sigfd) {
-                devf("Got signal event\n");
-                if (epev.events & EPOLLIN) {
+            if (epev[i].data.fd == sigfd) {
+                if (epev[i].events & (EPOLLERR | EPOLLHUP)) {
+                    fatalf("Signal fd unexpectedly be closed!");
+                    ret = -1;
+                    goto out_cleanup;
+                }
+                if (epev[i].events & EPOLLIN) {
                     if (handle_sigfd(sigfd, meta) < 0) {
                         ret = -1;
                         goto out_cleanup;
@@ -350,15 +360,30 @@ int cjail_exec(const struct cjail_ctx *ctx, struct cjail_result *result)
                     }
                 }
             }
+            if (epev[i].data.fd == taskstats_sockfd(ts)) {
+                if (epev[i].events & (EPOLLERR | EPOLLHUP)) {
+                    errorf("Taskstats netlink socket unexpectedly be closed!");
+                    if (epoll_del(epfd, taskstats_sockfd(ts))) {
+                        PFTL("delete netlink socket epoll event");
+                        ret = -1;
+                        goto out_cleanup;
+                    }
+                }
+                if (epev[i].events & EPOLLIN) {
+                    if (taskstats_recv(ts) < 0) {
+                        ret = -1;
+                        goto out_cleanup;
+                    }
+                }
+            }
         }
     }
 
     if (ret == 0 && result) {
-        if (taskstats_result(&tsproc, meta->childpid, &ts)) {
+        if (taskstats_get_stats(ts, meta->childpid, &result->stats)) {
             errorf("Failed to receive from taskstats.\n");
             ret = -1;
         }
-        result->stats = ts;
         if (meta->ctx.cg_rss) {
             if (cgroup_read("memory", "memory.oom_control",
                             "oom_kill_disable %*d\n"

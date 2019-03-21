@@ -18,6 +18,7 @@
 #include <sys/epoll.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/sysinfo.h>
 #include <unistd.h>
 
 int table_to_int(const table_int32 *table, const char *str)
@@ -75,6 +76,16 @@ int cpuset_tostr(const cpu_set_t *cpuset, char *str, size_t len)
     }
     devf("parse_cpuset %s\n", str);
     return l;
+}
+
+int get_system_cpumask(char *mask, size_t len)
+{
+    cpu_set_t system_cpuset;
+    CPU_ZERO(&system_cpuset);
+    for (int i = 0; i < get_nprocs(); i++) {
+        CPU_SET(i, &system_cpuset);
+    }
+    return cpuset_tostr(&system_cpuset, mask, len);
 }
 
 static int readcpunum(const char *str, char **end_ptr)
@@ -235,11 +246,19 @@ char *strlwr(char *str)
 
 int epoll_add(int epfd, int fd, unsigned long events)
 {
-    struct epoll_event epev = {
-        .events = events,
-        .data.fd = fd
-    };
+    /* explicitly zero to avoid valgrind reporting errors */
+    struct epoll_event epev = { 0 };
+    epev.events = events;
+    epev.data.fd = fd;
     if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &epev)) {
+        return -1;
+    }
+    return 0;
+}
+
+int epoll_del(int epfd, int fd)
+{
+    if (epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL)) {
         return -1;
     }
     return 0;

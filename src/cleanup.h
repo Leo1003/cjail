@@ -32,7 +32,7 @@ struct cleanuptask {
             int sig;
         } kill; //CLN_KILL
         const char *subsystem; //CLN_CGROUP
-        tsproc_t *tsproc; //CLN_TASKSTAT
+        ts_t *ts; //CLN_TASKSTAT
         struct sig_rule *rules; //CLN_SIGSET
     } arg;
 };
