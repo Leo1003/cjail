@@ -5,7 +5,7 @@
     - [x] redesign mounting functions filesystem
     - [x] source code using public header too
     - [x] rewrite cjail_exec() using socketpair and signalfd
-    - [ ] CLI return child process exit code (can be disable by option)
+    - [x] CLI return child process exit code (can be disable by option)
     - [ ] CLI not print all resource statistics by default
     - [ ] CLI add mount option
 - Future Version: 

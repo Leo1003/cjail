@@ -15,6 +15,7 @@
 #include <getopt.h>
 #include <math.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,41 +39,43 @@ enum OPTVAL {
     OPT_CGR,
     OPT_SCC,
     OPT_ALR,
+    OPT_SUC,
 };
 
 // clang-format off
 const char opts[] = "e:Ec:d:u:g:i:o:r:I:O:R:s:V:C:F:Z:P:S:T:m:qvh";
 const struct option longopts[] = {
-    {"environ",     required_argument,  NULL, 'e'},
-    {"inherit-env", no_argument,        NULL, 'E'},
-    {"chroot",      required_argument,  NULL, 'c'},
-    {"workingDir",  required_argument,  NULL, 'd'},
-    {"uid",         required_argument,  NULL, 'u'},
-    {"gid",         required_argument,  NULL, 'g'},
-    {"file-input",  required_argument,  NULL, 'i'},
-    {"file-output", required_argument,  NULL, 'o'},
-    {"file-err",    required_argument,  NULL, 'r'},
-    {"fd-input",    required_argument,  NULL, 'I'},
-    {"fd-output",   required_argument,  NULL, 'O'},
-    {"fd-err",      required_argument,  NULL, 'R'},
-    {"preserve-fd", no_argument,        NULL, OPT_PFD},
-    {"share-net",   no_argument,        NULL, OPT_NET},
-    {"cpuset",      required_argument,  NULL, 's'},
-    {"limit-vss",   required_argument,  NULL, 'V'},
-    {"limit-core",  required_argument,  NULL, 'C'},
-    {"limit-nofile",required_argument,  NULL, 'F'},
-    {"limit-fsize", required_argument,  NULL, 'Z'},
-    {"limit-proc",  required_argument,  NULL, 'P'},
-    {"limit-stack", required_argument,  NULL, 'S'},
-    {"limit-time",  required_argument,  NULL, 'T'},
-    {"cgroup-root", required_argument,  NULL, OPT_CGR},
-    {"limit-rss",   required_argument,  NULL, 'm'},
-    {"seccomp-cfg", required_argument,  NULL, OPT_SCC},
-    {"allow-root",  no_argument      ,  NULL, OPT_ALR},
-    {"quiet",       no_argument      ,  NULL, 'q'},
-    {"verbose",     no_argument      ,  NULL, 'v'},
-    {"help",        no_argument      ,  NULL, 'h'},
-    {NULL,          0,                  NULL,  0 }
+    { "environ",        required_argument,  NULL, 'e' },
+    { "inherit-env",    no_argument,        NULL, 'E' },
+    { "chroot",         required_argument,  NULL, 'c' },
+    { "workingDir",     required_argument,  NULL, 'd' },
+    { "uid",            required_argument,  NULL, 'u' },
+    { "gid",            required_argument,  NULL, 'g' },
+    { "file-input",     required_argument,  NULL, 'i' },
+    { "file-output",    required_argument,  NULL, 'o' },
+    { "file-err",       required_argument,  NULL, 'r' },
+    { "fd-input",       required_argument,  NULL, 'I' },
+    { "fd-output",      required_argument,  NULL, 'O' },
+    { "fd-err",         required_argument,  NULL, 'R' },
+    { "preserve-fd",    no_argument,        NULL, OPT_PFD },
+    { "share-net",      no_argument,        NULL, OPT_NET },
+    { "cpuset",         required_argument,  NULL, 's' },
+    { "limit-vss",      required_argument,  NULL, 'V' },
+    { "limit-core",     required_argument,  NULL, 'C' },
+    { "limit-nofile",   required_argument,  NULL, 'F' },
+    { "limit-fsize",    required_argument,  NULL, 'Z' },
+    { "limit-proc",     required_argument,  NULL, 'P' },
+    { "limit-stack",    required_argument,  NULL, 'S' },
+    { "limit-time",     required_argument,  NULL, 'T' },
+    { "cgroup-root",    required_argument,  NULL, OPT_CGR },
+    { "limit-rss",      required_argument,  NULL, 'm' },
+    { "seccomp-cfg",    required_argument,  NULL, OPT_SCC },
+    { "allow-root",     no_argument,        NULL, OPT_ALR },
+    { "alway-success",  no_argument,        NULL, OPT_SUC },
+    { "quiet",          no_argument,        NULL, 'q' },
+    { "verbose",        no_argument,        NULL, 'v' },
+    { "help",           no_argument,        NULL, 'h' },
+    { NULL,             0,                  NULL,  0  }
 };
 // clang-format on
 
@@ -159,7 +162,7 @@ int parse_env(const char *str, char *envp[], char **dest[], char **data)
 
     envz_strip(&envz, &envz_len);
 
-    *dest = malloc((argz_count(envz, envz_len) + 1) * sizeof(char *));
+    *dest = (char **)malloc((argz_count(envz, envz_len) + 1) * sizeof(char *));
     argz_extract(envz, envz_len, *dest);
     *data = envz;
     return 0;
@@ -181,7 +184,7 @@ int main(int argc, char *argv[], char *envp[])
     struct cjail_ctx ctx;
     struct cjail_result res;
     struct timeval time;
-    int inherenv = 0, allow_root = 0;
+    bool inherenv = false, allow_root = false, alway_success = false;
     char *envstr = NULL, **para_env = NULL, *envdata = NULL, *sccfg_path = NULL;
     parser_error_t pserr;
 #ifndef NDEBUG
@@ -194,7 +197,7 @@ int main(int argc, char *argv[], char *envp[])
                 envstr = optarg;
                 break;
             case 'E':
-                inherenv = 1;
+                inherenv = true;
                 break;
             case 'c':
                 ctx.chroot = optarg;
@@ -283,7 +286,10 @@ int main(int argc, char *argv[], char *envp[])
                 sccfg_path = optarg;
                 break;
             case OPT_ALR:
-                allow_root = 1;
+                allow_root = true;
+                break;
+            case OPT_SUC:
+                alway_success = true;
                 break;
             case 'q':
                 set_log_level(LOG_SLIENT);
@@ -355,11 +361,14 @@ int main(int argc, char *argv[], char *envp[])
     }
     if (ret) {
         perrf("cjail failure. %s\n", strerror(errno));
-        exit(1);
+        exit(127);
     }
     print_result(&res);
     scconfig_free(ctx.seccomp_cfg);
-    return 0;
+    if (alway_success) {
+        return 0;
+    }
+    return (res.info.si_code == CLD_EXITED ? res.info.si_status : res.info.si_status | 0x80);
 }
 
 void print_result(const struct cjail_result *res)
