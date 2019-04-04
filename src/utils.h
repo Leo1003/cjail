@@ -32,11 +32,10 @@
 
 #define pathprintf(dest, fmt, ...) snprintf(dest, sizeof(char) * PATH_MAX, fmt, ##__VA_ARGS__)
 
-struct _int_table {
+typedef struct _int_table {
     char *name;
     int value;
-};
-typedef struct _int_table table_int32;
+} table_int32;
 int table_to_int(const table_int32 *table, const char *str);
 const char *table_to_str(const table_int32 *table, int value);
 

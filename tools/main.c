@@ -30,7 +30,7 @@
 
 #define STR_BUF 256
 
-void usage(char *name);
+void usage(const char *name);
 void print_result(const struct cjail_result *res);
 
 enum OPTVAL {
@@ -79,7 +79,7 @@ const struct option longopts[] = {
 };
 // clang-format on
 
-unsigned long toul(char *str, int abort)
+unsigned long toul(const char *str, int abort)
 {
     char *p;
     unsigned long ret;
@@ -92,7 +92,7 @@ unsigned long toul(char *str, int abort)
     return ret;
 }
 
-long long int toll(char *str, int abort)
+long long int toll(const char *str, int abort)
 {
     char *p;
     long long int ret;
@@ -439,7 +439,7 @@ void print_result(const struct cjail_result *res)
     }
 }
 
-void usage(char *name)
+void usage(const char *name)
 {
     printf("Usage: %s [OPTIONS...] [--] PROGRAM... [ARG...]\n", name);
     printf("       %s --help\n", name);
