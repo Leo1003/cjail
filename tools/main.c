@@ -9,6 +9,7 @@
  */
 #define _GNU_SOURCE
 #include <cjail/cjail.h>
+#include <cjail/utils.h>
 
 #include <argz.h>
 #include <envz.h>
@@ -19,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/acct.h>
 #include <time.h>
 
 #define perrf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
@@ -28,10 +30,41 @@
 #define devf(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 #endif
 
+// clang-format off
+#define STATFLAGS_GENERAL           0x00000001UL
+#define STATFLAGS_TASKSTATS         0x00000002UL
+#define STATFLAGS_TASKSTATS_TIME    0x00000004UL
+#define STATFLAGS_TASKSTATS_CPU     0x00000008UL
+#define STATFLAGS_TASKSTATS_MEM     0x00000010UL
+#define STATFLAGS_TASKSTATS_IO      0x00000020UL
+#define STATFLAGS_RUSAGE            0x00000040UL
+#define STATFLAGS_NOFMTTIME         0x00000080UL
+#define STATFLAGS_INVALID           0xFFFFFFFFUL
+
+#define STATFLAGS_TASKSTATS_ALL     (STATFLAGS_TASKSTATS | STATFLAGS_TASKSTATS_TIME | STATFLAGS_TASKSTATS_CPU | STATFLAGS_TASKSTATS_MEM | STATFLAGS_TASKSTATS_IO)
+#define STATFLAGS_ALL               (STATFLAGS_GENERAL | STATFLAGS_TASKSTATS_ALL | STATFLAGS_RUSAGE)
+
+const table_uint32 statflags_table[] = {
+    { "general",            STATFLAGS_GENERAL },
+    { "taskstats",          STATFLAGS_TASKSTATS },
+    { "taskstats-time",     STATFLAGS_TASKSTATS_TIME },
+    { "taskstats-cpu",      STATFLAGS_TASKSTATS_CPU },
+    { "taskstats-mem",      STATFLAGS_TASKSTATS_MEM },
+    { "taskstats-memory",   STATFLAGS_TASKSTATS_MEM },
+    { "taskstats-io",       STATFLAGS_TASKSTATS_IO },
+    { "taskstats-all",      STATFLAGS_TASKSTATS },
+    { "rusage",             STATFLAGS_RUSAGE },
+    { "all",                STATFLAGS_ALL },
+    { "no-format-time",     STATFLAGS_NOFMTTIME },
+    { "default",            STATFLAGS_GENERAL },
+    { NULL,                 STATFLAGS_INVALID },
+};
+// clang-format on
+
 #define STR_BUF 256
 
 void usage(const char *name);
-void print_result(const struct cjail_result *res);
+void print_result(const struct cjail_result *res, unsigned long flags);
 
 enum OPTVAL {
     OPT_PFD = 256,
@@ -43,7 +76,7 @@ enum OPTVAL {
 };
 
 // clang-format off
-const char opts[] = "e:Ec:d:u:g:i:o:r:I:O:R:s:V:C:F:Z:P:S:T:m:qvh";
+const char opts[] = "e:Ec:d:u:g:i:o:r:I:O:R:s:V:C:F:Z:P:S:T:m:t::qvh";
 const struct option longopts[] = {
     { "environ",        required_argument,  NULL, 'e' },
     { "inherit-env",    no_argument,        NULL, 'E' },
@@ -72,6 +105,7 @@ const struct option longopts[] = {
     { "seccomp-cfg",    required_argument,  NULL, OPT_SCC },
     { "allow-root",     no_argument,        NULL, OPT_ALR },
     { "alway-success",  no_argument,        NULL, OPT_SUC },
+    { "statistics",     optional_argument,  NULL, 't' },
     { "quiet",          no_argument,        NULL, 'q' },
     { "verbose",        no_argument,        NULL, 'v' },
     { "help",           no_argument,        NULL, 'h' },
@@ -105,7 +139,46 @@ long long int toll(const char *str, int abort)
     return ret;
 }
 
-struct timeval totime(char *str, int abort)
+unsigned long parse_statistics_token(const char *token, int abort)
+{
+    unsigned long flags = utable_to_uint(statflags_table, token);
+    if (flags == STATFLAGS_INVALID) {
+        perrf("Invalid statistic flag: %s\n", token);
+        if (abort) {
+            exit(1);
+        } else {
+            return 0;
+        }
+    }
+    return flags;
+}
+
+unsigned long parse_statistics_flags(const char *arg, int abort)
+{
+    unsigned long flags = 0;
+    if (arg) {
+        // Since it is not a right way to modify arguments in argv, we make a copy of it first.
+        size_t len = strlen(arg);
+        char *arg_cpy = (char *)malloc(sizeof(char) * (len + 1));
+        if (!arg_cpy) {
+            perrf("Failed to allocate memory\n");
+            exit(1);
+        }
+        strncpy(arg_cpy, arg, sizeof(char) * (len + 1));
+
+        char *p = strtok(arg_cpy, ", \t");
+        while (p != NULL) {
+            flags |= parse_statistics_token(p, abort);
+            p = strtok(NULL, ", \t");
+        }
+        free(arg_cpy);
+    } else {
+        flags |= parse_statistics_token("default", false);
+    }
+    return flags;
+}
+
+struct timeval totime(const char *str, int abort)
 {
     char *p;
     double sec;
@@ -185,6 +258,7 @@ int main(int argc, char *argv[], char *envp[])
     struct cjail_result res;
     struct timeval time;
     bool inherenv = false, allow_root = false, alway_success = false;
+    unsigned long statistics_flags = 0;
     char *envstr = NULL, **para_env = NULL, *envdata = NULL, *sccfg_path = NULL;
     parser_error_t pserr;
 #ifndef NDEBUG
@@ -291,6 +365,9 @@ int main(int argc, char *argv[], char *envp[])
             case OPT_SUC:
                 alway_success = true;
                 break;
+            case 't':
+                statistics_flags = parse_statistics_flags(optarg, 1);
+                break;
             case 'q':
                 set_log_level(LOG_SLIENT);
                 break;
@@ -366,7 +443,7 @@ int main(int argc, char *argv[], char *envp[])
         }
         exit(254);
     }
-    print_result(&res);
+    print_result(&res, statistics_flags);
     scconfig_free(ctx.seccomp_cfg);
     if (alway_success) {
         return 0;
@@ -374,69 +451,107 @@ int main(int argc, char *argv[], char *envp[])
     return (res.info.si_code == CLD_EXITED ? res.info.si_status : res.info.si_status | 0x80);
 }
 
-void print_result(const struct cjail_result *res)
+void print_result(const struct cjail_result *res, unsigned long flags)
 {
+    // No need to print anything if nothing in the flags
+    if (!(flags & STATFLAGS_ALL)) {
+        return;
+    }
+
     char timestr[STR_BUF + 1];
     struct tm time;
-    if (!localtime_r((time_t *)&res->stats.ac_btime, &time)) {
+    if ((flags & STATFLAGS_NOFMTTIME) || !localtime_r((time_t *)&res->stats.ac_btime, &time)) {
         snprintf(timestr, sizeof(timestr), "%u", res->stats.ac_btime);
+    } else {
+        strftime(timestr, sizeof(timestr), "%F %T", &time);
     }
-    strftime(timestr, sizeof(timestr), "%F %T", &time);
 
     printf("++++++++ Execution Result ++++++++\n");
-    printf("Time: %ld.%06ld sec\n", res->time.tv_sec, res->time.tv_usec);
-    printf("Timeout: %s\n", (res->timekill ? "Y" : "N"));
-    printf("Oomkill: %d\n", res->oomkill);
-    printf("-------- TASKSTAT --------\n");
-    printf("PID: %u\n", res->stats.ac_pid);
-    printf("UID: %u\n", res->stats.ac_uid);
-    printf("GID: %u\n", res->stats.ac_gid);
-    printf("command: %s\n", res->stats.ac_comm);
-    printf("exit status: %u\n", res->stats.ac_exitcode);
-    printf("NICE: %u\n", res->stats.ac_nice);
-    printf("time:\n");
-    printf("    start: %s\n", timestr);
-    printf("        elapsed: %llu\n", res->stats.ac_etime);
-    printf("        user: %llu\n", res->stats.ac_utime);
-    printf("        system: %llu\n", res->stats.ac_stime);
-    printf("CPU:\n");
-    printf("    count: %llu\n", res->stats.cpu_count);
-    printf("    realtime: %llu\n", res->stats.cpu_run_real_total);
-    printf("    virttime: %llu\n", res->stats.cpu_run_virtual_total);
-    printf("memory:\n");
-    printf("    bytetime:\n");
-    printf("        rss: %llu\n", res->stats.coremem);
-    printf("        vsz: %llu\n", res->stats.virtmem);
-    printf("    peak:\n");
-    printf("        rss: %llu\n", res->stats.hiwater_rss);
-    printf("        vsz: %llu\n", res->stats.hiwater_vm);
-    printf("I/O:\n");
-    printf("    bytes:\n");
-    printf("        read: %llu\n", res->stats.read_char);
-    printf("        write: %llu\n", res->stats.write_char);
-    printf("    syscalls:\n");
-    printf("        read: %llu\n", res->stats.read_syscalls);
-    printf("        write: %llu\n", res->stats.write_syscalls);
-    printf("--------  RUSAGE  --------\n");
-    printf("user time: %ld.%06ld\n", res->rus.ru_utime.tv_sec, res->rus.ru_utime.tv_usec);
-    printf("system time: %ld.%06ld\n", res->rus.ru_stime.tv_sec, res->rus.ru_stime.tv_usec);
-    printf("max_rss: %ld\n", res->rus.ru_maxrss);
-    printf("inblock: %ld\n", res->rus.ru_inblock);
-    printf("outblock: %ld\n", res->rus.ru_oublock);
-    printf("major fault: %ld\n", res->rus.ru_majflt);
-    printf("minor fault: %ld\n", res->rus.ru_minflt);
-    printf("content switch: %ld\n", res->rus.ru_nvcsw);
-    printf("icontent switch: %ld\n", res->rus.ru_nivcsw);
-    printf("--------------------------\n");
-    switch (res->info.si_code) {
-        case CLD_EXITED:
-            printf("Exitcode: %d\n", res->info.si_status);
-            break;
-        case CLD_KILLED:
-        case CLD_DUMPED:
-            printf("Signaled: %d %s\n", res->info.si_status, strsignal(res->info.si_status));
-            break;
+    if (flags & STATFLAGS_GENERAL) {
+        switch (res->info.si_code) {
+            case CLD_EXITED:
+                printf("Exitcode: %d\n", res->info.si_status);
+                break;
+            case CLD_KILLED:
+            case CLD_DUMPED:
+                printf("Signaled: %d %s\n", res->info.si_status, strsignal(res->info.si_status));
+                break;
+        }
+        if (flags & STATFLAGS_NOFMTTIME) {
+            printf("Time: %ld\n", res->time.tv_sec * 1000000 + res->time.tv_usec);
+        } else {
+            printf("Time: %ld.%06ld sec\n", res->time.tv_sec, res->time.tv_usec);
+        }
+        printf("Timeout: %s\n", (res->timekill ? "Y" : "N"));
+        printf("OOMkill: %d\n", res->oomkill);
     }
+
+    if (flags & STATFLAGS_TASKSTATS_ALL) {
+        printf("-------- TASKSTATS -------\n");
+        if (flags & STATFLAGS_TASKSTATS) {
+            printf("PID: %u\n", res->stats.ac_pid);
+            printf("UID: %u\n", res->stats.ac_uid);
+            printf("GID: %u\n", res->stats.ac_gid);
+            printf("Command: %s\n", res->stats.ac_comm);
+            printf("Exit Status: %u\n", res->stats.ac_exitcode);
+            // TODO: Print taskstats flags
+            printf("NICE: %u\n", res->stats.ac_nice);
+        }
+        if (flags & STATFLAGS_TASKSTATS_TIME) {
+            printf("Time:\n");
+            printf("    Start: %s\n", timestr);
+            printf("        Elapsed: %llu\n", res->stats.ac_etime);
+            printf("        User: %llu\n", res->stats.ac_utime);
+            printf("        System: %llu\n", res->stats.ac_stime);
+        }
+        if (flags & STATFLAGS_TASKSTATS_CPU) {
+            printf("CPU:\n");
+            printf("    Count: %llu\n", res->stats.cpu_count);
+            printf("    Realtime: %llu\n", res->stats.cpu_run_real_total);
+            printf("    Virttime: %llu\n", res->stats.cpu_run_virtual_total);
+        }
+        if (flags & STATFLAGS_TASKSTATS_MEM) {
+            printf("Memory:\n");
+            printf("    Bytetime:\n");
+            printf("        RSS: %llu\n", res->stats.coremem);
+            printf("        VSZ: %llu\n", res->stats.virtmem);
+            printf("    Peak:\n");
+            printf("        RSS: %llu\n", res->stats.hiwater_rss);
+            printf("        VSZ: %llu\n", res->stats.hiwater_vm);
+        }
+        if (flags & STATFLAGS_TASKSTATS_IO) {
+            printf("I/O:\n");
+            printf("    Bytes:\n");
+            printf("        Read: %llu\n", res->stats.read_char);
+            printf("        Write: %llu\n", res->stats.write_char);
+            printf("    Syscalls:\n");
+            printf("        Read: %llu\n", res->stats.read_syscalls);
+            printf("        Write: %llu\n", res->stats.write_syscalls);
+        }
+    }
+
+    if (flags & STATFLAGS_RUSAGE) {
+        printf("--------  RUSAGE  --------\n");
+        if (flags & STATFLAGS_NOFMTTIME) {
+            printf("User Time: %ld\n", res->rus.ru_utime.tv_sec * 1000000 + res->rus.ru_utime.tv_usec);
+        } else {
+            printf("User Time: %ld.%06ld sec\n", res->rus.ru_utime.tv_sec, res->rus.ru_utime.tv_usec);
+        }
+        if (flags & STATFLAGS_NOFMTTIME) {
+            printf("System Time: %ld\n", res->rus.ru_stime.tv_sec * 1000000 + res->rus.ru_stime.tv_usec);
+        } else {
+            printf("System Time: %ld.%06ld sec\n", res->rus.ru_stime.tv_sec, res->rus.ru_stime.tv_usec);
+        }
+        printf("Max RSS: %ld\n", res->rus.ru_maxrss);
+        printf("Inblock: %ld\n", res->rus.ru_inblock);
+        printf("Outblock: %ld\n", res->rus.ru_oublock);
+        printf("Major Fault: %ld\n", res->rus.ru_majflt);
+        printf("Minor Fault: %ld\n", res->rus.ru_minflt);
+        printf("Content Switch: %ld\n", res->rus.ru_nvcsw);
+        printf("Icontent Switch: %ld\n", res->rus.ru_nivcsw);
+    }
+
+    printf("--------------------------\n");
 }
 
 void usage(const char *name)
