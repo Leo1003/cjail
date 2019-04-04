@@ -21,7 +21,7 @@
 #include <sys/sysinfo.h>
 #include <unistd.h>
 
-int table_to_int(const table_int32 *table, const char *str)
+long table_to_int(const table_int32 *table, const char *str)
 {
     int i = 0;
     while (table[i].name) {
@@ -30,10 +30,36 @@ int table_to_int(const table_int32 *table, const char *str)
         }
         i++;
     }
+    // Return the value of the NULL row
     return table[i].value;
 }
 
-const char *table_to_str(const table_int32 *table, int value)
+const char *table_to_str(const table_int32 *table, long value)
+{
+    int i = 0;
+    while (table[i].name) {
+        if (table[i].value == value) {
+            return table[i].name;
+        }
+        i++;
+    }
+    return NULL;
+}
+
+unsigned long utable_to_uint(const table_uint32 *table, const char *str)
+{
+    int i = 0;
+    while (table[i].name) {
+        if (!strcmp(table[i].name, str)) {
+            return table[i].value;
+        }
+        i++;
+    }
+    // Return the value of the NULL row
+    return table[i].value;
+}
+
+const char *utable_to_str(const table_uint32 *table, unsigned long value)
 {
     int i = 0;
     while (table[i].name) {

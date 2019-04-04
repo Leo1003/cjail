@@ -7,6 +7,7 @@
 #define UTILS_H
 
 #include <cjail/cjail.h>
+#include <cjail/utils.h>
 
 #include <errno.h>
 #include <linux/limits.h>
@@ -31,13 +32,6 @@
     _a < _b ? _a : _b; })
 
 #define pathprintf(dest, fmt, ...) snprintf(dest, sizeof(char) * PATH_MAX, fmt, ##__VA_ARGS__)
-
-typedef struct _int_table {
-    char *name;
-    int value;
-} table_int32;
-int table_to_int(const table_int32 *table, const char *str);
-const char *table_to_str(const table_int32 *table, int value);
 
 int get_online_cpumask(char *mask, size_t len);
 int mkdir_r(const char *path);
