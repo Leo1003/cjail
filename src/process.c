@@ -149,5 +149,9 @@ void child_process(struct exec_meta meta)
     if (load_seccomp(meta.ctx, &meta.bpf))
         child_exit();
     execve(meta.ctx.argv[0], meta.ctx.argv, meta.ctx.environ);
+    // Redirect the executable not found error to ENOEXEC to easily distinguish from other file not found error
+    if (errno == ENOENT) {
+        errno = ENOEXEC;
+    }
     child_exit();
 }

@@ -361,7 +361,10 @@ int main(int argc, char *argv[], char *envp[])
     }
     if (ret) {
         perrf("cjail failure. %s\n", strerror(errno));
-        exit(127);
+        if (errno == ENOEXEC) {
+            exit(255);
+        }
+        exit(254);
     }
     print_result(&res);
     scconfig_free(ctx.seccomp_cfg);
