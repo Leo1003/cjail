@@ -12,6 +12,7 @@
 #include <cjail/utils.h>
 
 #include <argz.h>
+#include <bsd/string.h>
 #include <envz.h>
 #include <getopt.h>
 #include <math.h>
@@ -39,9 +40,11 @@
 #define STATFLAGS_TASKSTATS_IO      0x00000020UL
 #define STATFLAGS_RUSAGE            0x00000040UL
 #define STATFLAGS_NOFMTTIME         0x00000080UL
+#define STATFLAGS_NOFMTFLAGS        0x00000100UL
 #define STATFLAGS_INVALID           0xFFFFFFFFUL
 
 #define STATFLAGS_TASKSTATS_ALL     (STATFLAGS_TASKSTATS | STATFLAGS_TASKSTATS_TIME | STATFLAGS_TASKSTATS_CPU | STATFLAGS_TASKSTATS_MEM | STATFLAGS_TASKSTATS_IO)
+#define STATFLAGS_NOFMT_ALL         (STATFLAGS_NOFMTTIME | STATFLAGS_NOFMTFLAGS)
 #define STATFLAGS_ALL               (STATFLAGS_GENERAL | STATFLAGS_TASKSTATS_ALL | STATFLAGS_RUSAGE)
 
 const table_uint32 statflags_table[] = {
@@ -55,13 +58,15 @@ const table_uint32 statflags_table[] = {
     { "taskstats-all",      STATFLAGS_TASKSTATS },
     { "rusage",             STATFLAGS_RUSAGE },
     { "all",                STATFLAGS_ALL },
+    { "no-format",          STATFLAGS_NOFMT_ALL },
     { "no-format-time",     STATFLAGS_NOFMTTIME },
+    { "no-format-flags",    STATFLAGS_NOFMTFLAGS },
     { "default",            STATFLAGS_GENERAL },
     { NULL,                 STATFLAGS_INVALID },
 };
 // clang-format on
 
-#define STR_BUF 256
+#define TIMESTR_BUF 256
 
 void usage(const char *name);
 void print_result(const struct cjail_result *res, unsigned long flags);
@@ -353,7 +358,7 @@ int main(int argc, char *argv[], char *envp[])
             case OPT_CGR:
                 ctx.cgroup_root = optarg;
                 break;
-            case 'M':
+            case 'm':
                 ctx.cg_rss = toll(optarg, 1);
                 break;
             case OPT_SCC:
@@ -380,9 +385,12 @@ int main(int argc, char *argv[], char *envp[])
                 usage(argv[0]);
                 exit(0);
                 break;
-            default:
+            case '?':
+            case ':':
                 usage(argv[0]);
                 exit(1);
+            default:
+                perrf("Unexpected option character: %c\n", o);
         }
     }
     if (optind >= argc) {
@@ -451,6 +459,71 @@ int main(int argc, char *argv[], char *envp[])
     return (res.info.si_code == CLD_EXITED ? res.info.si_status : res.info.si_status | 0x80);
 }
 
+char *printlocaltimef(char *buf, size_t size, const char *format, time_t time, unsigned long flags)
+{
+    struct tm t;
+    if ((flags & STATFLAGS_NOFMTTIME) || !localtime_r(&time, &t)) {
+        snprintf(buf, size, "%ld", time);
+    } else {
+        strftime(buf, size, format, &t);
+    }
+    return buf;
+}
+
+char *printtimeval(char *buf, size_t size, const struct timeval *time, unsigned long flags)
+{
+    if (flags & STATFLAGS_NOFMTTIME) {
+        snprintf(buf, size, "%ld", time->tv_sec * 1000000 + time->tv_usec);
+    } else {
+        snprintf(buf, size, "%ld.%06ld sec", time->tv_sec, time->tv_usec);
+    }
+    return buf;
+}
+
+char *printusec(char *buf, size_t size, unsigned long long time, unsigned long flags)
+{
+    if (flags & STATFLAGS_NOFMTTIME) {
+        snprintf(buf, size, "%llu", time);
+    } else {
+        snprintf(buf, size, "%llu.%06llu sec", time / 1000000, time % 1000000);
+    }
+    return buf;
+}
+
+char *printnsec(char *buf, size_t size, unsigned long long time, unsigned long flags)
+{
+    if (flags & STATFLAGS_NOFMTTIME) {
+        snprintf(buf, size, "%llu", time);
+    } else {
+        snprintf(buf, size, "%llu.%09llu sec", time / 1000000000, time % 1000000000);
+    }
+    return buf;
+}
+
+char *flags_append(char *buf, size_t size, const char *flagstr)
+{
+    if (buf[0] != '\0') {
+        strlcat(buf, " | ", size);
+    }
+    strlcat(buf, flagstr, size);
+    return buf;
+}
+
+char *print_acctflags(char *buf, size_t size, unsigned char acctflags, unsigned long flags)
+{
+    if (flags & STATFLAGS_NOFMTFLAGS) {
+        snprintf(buf, size, "0x%02hhx\n", acctflags);
+    } else {
+        buf[0] = '\0';
+        if (acctflags & AFORK)  flags_append(buf, size, "AFORK");
+        if (acctflags & ASU)    flags_append(buf, size, "ASU");
+        if (acctflags & ACORE)  flags_append(buf, size, "ACORE");
+        if (acctflags & AXSIG)  flags_append(buf, size, "AXSIG");
+        strlcat(buf, "\n", size);
+    }
+    return buf;
+}
+
 void print_result(const struct cjail_result *res, unsigned long flags)
 {
     // No need to print anything if nothing in the flags
@@ -458,13 +531,7 @@ void print_result(const struct cjail_result *res, unsigned long flags)
         return;
     }
 
-    char timestr[STR_BUF + 1];
-    struct tm time;
-    if ((flags & STATFLAGS_NOFMTTIME) || !localtime_r((time_t *)&res->stats.ac_btime, &time)) {
-        snprintf(timestr, sizeof(timestr), "%u", res->stats.ac_btime);
-    } else {
-        strftime(timestr, sizeof(timestr), "%F %T", &time);
-    }
+    char timebuf[TIMESTR_BUF + 1];
 
     printf("++++++++ Execution Result ++++++++\n");
     if (flags & STATFLAGS_GENERAL) {
@@ -474,15 +541,14 @@ void print_result(const struct cjail_result *res, unsigned long flags)
                 break;
             case CLD_KILLED:
             case CLD_DUMPED:
-                printf("Signaled: %d %s\n", res->info.si_status, strsignal(res->info.si_status));
+                printf("Signaled: %d %s", res->info.si_status, strsignal(res->info.si_status));
+                if (res->timekill) {
+                    printf(" (Timeout)");
+                }
+                printf("\n");
                 break;
         }
-        if (flags & STATFLAGS_NOFMTTIME) {
-            printf("Time: %ld\n", res->time.tv_sec * 1000000 + res->time.tv_usec);
-        } else {
-            printf("Time: %ld.%06ld sec\n", res->time.tv_sec, res->time.tv_usec);
-        }
-        printf("Timeout: %s\n", (res->timekill ? "Y" : "N"));
+        printf("Time: %s\n", printtimeval(timebuf, sizeof(timebuf), &res->time, flags));
         printf("OOMkill: %d\n", res->oomkill);
     }
 
@@ -494,28 +560,28 @@ void print_result(const struct cjail_result *res, unsigned long flags)
             printf("GID: %u\n", res->stats.ac_gid);
             printf("Command: %s\n", res->stats.ac_comm);
             printf("Exit Status: %u\n", res->stats.ac_exitcode);
-            // TODO: Print taskstats flags
+            printf("Flags: %s", print_acctflags(timebuf, sizeof(timebuf), res->stats.ac_flag, flags));
             printf("NICE: %u\n", res->stats.ac_nice);
         }
         if (flags & STATFLAGS_TASKSTATS_TIME) {
             printf("Time:\n");
-            printf("    Start: %s\n", timestr);
-            printf("        Elapsed: %llu\n", res->stats.ac_etime);
-            printf("        User: %llu\n", res->stats.ac_utime);
-            printf("        System: %llu\n", res->stats.ac_stime);
+            printf("    Start: %s\n", printlocaltimef(timebuf, sizeof(timebuf), "%F %T", res->stats.ac_btime, flags));
+            printf("        Elapsed: %s\n", printusec(timebuf, sizeof(timebuf), res->stats.ac_etime, flags));
+            printf("        User: %s\n", printusec(timebuf, sizeof(timebuf), res->stats.ac_utime, flags));
+            printf("        System: %s\n", printusec(timebuf, sizeof(timebuf), res->stats.ac_stime, flags));
         }
         if (flags & STATFLAGS_TASKSTATS_CPU) {
             printf("CPU:\n");
             printf("    Count: %llu\n", res->stats.cpu_count);
-            printf("    Realtime: %llu\n", res->stats.cpu_run_real_total);
-            printf("    Virttime: %llu\n", res->stats.cpu_run_virtual_total);
+            printf("    Realtime: %s\n", printnsec(timebuf, sizeof(timebuf), res->stats.cpu_run_real_total, flags));
+            printf("    Virttime: %s\n", printnsec(timebuf, sizeof(timebuf), res->stats.cpu_run_virtual_total, flags));
         }
         if (flags & STATFLAGS_TASKSTATS_MEM) {
             printf("Memory:\n");
             printf("    Bytetime:\n");
             printf("        RSS: %llu\n", res->stats.coremem);
             printf("        VSZ: %llu\n", res->stats.virtmem);
-            printf("    Peak:\n");
+            printf("    High Watermark:\n");
             printf("        RSS: %llu\n", res->stats.hiwater_rss);
             printf("        VSZ: %llu\n", res->stats.hiwater_vm);
         }
@@ -532,16 +598,8 @@ void print_result(const struct cjail_result *res, unsigned long flags)
 
     if (flags & STATFLAGS_RUSAGE) {
         printf("--------  RUSAGE  --------\n");
-        if (flags & STATFLAGS_NOFMTTIME) {
-            printf("User Time: %ld\n", res->rus.ru_utime.tv_sec * 1000000 + res->rus.ru_utime.tv_usec);
-        } else {
-            printf("User Time: %ld.%06ld sec\n", res->rus.ru_utime.tv_sec, res->rus.ru_utime.tv_usec);
-        }
-        if (flags & STATFLAGS_NOFMTTIME) {
-            printf("System Time: %ld\n", res->rus.ru_stime.tv_sec * 1000000 + res->rus.ru_stime.tv_usec);
-        } else {
-            printf("System Time: %ld.%06ld sec\n", res->rus.ru_stime.tv_sec, res->rus.ru_stime.tv_usec);
-        }
+        printf("User Time: %s\n", printtimeval(timebuf, sizeof(timebuf), &res->rus.ru_utime, flags));
+        printf("System Time: %s\n", printtimeval(timebuf, sizeof(timebuf), &res->rus.ru_stime, flags));
         printf("Max RSS: %ld\n", res->rus.ru_maxrss);
         printf("Inblock: %ld\n", res->rus.ru_inblock);
         printf("Outblock: %ld\n", res->rus.ru_oublock);
@@ -568,6 +626,10 @@ void usage(const char *name)
     printf("      --share-net\t\tnot to unshare the net namespace while creating the jail\n");
     printf("      --cgroup-root=PATH\tchange cgroup filesystem root path (default: /sys/fs/cgroup)\n");
     printf("      --allow-root\t\tallow uid or gid to be 0 (root)\n");
+    printf("      --alway-success\t\tExit with success even if child process exit with failed status\n");
+    printf("  -t, --statistics[=FLAGS]\tPrint statistics to standard output\n");
+    printf("      \t\t\t\tBy default, it prints execution result only\n");
+    printf("      \t\t\t\tFor other flags, see the sections below\n");
     printf("  -q, --quiet\t\t\tnot to print any message\n");
     printf("  -v  --verbose\t\t\tprint more details\n");
     printf("  -h, --help\t\t\tshow this help\n");
@@ -579,7 +641,7 @@ void usage(const char *name)
     printf("  -P, --limit-proc=NUM\t\tlimit the process number in the jail\n");
     printf("  -S, --limit-stack=SIZE\tlimit the stack size of one process (KB)\n");
     printf("  -T, --limit-time=SEC\t\tlimit the total running time of the jail (sec)\n");
-    printf("  -M, --limit-rss=SIZE\t\tlimit the memory size can be used of the jail (KB)\n");
+    printf("  -m, --limit-rss=SIZE\t\tlimit the memory size can be used of the jail (KB)\n");
     printf("\n");
     printf(" I/O Options:\n");
     printf("  -i, --file-input=FILE\t\tredirect stdin of the program to the file\n");
@@ -600,4 +662,20 @@ void usage(const char *name)
     printf("\n");
     printf(" Seccomp Options:\n");
     printf("      --seccomp-cfg=FILE\tspecify seccomp rules to load\n");
+    printf("\n");
+    printf(" Statistics Flags:\n");
+    printf("      default\t\t\tsame as \"general\"\n");
+    printf("      general\t\t\tPrint exit status\n");
+    printf("      taskstats\t\t\tPrint basic taskstats\n");
+    printf("      taskstats-time\t\tPrint taskstats time related statistics\n");
+    printf("      taskstats-cpu\t\tPrint taskstats CPU time statistics\n");
+    printf("      taskstats-memory\t\tPrint taskstats memory statistics\n");
+    printf("      taskstats-mem\t\tAlias for \"taskstats-memory\"\n");
+    printf("      taskstats-io\t\tPrint taskstats IO statistics\n");
+    printf("      taskstats-all\t\tPrint all taskstats\n");
+    printf("      rusage\t\t\tPrint rusage\n");
+    printf("      all\t\t\tPrint all statistics above\n");
+    printf("      no-format\t\t\tNot to format anything\n");
+    printf("      no-format-time\t\tNot to format times\n");
+    printf("      no-format-flags\t\tNot to format taskstats flags\n");
 }

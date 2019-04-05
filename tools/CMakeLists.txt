@@ -11,6 +11,7 @@ target_link_libraries(cjail
     PRIVATE
         CJail::libcjail
         "m"
+        "bsd"
 )
 
 #--------------------------------
