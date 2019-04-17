@@ -32,7 +32,7 @@
 #endif
 
 // clang-format off
-#define STATFLAGS_GENERAL           0x00000001UL
+#define STATFLAGS_STATUS            0x00000001UL
 #define STATFLAGS_TASKSTATS         0x00000002UL
 #define STATFLAGS_TASKSTATS_TIME    0x00000004UL
 #define STATFLAGS_TASKSTATS_CPU     0x00000008UL
@@ -41,14 +41,17 @@
 #define STATFLAGS_RUSAGE            0x00000040UL
 #define STATFLAGS_NOFMTTIME         0x00000080UL
 #define STATFLAGS_NOFMTFLAGS        0x00000100UL
+#define STATFLAGS_NOFMTSIZE         0x00000200UL
+// internal use only
+#define STATFLAGS_SIZEUSEC          0x80000000UL
 #define STATFLAGS_INVALID           0xFFFFFFFFUL
 
 #define STATFLAGS_TASKSTATS_ALL     (STATFLAGS_TASKSTATS | STATFLAGS_TASKSTATS_TIME | STATFLAGS_TASKSTATS_CPU | STATFLAGS_TASKSTATS_MEM | STATFLAGS_TASKSTATS_IO)
-#define STATFLAGS_NOFMT_ALL         (STATFLAGS_NOFMTTIME | STATFLAGS_NOFMTFLAGS)
-#define STATFLAGS_ALL               (STATFLAGS_GENERAL | STATFLAGS_TASKSTATS_ALL | STATFLAGS_RUSAGE)
+#define STATFLAGS_NOFMT_ALL         (STATFLAGS_NOFMTTIME | STATFLAGS_NOFMTFLAGS | STATFLAGS_NOFMTSIZE)
+#define STATFLAGS_ALL               (STATFLAGS_STATUS | STATFLAGS_TASKSTATS_ALL | STATFLAGS_RUSAGE)
 
 const table_uint32 statflags_table[] = {
-    { "general",            STATFLAGS_GENERAL },
+    { "status",             STATFLAGS_STATUS },
     { "taskstats",          STATFLAGS_TASKSTATS },
     { "taskstats-time",     STATFLAGS_TASKSTATS_TIME },
     { "taskstats-cpu",      STATFLAGS_TASKSTATS_CPU },
@@ -61,7 +64,9 @@ const table_uint32 statflags_table[] = {
     { "no-format",          STATFLAGS_NOFMT_ALL },
     { "no-format-time",     STATFLAGS_NOFMTTIME },
     { "no-format-flags",    STATFLAGS_NOFMTFLAGS },
-    { "default",            STATFLAGS_GENERAL },
+    { "no-format-size",     STATFLAGS_NOFMTSIZE },
+    { "default",            STATFLAGS_STATUS },
+    { "none",               0 },
     { NULL,                 STATFLAGS_INVALID },
 };
 // clang-format on
@@ -459,6 +464,7 @@ int main(int argc, char *argv[], char *envp[])
     return (res.info.si_code == CLD_EXITED ? res.info.si_status : res.info.si_status | 0x80);
 }
 
+// Prettify datetime
 char *printlocaltimef(char *buf, size_t size, const char *format, time_t time, unsigned long flags)
 {
     struct tm t;
@@ -470,6 +476,7 @@ char *printlocaltimef(char *buf, size_t size, const char *format, time_t time, u
     return buf;
 }
 
+// Prettify struct timeval
 char *printtimeval(char *buf, size_t size, const struct timeval *time, unsigned long flags)
 {
     if (flags & STATFLAGS_NOFMTTIME) {
@@ -480,6 +487,7 @@ char *printtimeval(char *buf, size_t size, const struct timeval *time, unsigned 
     return buf;
 }
 
+// Prettify time in micro second
 char *printusec(char *buf, size_t size, unsigned long long time, unsigned long flags)
 {
     if (flags & STATFLAGS_NOFMTTIME) {
@@ -490,6 +498,7 @@ char *printusec(char *buf, size_t size, unsigned long long time, unsigned long f
     return buf;
 }
 
+// Prettify time in nano second
 char *printnsec(char *buf, size_t size, unsigned long long time, unsigned long flags)
 {
     if (flags & STATFLAGS_NOFMTTIME) {
@@ -509,6 +518,7 @@ char *flags_append(char *buf, size_t size, const char *flagstr)
     return buf;
 }
 
+// Prettify print unix acct flags
 char *print_acctflags(char *buf, size_t size, unsigned char acctflags, unsigned long flags)
 {
     if (flags & STATFLAGS_NOFMTFLAGS) {
@@ -524,6 +534,70 @@ char *print_acctflags(char *buf, size_t size, unsigned char acctflags, unsigned 
     return buf;
 }
 
+enum size_unit {
+    Bytes = 0,
+    KBytes,
+    MBytes,
+    GBytes,
+    TBytes,
+    PBytes,
+    EBytes,
+    ZBytes,
+    YBytes,
+};
+
+const char *str_unit(enum size_unit unit)
+{
+    switch (unit)
+    {
+        case Bytes:
+            return "Bytes";
+        case KBytes:
+            return "KB";
+        case MBytes:
+            return "MB";
+        case GBytes:
+            return "GB";
+        case TBytes:
+            return "TB";
+        case PBytes:
+            return "PB";
+        case EBytes:
+            return "EB";
+        case ZBytes:
+            return "ZB";
+        case YBytes:
+            return "YB";
+    }
+}
+
+// Prettify print size unit
+char *print_size(char *buf, size_t size, unsigned long long bytes, enum size_unit base_unit, unsigned long flags)
+{
+    if (flags & STATFLAGS_NOFMTSIZE) {
+        snprintf(buf, size, "%llu", bytes);
+    } else {
+        enum size_unit current_unit = base_unit;
+        double bytes_float = bytes;
+        while (bytes_float >= 1024) {
+            if (current_unit == TBytes) {
+                // Reach maximum supported unit
+                break;
+            }
+            current_unit = (enum size_unit)(current_unit + 1);
+            bytes_float /= 1024.0;
+        }
+
+        // Check if size-time unit
+        if (flags & STATFLAGS_SIZEUSEC) {
+            snprintf(buf, size, "%.2lf %s-usecs", bytes_float, str_unit(current_unit));
+        } else {
+            snprintf(buf, size, "%.2lf %s", bytes_float, str_unit(current_unit));
+        }
+    }
+    return buf;
+}
+
 void print_result(const struct cjail_result *res, unsigned long flags)
 {
     // No need to print anything if nothing in the flags
@@ -531,10 +605,10 @@ void print_result(const struct cjail_result *res, unsigned long flags)
         return;
     }
 
-    char timebuf[TIMESTR_BUF + 1];
+    char fmtbuf[TIMESTR_BUF + 1];
 
     printf("++++++++ Execution Result ++++++++\n");
-    if (flags & STATFLAGS_GENERAL) {
+    if (flags & STATFLAGS_STATUS) {
         switch (res->info.si_code) {
             case CLD_EXITED:
                 printf("Exitcode: %d\n", res->info.si_status);
@@ -548,7 +622,7 @@ void print_result(const struct cjail_result *res, unsigned long flags)
                 printf("\n");
                 break;
         }
-        printf("Time: %s\n", printtimeval(timebuf, sizeof(timebuf), &res->time, flags));
+        printf("Time: %s\n", printtimeval(fmtbuf, sizeof(fmtbuf), &res->time, flags));
         printf("OOMkill: %d\n", res->oomkill);
     }
 
@@ -560,36 +634,36 @@ void print_result(const struct cjail_result *res, unsigned long flags)
             printf("GID: %u\n", res->stats.ac_gid);
             printf("Command: %s\n", res->stats.ac_comm);
             printf("Exit Status: %u\n", res->stats.ac_exitcode);
-            printf("Flags: %s", print_acctflags(timebuf, sizeof(timebuf), res->stats.ac_flag, flags));
+            printf("Flags: %s", print_acctflags(fmtbuf, sizeof(fmtbuf), res->stats.ac_flag, flags));
             printf("NICE: %u\n", res->stats.ac_nice);
         }
         if (flags & STATFLAGS_TASKSTATS_TIME) {
             printf("Time:\n");
-            printf("    Start: %s\n", printlocaltimef(timebuf, sizeof(timebuf), "%F %T", res->stats.ac_btime, flags));
-            printf("        Elapsed: %s\n", printusec(timebuf, sizeof(timebuf), res->stats.ac_etime, flags));
-            printf("        User: %s\n", printusec(timebuf, sizeof(timebuf), res->stats.ac_utime, flags));
-            printf("        System: %s\n", printusec(timebuf, sizeof(timebuf), res->stats.ac_stime, flags));
+            printf("    Start: %s\n", printlocaltimef(fmtbuf, sizeof(fmtbuf), "%F %T", res->stats.ac_btime, flags));
+            printf("        Elapsed: %s\n", printusec(fmtbuf, sizeof(fmtbuf), res->stats.ac_etime, flags));
+            printf("        User: %s\n", printusec(fmtbuf, sizeof(fmtbuf), res->stats.ac_utime, flags));
+            printf("        System: %s\n", printusec(fmtbuf, sizeof(fmtbuf), res->stats.ac_stime, flags));
         }
         if (flags & STATFLAGS_TASKSTATS_CPU) {
             printf("CPU:\n");
             printf("    Count: %llu\n", res->stats.cpu_count);
-            printf("    Realtime: %s\n", printnsec(timebuf, sizeof(timebuf), res->stats.cpu_run_real_total, flags));
-            printf("    Virttime: %s\n", printnsec(timebuf, sizeof(timebuf), res->stats.cpu_run_virtual_total, flags));
+            printf("    Realtime: %s\n", printnsec(fmtbuf, sizeof(fmtbuf), res->stats.cpu_run_real_total, flags));
+            printf("    Virttime: %s\n", printnsec(fmtbuf, sizeof(fmtbuf), res->stats.cpu_run_virtual_total, flags));
         }
         if (flags & STATFLAGS_TASKSTATS_MEM) {
             printf("Memory:\n");
             printf("    Bytetime:\n");
-            printf("        RSS: %llu\n", res->stats.coremem);
-            printf("        VSZ: %llu\n", res->stats.virtmem);
+            printf("        RSS: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.coremem, MBytes, flags | STATFLAGS_SIZEUSEC));
+            printf("        VSZ: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.virtmem, MBytes, flags | STATFLAGS_SIZEUSEC));
             printf("    High Watermark:\n");
-            printf("        RSS: %llu\n", res->stats.hiwater_rss);
-            printf("        VSZ: %llu\n", res->stats.hiwater_vm);
+            printf("        RSS: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.hiwater_rss, KBytes, flags));
+            printf("        VSZ: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.hiwater_vm, KBytes, flags));
         }
         if (flags & STATFLAGS_TASKSTATS_IO) {
             printf("I/O:\n");
             printf("    Bytes:\n");
-            printf("        Read: %llu\n", res->stats.read_char);
-            printf("        Write: %llu\n", res->stats.write_char);
+            printf("        Read: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.read_char, Bytes, flags));
+            printf("        Write: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.write_char, Bytes, flags));
             printf("    Syscalls:\n");
             printf("        Read: %llu\n", res->stats.read_syscalls);
             printf("        Write: %llu\n", res->stats.write_syscalls);
@@ -598,9 +672,9 @@ void print_result(const struct cjail_result *res, unsigned long flags)
 
     if (flags & STATFLAGS_RUSAGE) {
         printf("--------  RUSAGE  --------\n");
-        printf("User Time: %s\n", printtimeval(timebuf, sizeof(timebuf), &res->rus.ru_utime, flags));
-        printf("System Time: %s\n", printtimeval(timebuf, sizeof(timebuf), &res->rus.ru_stime, flags));
-        printf("Max RSS: %ld\n", res->rus.ru_maxrss);
+        printf("User Time: %s\n", printtimeval(fmtbuf, sizeof(fmtbuf), &res->rus.ru_utime, flags));
+        printf("System Time: %s\n", printtimeval(fmtbuf, sizeof(fmtbuf), &res->rus.ru_stime, flags));
+        printf("Max RSS: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->rus.ru_maxrss, KBytes, flags));
         printf("Inblock: %ld\n", res->rus.ru_inblock);
         printf("Outblock: %ld\n", res->rus.ru_oublock);
         printf("Major Fault: %ld\n", res->rus.ru_majflt);
@@ -628,7 +702,8 @@ void usage(const char *name)
     printf("      --allow-root\t\tallow uid or gid to be 0 (root)\n");
     printf("      --alway-success\t\tExit with success even if child process exit with failed status\n");
     printf("  -t, --statistics[=FLAGS]\tPrint statistics to standard output\n");
-    printf("      \t\t\t\tBy default, it prints execution result only\n");
+    printf("      \t\t\t\tIf this option doesn't specified, it wouldn't print out any statistics\n");
+    printf("      \t\t\t\tIf no flags are given, it only prints exit status (same as \"default\" flag)\n");
     printf("      \t\t\t\tFor other flags, see the sections below\n");
     printf("  -q, --quiet\t\t\tnot to print any message\n");
     printf("  -v  --verbose\t\t\tprint more details\n");
@@ -664,8 +739,8 @@ void usage(const char *name)
     printf("      --seccomp-cfg=FILE\tspecify seccomp rules to load\n");
     printf("\n");
     printf(" Statistics Flags:\n");
-    printf("      default\t\t\tsame as \"general\"\n");
-    printf("      general\t\t\tPrint exit status\n");
+    printf("      default\t\t\tsame as \"status\"\n");
+    printf("      status\t\t\tPrint exit status\n");
     printf("      taskstats\t\t\tPrint basic taskstats\n");
     printf("      taskstats-time\t\tPrint taskstats time related statistics\n");
     printf("      taskstats-cpu\t\tPrint taskstats CPU time statistics\n");
@@ -675,7 +750,9 @@ void usage(const char *name)
     printf("      taskstats-all\t\tPrint all taskstats\n");
     printf("      rusage\t\t\tPrint rusage\n");
     printf("      all\t\t\tPrint all statistics above\n");
+    printf("      none\t\t\tPrint nothing (This flag doesn't disable other flags)\n");
     printf("      no-format\t\t\tNot to format anything\n");
-    printf("      no-format-time\t\tNot to format times\n");
+    printf("      no-format-time\t\tNot to format time\n");
     printf("      no-format-flags\t\tNot to format taskstats flags\n");
+    printf("      no-format-size\t\tNot to format size\n");
 }
