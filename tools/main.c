@@ -42,12 +42,13 @@
 #define STATFLAGS_NOFMTTIME         0x00000080UL
 #define STATFLAGS_NOFMTFLAGS        0x00000100UL
 #define STATFLAGS_NOFMTSIZE         0x00000200UL
+#define STATFLAGS_NOFMTAVG          0x00000400UL
 // internal use only
 #define STATFLAGS_SIZEUSEC          0x80000000UL
 #define STATFLAGS_INVALID           0xFFFFFFFFUL
 
 #define STATFLAGS_TASKSTATS_ALL     (STATFLAGS_TASKSTATS | STATFLAGS_TASKSTATS_TIME | STATFLAGS_TASKSTATS_CPU | STATFLAGS_TASKSTATS_MEM | STATFLAGS_TASKSTATS_IO)
-#define STATFLAGS_NOFMT_ALL         (STATFLAGS_NOFMTTIME | STATFLAGS_NOFMTFLAGS | STATFLAGS_NOFMTSIZE)
+#define STATFLAGS_NOFMT_ALL         (STATFLAGS_NOFMTTIME | STATFLAGS_NOFMTFLAGS | STATFLAGS_NOFMTSIZE | STATFLAGS_NOFMTAVG)
 #define STATFLAGS_ALL               (STATFLAGS_STATUS | STATFLAGS_TASKSTATS_ALL | STATFLAGS_RUSAGE)
 
 const table_uint32 statflags_table[] = {
@@ -65,13 +66,14 @@ const table_uint32 statflags_table[] = {
     { "no-format-time",     STATFLAGS_NOFMTTIME },
     { "no-format-flags",    STATFLAGS_NOFMTFLAGS },
     { "no-format-size",     STATFLAGS_NOFMTSIZE },
+    { "no-average",         STATFLAGS_NOFMTAVG },
     { "default",            STATFLAGS_STATUS },
     { "none",               0 },
     { NULL,                 STATFLAGS_INVALID },
 };
 // clang-format on
 
-#define TIMESTR_BUF 256
+#define FMTSTR_BUF 256
 
 void usage(const char *name);
 void print_result(const struct cjail_result *res, unsigned long flags);
@@ -482,7 +484,9 @@ char *printtimeval(char *buf, size_t size, const struct timeval *time, unsigned 
     if (flags & STATFLAGS_NOFMTTIME) {
         snprintf(buf, size, "%ld", time->tv_sec * 1000000 + time->tv_usec);
     } else {
-        snprintf(buf, size, "%ld.%06ld sec", time->tv_sec, time->tv_usec);
+        //snprintf(buf, size, "%ld.%06ld sec", time->tv_sec, time->tv_usec);
+        unsigned long long usec = time->tv_sec * 1000000 + time->tv_usec;
+        snprintf(buf, size, "%.03lf sec", usec / 1000000.0);
     }
     return buf;
 }
@@ -493,7 +497,8 @@ char *printusec(char *buf, size_t size, unsigned long long time, unsigned long f
     if (flags & STATFLAGS_NOFMTTIME) {
         snprintf(buf, size, "%llu", time);
     } else {
-        snprintf(buf, size, "%llu.%06llu sec", time / 1000000, time % 1000000);
+        //snprintf(buf, size, "%llu.%06llu sec", time / 1000000, time % 1000000);
+        snprintf(buf, size, "%.03lf sec", time / 1000000.0);
     }
     return buf;
 }
@@ -504,7 +509,8 @@ char *printnsec(char *buf, size_t size, unsigned long long time, unsigned long f
     if (flags & STATFLAGS_NOFMTTIME) {
         snprintf(buf, size, "%llu", time);
     } else {
-        snprintf(buf, size, "%llu.%09llu sec", time / 1000000000, time % 1000000000);
+        //snprintf(buf, size, "%llu.%09llu sec", time / 1000000000, time % 1000000000);
+        snprintf(buf, size, "%.03lf sec", time / 1000000000.0);
     }
     return buf;
 }
@@ -571,30 +577,53 @@ const char *str_unit(enum size_unit unit)
     }
 }
 
+static char *_print_size(char *buf, size_t size, double bytes, enum size_unit base_unit, unsigned long flags)
+{
+    enum size_unit cur_unit = base_unit;
+    double cur_bytes = bytes;
+    // Convert to bigger unit
+    while (cur_bytes >= 1024.0) {
+        if (cur_unit == TBytes) {
+            // Reach maximum supported unit
+            break;
+        }
+        cur_unit = (enum size_unit)(cur_unit + 1);
+        cur_bytes /= 1024.0;
+    }
+    // Convert to smaller unit
+    while (cur_bytes < 1.0) {
+        if (cur_unit == Bytes) {
+            // Reach minimum supported unit
+            break;
+        }
+        cur_unit = (enum size_unit)(cur_unit - 1);
+        cur_bytes *= 1024.0;
+    }
+
+    // Check if size-time unit
+    if (flags & STATFLAGS_SIZEUSEC) {
+        snprintf(buf, size, "%.2lf %s-usecs", cur_bytes, str_unit(cur_unit));
+    } else {
+        snprintf(buf, size, "%.2lf %s", cur_bytes, str_unit(cur_unit));
+    }
+    return buf;
+}
+
 // Prettify print size unit
 char *print_size(char *buf, size_t size, unsigned long long bytes, enum size_unit base_unit, unsigned long flags)
 {
     if (flags & STATFLAGS_NOFMTSIZE) {
         snprintf(buf, size, "%llu", bytes);
     } else {
-        enum size_unit current_unit = base_unit;
-        double bytes_float = bytes;
-        while (bytes_float >= 1024) {
-            if (current_unit == TBytes) {
-                // Reach maximum supported unit
-                break;
-            }
-            current_unit = (enum size_unit)(current_unit + 1);
-            bytes_float /= 1024.0;
-        }
-
-        // Check if size-time unit
-        if (flags & STATFLAGS_SIZEUSEC) {
-            snprintf(buf, size, "%.2lf %s-usecs", bytes_float, str_unit(current_unit));
-        } else {
-            snprintf(buf, size, "%.2lf %s", bytes_float, str_unit(current_unit));
-        }
+        _print_size(buf, size, (double)bytes, base_unit, flags);
     }
+    return buf;
+}
+
+char *print_average(char *buf, size_t size, unsigned long long bytetime, enum size_unit base_unit, unsigned long long usecs)
+{
+    double avg = (double)bytetime / (double)usecs;
+    _print_size(buf, size, avg, base_unit, 0);
     return buf;
 }
 
@@ -605,7 +634,7 @@ void print_result(const struct cjail_result *res, unsigned long flags)
         return;
     }
 
-    char fmtbuf[TIMESTR_BUF + 1];
+    char fmtbuf[FMTSTR_BUF + 1];
 
     printf("++++++++ Execution Result ++++++++\n");
     if (flags & STATFLAGS_STATUS) {
@@ -652,9 +681,15 @@ void print_result(const struct cjail_result *res, unsigned long flags)
         }
         if (flags & STATFLAGS_TASKSTATS_MEM) {
             printf("Memory:\n");
-            printf("    Bytetime:\n");
-            printf("        RSS: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.coremem, MBytes, flags | STATFLAGS_SIZEUSEC));
-            printf("        VSZ: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.virtmem, MBytes, flags | STATFLAGS_SIZEUSEC));
+            if (flags & STATFLAGS_NOFMTAVG) {
+                printf("    Byte-Time:\n");
+                printf("        RSS: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.coremem, MBytes, flags | STATFLAGS_SIZEUSEC));
+                printf("        VSZ: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.virtmem, MBytes, flags | STATFLAGS_SIZEUSEC));
+            } else {
+                printf("    Average:\n");
+                printf("        RSS: %s\n", print_average(fmtbuf, sizeof(fmtbuf), res->stats.coremem, MBytes, res->stats.ac_etime));
+                printf("        VSZ: %s\n", print_average(fmtbuf, sizeof(fmtbuf), res->stats.virtmem, MBytes, res->stats.ac_etime));
+            }
             printf("    High Watermark:\n");
             printf("        RSS: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.hiwater_rss, KBytes, flags));
             printf("        VSZ: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.hiwater_vm, KBytes, flags));
@@ -755,4 +790,5 @@ void usage(const char *name)
     printf("      no-format-time\t\tNot to format time\n");
     printf("      no-format-flags\t\tNot to format taskstats flags\n");
     printf("      no-format-size\t\tNot to format size\n");
+    printf("      no-average\t\tDon't convert byte-time into average memory usage\n");
 }
