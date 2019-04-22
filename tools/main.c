@@ -620,10 +620,21 @@ char *print_size(char *buf, size_t size, unsigned long long bytes, enum size_uni
     return buf;
 }
 
-char *print_average(char *buf, size_t size, unsigned long long bytetime, enum size_unit base_unit, unsigned long long usecs)
+char *print_average(char *buf, size_t size, unsigned long long bytetime, enum size_unit base_unit, unsigned long long usecs, unsigned long flags)
 {
     double avg = (double)bytetime / (double)usecs;
-    _print_size(buf, size, avg, base_unit, 0);
+    if (flags & STATFLAGS_NOFMTSIZE) {
+        enum size_unit cur_unit = base_unit;
+        while (cur_unit != Bytes) {
+            cur_unit = (enum size_unit)(cur_unit - 1);
+            avg *= 1024.0;
+        }
+        unsigned long long avg_bytes = (unsigned long long)round(avg);
+        snprintf(buf, size, "%llu", avg_bytes);
+    } else {
+        _print_size(buf, size, avg, base_unit, 0);
+    }
+
     return buf;
 }
 
@@ -687,8 +698,8 @@ void print_result(const struct cjail_result *res, unsigned long flags)
                 printf("        VSZ: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.virtmem, MBytes, flags | STATFLAGS_SIZEUSEC));
             } else {
                 printf("    Average:\n");
-                printf("        RSS: %s\n", print_average(fmtbuf, sizeof(fmtbuf), res->stats.coremem, MBytes, res->stats.ac_etime));
-                printf("        VSZ: %s\n", print_average(fmtbuf, sizeof(fmtbuf), res->stats.virtmem, MBytes, res->stats.ac_etime));
+                printf("        RSS: %s\n", print_average(fmtbuf, sizeof(fmtbuf), res->stats.coremem, MBytes, res->stats.ac_etime, flags));
+                printf("        VSZ: %s\n", print_average(fmtbuf, sizeof(fmtbuf), res->stats.virtmem, MBytes, res->stats.ac_etime, flags));
             }
             printf("    High Watermark:\n");
             printf("        RSS: %s\n", print_size(fmtbuf, sizeof(fmtbuf), res->stats.hiwater_rss, KBytes, flags));
