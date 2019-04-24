@@ -1,7 +1,7 @@
 #--------------------------------
 # Setup targets & properties
 #
-add_executable(cjail main.c)
+add_executable(cjail main.c statistics.c)
 add_executable(CJail::cjail ALIAS cjail)
 
 set_target_properties(cjail PROPERTIES
