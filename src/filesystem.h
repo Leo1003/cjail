@@ -22,12 +22,16 @@ int try_umount(const char *path);
 int jail_chroot(const char *path, const char *cdpath);
 int privatize_fs();
 
-struct jail_mount_item {
+struct jail_mount_node *mount_node_new();
+void mount_node_set_ctx(struct jail_mount_node *node, const struct jail_mount_ctx *ctx);
+void mount_node_free(struct jail_mount_node *node);
+
+struct jail_mount_node {
     struct jail_mount_ctx ctx;
-    struct jail_mount_item *next;
+    struct jail_mount_node *next;
 };
 struct jail_mount_list {
-    struct jail_mount_item *head, *end;
+    struct jail_mount_node *head, *end;
 };
 
 #endif

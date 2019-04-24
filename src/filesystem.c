@@ -159,18 +159,18 @@ int mnt_list_add(struct jail_mount_list *ml, const struct jail_mount_ctx *ctx)
         return -1;
     }
 
-    struct jail_mount_item *item = (struct jail_mount_item *)malloc(sizeof(struct jail_mount_item));
-    if (!item) {
+    struct jail_mount_node *node = mount_node_new();
+    if (!node) {
         return -1;
     }
 
-    item->ctx = *ctx;
-    item->next = NULL;
+    mount_node_set_ctx(node, ctx);
+    node->next = NULL;
     if (!ml->end) {
-        ml->head = ml->end = item;
+        ml->head = ml->end = node;
     } else {
-        ml->end->next = item;
-        ml->end = item;
+        ml->end->next = node;
+        ml->end = node;
     }
     return 0;
 }
@@ -182,10 +182,10 @@ int mnt_list_clear(struct jail_mount_list *ml)
         return -1;
     }
 
-    struct jail_mount_item *cur = ml->head, *next = NULL;
+    struct jail_mount_node *cur = ml->head, *next = NULL;
     while (cur) {
         next = cur->next;
-        free(cur);
+        mount_node_free(cur);
         cur = next;
     }
     ml->head = ml->end = NULL;
@@ -231,7 +231,7 @@ int mnt_ops_register(const struct mnt_ops *ops)
         return -1;
     }
     /* Copy and link to the list */
-    struct mnt_ops *cops = malloc(sizeof(struct mnt_ops));
+    struct mnt_ops *cops = (struct mnt_ops *)malloc(sizeof(struct mnt_ops));
     if (!cops) {
         return -1;
     }
@@ -271,6 +271,68 @@ int mnt_ops_deregister(const char *name)
 const struct mnt_ops *mnt_ops_find(const char *name)
 {
     return mnt_ops_find_prev(name, NULL, NULL);
+}
+
+struct jail_mount_node *mount_node_new()
+{
+    struct jail_mount_node *node = (struct jail_mount_node *)malloc(sizeof(struct jail_mount_node));
+    if (!node) {
+        return NULL;
+    }
+    memset(node, 0, sizeof(struct jail_mount_node));
+    return node;
+}
+
+static char *node_set_string(char **orig_s, const char *new_s, size_t size)
+{
+    if (new_s) {
+        if (!*orig_s) {
+            *orig_s = (char *)malloc(sizeof(char) * (size));
+            if (!*orig_s) {
+                /* Allocation failed */
+                *orig_s = NULL;
+                return *orig_s;
+            }
+        }
+        strncpy(*orig_s, new_s, sizeof(char) * (size));
+        *orig_s[size - 1] = '\0';   /* Prevent strncpy() not writing null character */
+    } else {
+        if (*orig_s) {
+            /* Free memory and set to NULL */
+            free(*orig_s);
+            *orig_s = NULL;
+        }
+    }
+    return *orig_s;
+}
+
+void mount_node_set_ctx(struct jail_mount_node *node, const struct jail_mount_ctx *ctx)
+{
+    if (!node) {
+        return;
+    }
+
+    node_set_string(&node->ctx.type, ctx->type, MNT_OPS_NAME_LEN);
+    node_set_string(&node->ctx.source, ctx->source, PATH_MAX);
+    node_set_string(&node->ctx.target, ctx->target, PATH_MAX);
+    node_set_string(&node->ctx.fstype, ctx->fstype, PATH_MAX);
+    node_set_string(&node->ctx.data, ctx->data, 4096);
+    node->ctx.flags = ctx->flags;
+}
+
+void mount_node_free(struct jail_mount_node *node)
+{
+    if (!node) {
+        return;
+    }
+
+    free(node->ctx.type);
+    free(node->ctx.source);
+    free(node->ctx.target);
+    free(node->ctx.fstype);
+    free(node->ctx.data);
+
+    free(node);
 }
 
 static void mnt_ops_fini() __attribute__((destructor));

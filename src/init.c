@@ -194,7 +194,7 @@ static int mount_fs(const struct cjail_ctx ctx)
     }
 
     if (ctx.mount_cfg) {
-        struct jail_mount_item *cur = ctx.mount_cfg->head;
+        struct jail_mount_node *cur = ctx.mount_cfg->head;
         while (cur) {
             if (jail_mount(ctx.chroot, &(cur->ctx))) {
                 fatalf("Failed to mount <%s> -> %s: %s\n", cur->ctx.fstype, cur->ctx.target, strerror(errno));
