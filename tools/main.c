@@ -172,6 +172,21 @@ error:
     return -1;
 }
 
+int parse_mnt_opt(const char *arg, struct jail_mount_list *mnt_list)
+{
+    struct jail_mount_ctx mnt_ctx;
+    const size_t MNT_ARG_LEN = 1024;
+    char arg_cp[MNT_ARG_LEN + 1];
+    if (strlen(arg) > MNT_ARG_LEN) {
+        return -1;
+    }
+    strncpy(arg_cp, arg, sizeof(arg_cp));
+    arg_cp[MNT_ARG_LEN] = '\0';
+
+    char *path_part = strtok(arg_cp, ":");
+    //TODO: Uncompleted
+}
+
 int main(int argc, char *argv[], char *envp[])
 {
     int o;
