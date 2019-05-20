@@ -22,7 +22,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <time.h>
+#include <unistd.h>
 
 void usage(const char *name);
 
@@ -33,10 +36,11 @@ enum OPTVAL {
     OPT_SCC,
     OPT_ALR,
     OPT_SUC,
+    OPT_SYS,
 };
 
 // clang-format off
-const char opts[] = "e:Ec:d:u:g:i:o:r:I:O:R:M:s:V:C:F:Z:P:S:T:m:t::qvh";
+const char opts[] = "e:Ec:d:u:g:i:o:r:I:O:R:M:B:s:V:C:F:Z:P:S:T:m:t::qvh";
 const struct option longopts[] = {
     { "environ",        required_argument,  NULL, 'e' },
     { "inherit-env",    no_argument,        NULL, 'E' },
@@ -51,6 +55,8 @@ const struct option longopts[] = {
     { "fd-output",      required_argument,  NULL, 'O' },
     { "fd-err",         required_argument,  NULL, 'R' },
     { "mount",          required_argument,  NULL, 'M' },
+    { "bind-mount",     required_argument,  NULL, 'B' },
+    { "sysfs-mount",    required_argument,  NULL, OPT_SYS },
     { "preserve-fd",    no_argument,        NULL, OPT_PFD },
     { "share-net",      no_argument,        NULL, OPT_NET },
     { "cpuset",         required_argument,  NULL, 's' },
@@ -170,21 +176,6 @@ error:
         free(envz);
     }
     return -1;
-}
-
-int parse_mnt_opt(const char *arg, struct jail_mount_list *mnt_list)
-{
-    struct jail_mount_ctx mnt_ctx;
-    const size_t MNT_ARG_LEN = 1024;
-    char arg_cp[MNT_ARG_LEN + 1];
-    if (strlen(arg) > MNT_ARG_LEN) {
-        return -1;
-    }
-    strncpy(arg_cp, arg, sizeof(arg_cp));
-    arg_cp[MNT_ARG_LEN] = '\0';
-
-    char *path_part = strtok(arg_cp, ":");
-    //TODO: Uncompleted
 }
 
 int main(int argc, char *argv[], char *envp[])
